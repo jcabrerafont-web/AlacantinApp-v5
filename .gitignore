@@ -1,0 +1,14 @@
+# Logs and temporary files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor and IDE directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Scratch and caches
+scratch/
+__pycache__/

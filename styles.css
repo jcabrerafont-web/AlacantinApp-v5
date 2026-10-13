@@ -1,0 +1,195 @@
+/* ============================================================================
+   ALACANTINAPP V5 - ESTILOS PERSONALIZADOS Y COMPLEMENTARIOS
+   Club Gallina Alacantina (ESGA025) - Protocolo CNZ 2025
+   ============================================================================ */
+
+:root {
+  --primary-navy: #0f172a;
+  --accent-gold: #d97706;
+  --accent-blue: #2563eb;
+  --alacantina-red: #dc2626;
+  --status-rd: #16a34a;
+  --status-rn: #0284c7;
+  --status-rf: #7c3aed;
+  --status-ra: #ea580c;
+  --status-rm: #ca8a04;
+}
+
+/* Scrollbars modernos */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Pulso sutil para indicador de conectividad */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.08); }
+}
+.pulse-online {
+  animation: pulse-subtle 2s infinite ease-in-out;
+}
+
+/* Árbol Genealógico / Pedigrí a 5 Generaciones */
+.pedigree-container {
+  display: flex;
+  overflow-x: auto;
+  padding: 1.5rem 0.5rem;
+  gap: 1.5rem;
+  background: linear-gradient(145deg, #0b1120 0%, #111827 100%);
+  border-radius: 0.75rem;
+  border: 1px solid #1e293b;
+  min-height: 480px;
+}
+
+.pedigree-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 1rem;
+  min-width: 210px;
+}
+
+.pedigree-node {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  position: relative;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.pedigree-node:hover {
+  transform: translateY(-2px);
+  border-color: #38bdf8;
+  box-shadow: 0 8px 15px -3px rgba(56, 189, 248, 0.2);
+}
+
+.pedigree-node.node-macho {
+  border-left: 4px solid #38bdf8;
+}
+
+.pedigree-node.node-hembra {
+  border-left: 4px solid #f472b6;
+}
+
+.pedigree-node.node-root {
+  border: 2px solid #fbbf24;
+  background: #1e293b;
+}
+
+/* Líneas de conexión visual de parentesco */
+.pedigree-connector {
+  position: absolute;
+  right: -1.5rem;
+  top: 50%;
+  width: 1.5rem;
+  height: 2px;
+  background-color: #475569;
+}
+
+/* Visor de las 3 Fotos Obligatorias */
+.photo-slot {
+  position: relative;
+  background: #0f172a;
+  border: 2px dashed #334155;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.photo-slot:hover {
+  border-color: #38bdf8;
+}
+
+.photo-slot.filled {
+  border: 2px solid #10b981;
+}
+
+.photo-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Medidor de Puntuación Morfológica Baremo 100p */
+.score-badge {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transiciones entre pestañas */
+.tab-content {
+  display: none;
+  animation: fadeIn 0.25s ease-in-out forwards;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Badges de Secciones Oficiales del Libro ESGA025 */
+.badge-rf { background-color: #581c87; color: #e9d5ff; border: 1px solid #9333ea; }
+.badge-ra { background-color: #7c2d12; color: #ffedd5; border: 1px solid #ea580c; }
+.badge-rn { background-color: #075985; color: #e0f2fe; border: 1px solid #0284c7; }
+.badge-rd { background-color: #14532d; color: #dcfce7; border: 1px solid #16a34a; }
+.badge-rm { background-color: #713f12; color: #fef9c3; border: 1px solid #ca8a04; }
+
+/* Estilos de Impresión Oficial (@media print) */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+  
+  header, nav, #app-navbar, .no-print, button, #offline-banner, .tab-nav-btn {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-card {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid;
+  }
+
+  .pedigree-container {
+    background: #ffffff !important;
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+  }
+
+  .pedigree-node {
+    background: #ffffff !important;
+    border: 1px solid #64748b !important;
+    color: #000000 !important;
+  }
+}
