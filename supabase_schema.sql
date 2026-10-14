@@ -39,7 +39,9 @@ END $$;
 -- Tabla 2.1: Explotaciones y Criadores Asociados
 CREATE TABLE IF NOT EXISTS explotaciones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    codigo_rega VARCHAR(30) UNIQUE NOT NULL, -- Código Registro de Explotaciones Ganaderas (REGA)
+    codigo_rega VARCHAR(50) UNIQUE,                    -- Código REGA: NULLABLE para admitir 'En trámite' o 'Sin REGA'
+    rega VARCHAR(50),                                  -- Alias directo REGA (NULLABLE)
+    numero_socio VARCHAR(50),                          -- Nº de Socio del Club (NULLABLE, ej: 'NS-000' aspirante)
     nombre_titular VARCHAR(150) NOT NULL,
     nombre_criadero VARCHAR(150),
     cif_nif VARCHAR(20),
@@ -69,6 +71,7 @@ CREATE TABLE IF NOT EXISTS animales (
     id_padre UUID REFERENCES animales(id) ON DELETE SET NULL,
     id_madre UUID REFERENCES animales(id) ON DELETE SET NULL,
     explotacion_id UUID REFERENCES explotaciones(id) ON DELETE RESTRICT,
+    codigo_rega VARCHAR(50),                           -- Código REGA de la explotación vinculada (actualizable masivamente)
     familia_origen VARCHAR(20) NOT NULL DEFAULT 'Familia A', -- Familias A, B, C, D, E para Regla de Gobe
     lote_actual VARCHAR(50),
     peso_actual_kg NUMERIC(5, 3) NOT NULL,             -- Gallo: 3.000 - 3.500 kg | Gallina: 2.200 - 2.600 kg
@@ -281,6 +284,53 @@ CREATE TRIGGER trg_procesar_inspeccion
     BEFORE INSERT OR UPDATE ON inspecciones_morfologicas
     FOR EACH ROW
     EXECUTE FUNCTION procesar_inspeccion_seccion_libro();
+
+-- Función 3.3: Actualización Masiva de Código REGA (Explotación y todos sus Animales asociados)
+CREATE OR REPLACE FUNCTION actualizar_rega_masiva(
+    p_explotacion_id UUID,
+    p_nueva_rega VARCHAR(50)
+)
+RETURNS INTEGER AS $$
+DECLARE
+    v_actualizados INTEGER := 0;
+BEGIN
+    -- 1. Actualizar la explotación
+    UPDATE explotaciones
+    SET codigo_rega = p_nueva_rega,
+        rega = p_nueva_rega,
+        updated_at = TIMEZONE('utc'::text, NOW())
+    WHERE id = p_explotacion_id;
+
+    -- 2. Actualizar todos los animales vinculados a esa explotación
+    UPDATE animales
+    SET codigo_rega = p_nueva_rega,
+        updated_at = TIMEZONE('utc'::text, NOW())
+    WHERE explotacion_id = p_explotacion_id;
+
+    GET DIAGNOSTICS v_actualizados = ROW_COUNT;
+    RETURN v_actualizados;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- SCRIPT DE MIGRACIÓN / COMPATIBILIDAD (IDEMPOTENTE)
+-- ============================================================================
+DO $$ BEGIN
+    -- Asegurar campos NULLABLE en explotaciones para registros en trámite o sin REGA
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'explotaciones' AND column_name = 'codigo_rega') THEN
+        ALTER TABLE explotaciones ALTER COLUMN codigo_rega DROP NOT NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'explotaciones' AND column_name = 'rega') THEN
+        ALTER TABLE explotaciones ADD COLUMN rega VARCHAR(50);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'explotaciones' AND column_name = 'numero_socio') THEN
+        ALTER TABLE explotaciones ADD COLUMN numero_socio VARCHAR(50);
+    END IF;
+    -- Asegurar campo codigo_rega en animales para trazabilidad directa y actualización masiva
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'animales' AND column_name = 'codigo_rega') THEN
+        ALTER TABLE animales ADD COLUMN codigo_rega VARCHAR(50);
+    END IF;
+END $$;
 
 -- ============================================================================
 -- 4. VISTAS CTE RECURSIVAS DE PEDIGRÍ A 5 GENERACIONES

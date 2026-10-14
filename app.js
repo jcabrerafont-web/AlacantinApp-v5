@@ -15,6 +15,9 @@ const app = {
   estado: {
     animales: [],
     explotaciones: [],
+    aviarioActivo: null,
+    gpsAviarioTemporal: null,
+    editandoAviarioId: null,
     inspecciones: [],
     controlesPuesta: [],
     lotes: [],
@@ -52,6 +55,9 @@ const app = {
     // Cargar datos (de IndexedDB primero, y luego sincronizar con Supabase si online)
     await this.cargarDatos();
 
+    // Comprobar e inicializar aviario activo o desplegar bienvenida
+    this.inicializarAviarioActivo();
+
     // Actualizar interfaz inicial
     this.poblarSelectores();
     this.actualizarReglasSexo();
@@ -59,6 +65,8 @@ const app = {
     this.actualizarKPIs();
     this.recalcularBaremo();
     this.renderizarLotes();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
 
     // Comprobar si hay hash en la URL para cambiar de pestaña directamente
     const hash = window.location.hash.replace('#', '');
@@ -254,24 +262,30 @@ const app = {
       {
         id: 'exp-01',
         codigo_rega: 'ES030140000001',
+        rega: 'ES030140000001',
+        numero_socio: 'SOC-001',
         nombre_titular: 'Vicent Soler Mas',
         nombre_criadero: 'Criadero El Palmeral - ESGA025',
         municipio: 'Elche',
         provincia: 'Alicante',
         latitud: 38.2671,
         longitud: -0.6983,
+        geolocalizacion_precision: 5,
         telefono: '600123456',
         activo: true
       },
       {
         id: 'exp-02',
         codigo_rega: 'ES030590000002',
+        rega: 'ES030590000002',
+        numero_socio: 'SOC-002',
         nombre_criadero: 'Aviario Crevillent Zootecnia',
         nombre_titular: 'Antoni Bernabeu',
         municipio: 'Crevillent',
         provincia: 'Alicante',
         latitud: 38.2492,
         longitud: -0.8091,
+        geolocalizacion_precision: 6,
         telefono: '611987654',
         activo: true
       }
@@ -607,6 +621,31 @@ const app = {
             await this.db.delete('syncQueue', item.id);
             sincronizados++;
           }
+        } else if (item.tipo === 'ALTA_EXPLOTACION') {
+          const { error } = await this.supabaseClient.from('explotaciones').upsert(item.payload);
+          if (!error) {
+            await this.db.delete('syncQueue', item.id);
+            sincronizados++;
+          }
+        } else if (item.tipo === 'ACTUALIZAR_REGA_MASIVA') {
+          const { explotacionId, nuevaRega, nuevosDatos } = item.payload;
+          const { error: rpcErr } = await this.supabaseClient.rpc('actualizar_rega_masiva', {
+            p_explotacion_id: explotacionId,
+            p_nueva_rega: nuevaRega
+          });
+          if (rpcErr) {
+            await this.supabaseClient.from('explotaciones').update({
+              codigo_rega: nuevaRega,
+              rega: nuevaRega,
+              ...(nuevosDatos || {})
+            }).eq('id', explotacionId);
+
+            await this.supabaseClient.from('animales').update({
+              codigo_rega: nuevaRega
+            }).eq('explotacion_id', explotacionId);
+          }
+          await this.db.delete('syncQueue', item.id);
+          sincronizados++;
         }
       } catch (err) {
         console.error('[SyncQueue] Error al sincronizar item:', item, err);
@@ -845,6 +884,26 @@ const app = {
   async guardarNuevoAnimal(event) {
     event.preventDefault();
 
+    // 1. Vincular automáticamente la explotación / aviario activo
+    let aviario = this.estado.aviarioActivo;
+    if (!aviario) {
+      const selectVal = document.getElementById('alta-explotacion')?.value;
+      if (selectVal) {
+        aviario = this.estado.explotaciones.find(e => e.id === selectVal);
+      }
+    }
+
+    if (!aviario) {
+      if (confirm('No tienes ningún aviario o explotación activa seleccionada.\n¿Deseas configurar tu aviario ahora para vincular automáticamente el código REGA y ubicación oficial?')) {
+        this.abrirModalAviario(true);
+        return;
+      }
+    }
+
+    const explotacionId = aviario ? aviario.id : (document.getElementById('alta-explotacion')?.value || 'exp-01');
+    const codigoRega = aviario ? (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001') : 'TEMP-REGA-001';
+    const titularNombre = aviario ? (aviario.nombre_titular || 'Criador Asociado') : 'Criador Asociado';
+
     const sexo = document.getElementById('alta-sexo').value;
     const anilla = document.getElementById('alta-anilla').value.trim();
     const codigoId = document.getElementById('alta-codigo-id').value.trim();
@@ -852,7 +911,6 @@ const app = {
     const fechaNac = document.getElementById('alta-fecha-nac').value;
     const variedad = document.getElementById('alta-variedad').value;
     const seccion = document.getElementById('alta-seccion').value;
-    const explotacionId = document.getElementById('alta-explotacion').value;
     const familia = document.getElementById('alta-familia').value;
     const padreId = document.getElementById('alta-padre').value || null;
     const madreId = document.getElementById('alta-madre').value || null;
@@ -872,6 +930,17 @@ const app = {
 
     const calibre = sexo === 'Macho' ? 20.0 : 18.0;
 
+    // GPS: Heredar automáticamente las coordenadas del aviario activo si no se capturó GPS específico
+    let gpsFinal = this.estado.gpsUbicacion;
+    if (!gpsFinal && aviario && aviario.latitud && aviario.longitud) {
+      gpsFinal = {
+        latitud: Number(aviario.latitud),
+        longitud: Number(aviario.longitud),
+        precision_m: aviario.geolocalizacion_precision || 10,
+        origen: 'aviario_heredado'
+      };
+    }
+
     const nuevoAnimal = {
       id: 'alac-' + Date.now(),
       codigo_identificacion: codigoId,
@@ -885,6 +954,8 @@ const app = {
       id_padre: padreId,
       id_madre: madreId,
       explotacion_id: explotacionId,
+      codigo_rega: codigoRega,
+      titular_nombre: titularNombre,
       familia_origen: familia,
       peso_actual_kg: peso,
       estado: 'Activo',
@@ -900,7 +971,7 @@ const app = {
         cabeza: this.estado.fotosCapturadas.cabeza,
         tarsos: this.estado.fotosCapturadas.tarsos
       },
-      geolocalizacion_alta: this.estado.gpsUbicacion,
+      geolocalizacion_alta: gpsFinal,
       notas: notas,
       created_at: new Date().toISOString()
     };
@@ -932,7 +1003,8 @@ const app = {
     this.actualizarKPIs();
     this.limpiarFormularioAlta();
 
-    alert(`¡Ejemplar ${nuevoAnimal.codigo_identificacion} dado de alta con éxito en el Libro Genealógico ESGA025!`);
+    const regaMsg = codigoRega ? ` (REGA: ${codigoRega})` : '';
+    alert(`¡Ejemplar ${nuevoAnimal.codigo_identificacion} dado de alta con éxito en el Libro Genealógico ESGA025${regaMsg}!`);
     this.cambiarTab('censo');
   },
 
@@ -951,8 +1023,20 @@ const app = {
       if (slot) slot.classList.remove('filled');
     });
 
-    document.getElementById('gps-display-box').classList.add('hidden');
-    document.getElementById('alta-fx-preview').classList.add('hidden');
+    const gpsDisplay = document.getElementById('gps-display-box');
+    if (gpsDisplay) gpsDisplay.classList.add('hidden');
+    const fxPreview = document.getElementById('alta-fx-preview');
+    if (fxPreview) fxPreview.classList.add('hidden');
+
+    const btnGpsText = document.getElementById('btn-gps-text');
+    if (btnGpsText) btnGpsText.textContent = 'GPS Específico Ave (Opcional)';
+
+    // Mantener selección del aviario activo si existe
+    if (this.estado.aviarioActivo) {
+      const selectExp = document.getElementById('alta-explotacion');
+      if (selectExp) selectExp.value = this.estado.aviarioActivo.id;
+    }
+
     this.actualizarReglasSexo();
     this.generarAnillaSiguiente();
   },

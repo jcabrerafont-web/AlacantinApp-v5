@@ -70,8 +70,25 @@
         </div>
       </div>
 
-      <!-- Indicadores de Conexión, Sincronización y Configuración -->
+      <!-- Indicadores de Conexión, Aviario Activo, Sincronización y Configuración -->
       <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- Badge de Aviario Activo (Clic para Configurar / Editar datos en cualquier momento) -->
+        <button id="badge-aviario-activo" onclick="app.abrirModalAviario()" title="Aviario Activo (Pulsar para configurar o editar datos)" class="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-amber-500/30 hover:border-amber-400 text-left transition shadow-sm max-w-[170px] sm:max-w-xs md:max-w-sm group">
+          <div class="h-7 w-7 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-105 transition-transform">
+            <i class="fa-solid fa-location-dot"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 leading-tight">
+              <span id="badge-aviario-nombre" class="font-bold text-xs text-white truncate">Aviario Activo</span>
+              <span id="badge-aviario-estado" class="text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden md:inline">Activo</span>
+            </div>
+            <div id="badge-aviario-subtexto" class="text-[10px] text-amber-300 font-mono truncate">
+              REGA: ES030140000001
+            </div>
+          </div>
+          <i class="fa-solid fa-pen text-[10px] text-slate-400 ml-auto hidden sm:inline group-hover:text-amber-400 transition-colors"></i>
+        </button>
+
         <!-- Indicador Online / Offline -->
         <div id="net-status-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
           <span class="h-2 w-2 rounded-full bg-emerald-400 pulse-online"></span>
@@ -96,10 +113,10 @@
     <!-- Navegación por 5 Pestañas Obligatorias -->
     <nav class="max-w-7xl mx-auto px-2 sm:px-6 border-t border-slate-800/80 bg-slate-900/60 overflow-x-auto no-scrollbar">
       <div class="flex space-x-1 sm:space-x-2 py-1.5 min-w-max">
-        <!-- Tab 1: Registro con GPS -->
+        <!-- Tab 1: Registro de Ejemplares -->
         <button onclick="app.cambiarTab('registro')" id="tab-btn-registro" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-amber-400 bg-slate-800 border border-amber-500/30">
-          <i class="fa-solid fa-location-crosshairs text-amber-400"></i>
-          <span>1. Alta Oficial & GPS</span>
+          <i class="fa-solid fa-id-card text-amber-400"></i>
+          <span>1. Registro de Ejemplares</span>
         </button>
         <!-- Tab 2: Censo con Modal -->
         <button onclick="app.cambiarTab('censo')" id="tab-btn-censo" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
@@ -131,7 +148,7 @@
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
 
     <!-- ======================================================================= -->
-    <!-- PESTAÑA 1: REGISTRO / ALTA OFICIAL CON GPS Y 3 FOTOS OBLIGATORIAS       -->
+    <!-- PESTAÑA 1: REGISTRO DE EJEMPLARES (VINCULADO A AVIARIO ACTIVO)           -->
     <!-- ======================================================================= -->
     <section id="tab-registro" class="tab-content active space-y-6">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 shadow-xl">
@@ -139,30 +156,67 @@
           <div>
             <h2 class="text-lg font-bold text-white flex items-center gap-2">
               <i class="fa-solid fa-id-card text-amber-400"></i>
-              Alta de Ejemplar en el Libro Genealógico (ESGA025)
+              Registro de Ejemplares en el Libro Genealógico (ESGA025)
             </h2>
             <p class="text-xs text-slate-400 mt-1">
-              Registro in situ conforme al Protocolo de la Comisión Nacional de Zootecnia (CNZ de 5 de junio de 2025).
+              Inscripción oficial zootécnica vinculada automáticamente a la explotación activa de la cabecera. RD 45/2019 y Protocolo CNZ.
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="app.capturarGPS()" class="px-3 py-1.5 rounded-lg bg-sky-950 border border-sky-800 text-sky-300 hover:bg-sky-900 text-xs font-semibold flex items-center gap-1.5 transition">
+            <button type="button" onclick="app.capturarGPS()" title="Opcional: Si no se pulsa, se utiliza automáticamente la geolocalización del aviario activo" class="px-3 py-1.5 rounded-lg bg-sky-950 border border-sky-800 text-sky-300 hover:bg-sky-900 text-xs font-semibold flex items-center gap-1.5 transition">
               <i class="fa-solid fa-location-dot"></i>
-              <span id="btn-gps-text">Obtener GPS in situ</span>
+              <span id="btn-gps-text">GPS Específico Ave (Opcional)</span>
             </button>
             <button type="button" onclick="app.limpiarFormularioAlta()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-xs transition">
-              <i class="fa-solid fa-rotate-left"></i> Limpiar
+              <i class="fa-solid fa-rotate-left"></i> Limpiar Formulario
             </button>
           </div>
         </div>
 
-        <!-- Coordenadas GPS capturadas -->
+        <!-- Tarjeta Informativa de Explotación / Aviario Activo Vinculado -->
+        <div id="registro-aviario-info-box" class="mt-4 p-3.5 rounded-xl bg-slate-950/80 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-10 w-10 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg flex-shrink-0">
+              <i class="fa-solid fa-warehouse"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-bold text-white text-sm truncate" id="reg-box-aviario-nombre">Aviario Activo</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono" id="reg-box-aviario-rega">REGA: ES030140000001</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-950 text-sky-400 border border-sky-800" id="reg-box-aviario-socio">Socio: NS-000</span>
+              </div>
+              <p class="text-slate-400 text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span id="reg-box-aviario-titular"><i class="fa-solid fa-user text-slate-500 mr-1"></i>Titular</span>
+                <span class="text-slate-600">·</span>
+                <span id="reg-box-aviario-municipio"><i class="fa-solid fa-map-pin text-slate-500 mr-1"></i>Municipio, Provincia</span>
+                <span class="text-slate-600">·</span>
+                <span id="reg-box-aviario-gps" class="text-emerald-400 font-mono"><i class="fa-solid fa-satellite-dish mr-1"></i>GPS Aviario Heredado</span>
+              </p>
+            </div>
+          </div>
+          <button type="button" onclick="app.abrirModalAviario()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition self-start sm:self-auto whitespace-nowrap">
+            <i class="fa-solid fa-pen-to-square"></i> Cambiar / Editar Aviario
+          </button>
+        </div>
+
+        <!-- Aviso si está en modo visitante sin aviario configurado -->
+        <div id="registro-aviso-sin-aviario" class="hidden mt-4 p-3.5 rounded-xl bg-amber-950/40 border border-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5 text-amber-200">
+            <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
+            <span>Estás en <strong>Modo Visitante</strong> (sin aviario activo). Para vincular tu REGA y geolocalización zootécnica oficial a este ejemplar, configura tu aviario.</span>
+          </div>
+          <button type="button" onclick="app.abrirModalAviario()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold whitespace-nowrap transition">
+            Configurar Aviario Ahora
+          </button>
+        </div>
+
+        <!-- Coordenadas GPS específicas sobreescritas (si se pulsa GPS individual) -->
         <div id="gps-display-box" class="hidden mt-3 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-satellite-dish text-emerald-400"></i>
-            <span><strong>GPS Localizado:</strong> Lat: <span id="gps-lat" class="text-emerald-400 font-mono">--</span>, Lng: <span id="gps-lng" class="text-emerald-400 font-mono">--</span> (Precisión: <span id="gps-prec" class="text-slate-400 font-mono">--</span> m)</span>
+            <span><strong>GPS Específico del Ave:</strong> Lat: <span id="gps-lat" class="text-emerald-400 font-mono">--</span>, Lng: <span id="gps-lng" class="text-emerald-400 font-mono">--</span> (Precisión: <span id="gps-prec" class="text-slate-400 font-mono">--</span> m)</span>
           </div>
-          <span class="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Verificado in situ</span>
+          <span class="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Sobrescrito in situ</span>
         </div>
 
         <!-- Formulario Oficial de Alta -->
@@ -244,12 +298,18 @@
               </select>
             </div>
 
-            <!-- Explotación / Criadero REGA -->
+            <!-- Explotación Ganadera / Aviario (Vinculado a cabecera) -->
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Explotación Ganadera (REGA)</label>
-              <select id="alta-explotacion" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-semibold text-slate-300">Explotación Ganadera (REGA)</label>
+                <button type="button" onclick="app.abrirModalAviario()" class="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold" title="Editar datos del aviario">
+                  <i class="fa-solid fa-pen-to-square"></i> Editar datos
+                </button>
+              </div>
+              <select id="alta-explotacion" onchange="app.seleccionarAviarioDesdeSelect(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 <!-- Se poblará dinámicamente -->
               </select>
+              <p class="text-[11px] text-slate-400 mt-1">Sincronizado con el aviario activo en cabecera</p>
             </div>
 
             <!-- Familia de Origen (Regla de Gobe) -->
@@ -1180,6 +1240,142 @@
     <div class="relative max-w-4xl w-full flex flex-col items-center">
       <img id="lightbox-img" class="max-h-[80vh] w-auto rounded-lg shadow-2xl object-contain border border-slate-700" alt="Vista Ampliada">
       <p id="lightbox-caption" class="text-xs text-slate-300 mt-2 font-medium bg-slate-900/80 px-3 py-1 rounded-full border border-slate-700"></p>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: BIENVENIDA Y CONFIGURACIÓN DEL AVIARIO / CRIADOR                   -->
+  <!-- ========================================================================= -->
+  <div id="modal-config-aviario" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 relative">
+      <button id="btn-cerrar-modal-aviario" onclick="app.cerrarModalAviario()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 text-lg" title="Cerrar ventana">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <!-- Cabecera del Modal -->
+      <div class="flex items-center gap-3 pb-3 border-b border-slate-800">
+        <div class="h-11 w-11 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl flex-shrink-0">
+          <i class="fa-solid fa-warehouse"></i>
+        </div>
+        <div>
+          <h3 id="modal-aviario-titulo" class="text-base sm:text-lg font-bold text-white">Configuración del Aviario / Criador</h3>
+          <p id="modal-aviario-subtitulo" class="text-xs text-slate-400">Identificación oficial de la explotación ganadera y datos zootécnicos del criador.</p>
+        </div>
+      </div>
+
+      <!-- Selector opcional de explotación ya registrada (para conmutar rápido) -->
+      <div id="box-selector-aviarios-existentes" class="hidden mt-3 p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-2 text-xs">
+        <span class="text-slate-400 text-[11px] whitespace-nowrap"><i class="fa-solid fa-clock-rotate-left mr-1"></i>Cargar registrado:</span>
+        <select id="select-aviarios-existentes" onchange="app.cargarAviarioDesdeExistente(this.value)" class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+          <option value="">-- O seleccionar explotación existente --</option>
+        </select>
+      </div>
+
+      <!-- Formulario de Configuración -->
+      <form id="form-config-aviario" onsubmit="app.guardarConfigAviario(event)" class="mt-4 space-y-4">
+        
+        <!-- Nombre del Criador / Razón Social (Obligatorio) -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">
+            Nombre del Criador / Razón Social <span class="text-red-400">*</span>
+          </label>
+          <input type="text" id="aviario-titular" required placeholder="Ej: Antoni Bernabeu Sanchis" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          <p class="text-[10px] text-slate-400 mt-0.5">Titular de la explotación zootécnica o persona física responsable.</p>
+        </div>
+
+        <!-- Nombre del Aviario / Criadero -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">
+            Nombre del Aviario / Criadero <span class="text-slate-400">(Opcional)</span>
+          </label>
+          <input type="text" id="aviario-nombre" placeholder="Ej: Aviario El Rebollo / Criadero Vinalopó" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        </div>
+
+        <!-- Nº de Socio del Club con Casilla "Aspirante / No socio aún" -->
+        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
+          <label class="block text-xs font-semibold text-slate-300">
+            Nº de Socio del Club Gallina Alacantina <span class="text-slate-400">(Opcional)</span>
+          </label>
+          <div class="relative">
+            <input type="text" id="aviario-socio" placeholder="Ej: SOC-042" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
+            <input type="checkbox" id="aviario-socio-aspirante" onchange="app.toggleSocioAspirante(this.checked)" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 h-4 w-4">
+            <span>Aspirante / No socio aún <span class="text-amber-400 font-mono text-[11px]">(Asigna automáticamente código temporal 'NS-000')</span></span>
+          </label>
+        </div>
+
+        <!-- Código REGA con Casilla "En trámite / Sin REGA" -->
+        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-300">
+              Código REGA (Registro de Explotaciones Ganaderas) <span class="text-slate-400">(Opcional)</span>
+            </label>
+            <span id="aviario-rega-status-pill" class="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Oficial o Provisional</span>
+          </div>
+          <div class="relative">
+            <input type="text" id="aviario-rega" placeholder="Ej: ES030140000001" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
+            <input type="checkbox" id="aviario-rega-tramite" onchange="app.toggleRegaTramite(this.checked)" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 h-4 w-4">
+            <span>En trámite / Sin REGA <span class="text-amber-400 font-mono text-[11px]">(Asigna identificación provisional tipo 'TEMP-REGA-001')</span></span>
+          </label>
+          <p id="aviario-rega-cambio-alerta" class="hidden text-[11px] text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-800">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+            Al guardar, se actualizarán automáticamente todos los ejemplares inscritos con el nuevo código oficial.
+          </p>
+        </div>
+
+        <!-- Municipio y Provincia -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Municipio <span class="text-red-400">*</span>
+            </label>
+            <input type="text" id="aviario-municipio" required placeholder="Ej: Crevillent" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Provincia <span class="text-red-400">*</span>
+            </label>
+            <input type="text" id="aviario-provincia" required value="Alicante" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Coordenadas GPS del Aviario -->
+        <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300">Geolocalización del Aviario (GPS)</label>
+              <p class="text-[10px] text-slate-400">Se asociará automáticamente a cada ejemplar registrado en esta explotación.</p>
+            </div>
+            <button type="button" onclick="app.capturarGPSAviario()" class="px-3 py-1.5 rounded-lg bg-sky-950 hover:bg-sky-900 border border-sky-800 text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap self-start sm:self-auto">
+              <i class="fa-solid fa-location-dot"></i>
+              <span id="btn-gps-aviario-texto">📍 Capturar Coordenadas GPS del Aviario</span>
+            </button>
+          </div>
+
+          <div id="aviario-gps-info" class="p-2.5 rounded bg-slate-900 border border-slate-800 text-xs flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-satellite-dish text-emerald-400"></i>
+              <span class="text-slate-300">Lat: <strong id="aviario-lat" class="text-emerald-400 font-mono">--</strong>, Lng: <strong id="aviario-lng" class="text-emerald-400 font-mono">--</strong> (Precisión: <span id="aviario-prec" class="text-slate-400 font-mono">--</span> m)</span>
+            </div>
+            <span id="aviario-gps-badge" class="text-[10px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">Sin capturar</span>
+          </div>
+        </div>
+
+        <!-- Botones de Navegación -->
+        <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button type="button" onclick="app.saltarModoVisitante()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition text-center order-2 sm:order-1">
+            Saltar por ahora / Modo Visitante
+          </button>
+          <button type="submit" id="btn-guardar-aviario" class="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 order-1 sm:order-2">
+            <i class="fa-solid fa-check"></i>
+            <span>Guardar Aviario y Continuar</span>
+          </button>
+        </div>
+
+      </form>
     </div>
   </div>
 
