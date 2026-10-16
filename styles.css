@@ -193,3 +193,70 @@
     color: #000000 !important;
   }
 }
+
+/* ============================================================================
+   FASE 6: MODO INSPECCIÓN ZOOTÉCNICA IN SITU & ALTO CONTRASTE EXTERIOR (SOLAR)
+   ============================================================================ */
+
+/* Modo Alto Contraste para Exteriores (Luz Solar Directa) */
+.outdoor-contrast-mode {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border-color: #facc15 !important;
+}
+
+.outdoor-contrast-mode .insitu-card {
+  background-color: #050505 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 0 0 1px #000000 !important;
+}
+
+.outdoor-contrast-mode .insitu-text-muted {
+  color: #fef08a !important;
+  font-weight: 600 !important;
+}
+
+.outdoor-contrast-mode .defect-touch-card {
+  background-color: #0a0a0a !important;
+  border: 2px solid #94a3b8 !important;
+  color: #ffffff !important;
+}
+
+.outdoor-contrast-mode .defect-touch-card.defect-active {
+  background-color: #7f1d1d !important;
+  border: 3px solid #ef4444 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.7) !important;
+}
+
+/* Tarjetas táctiles de un solo toque para defectos descalificables */
+.defect-touch-card {
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.defect-touch-card:active {
+  transform: scale(0.97);
+}
+
+.defect-touch-card.defect-active {
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.75) 0%, rgba(69, 10, 10, 0.9) 100%);
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+}
+
+/* Lienzo de Firma Manuscrita del Inspector */
+#canvas-firma-inspector {
+  touch-action: none;
+  cursor: crosshair;
+  background-image: radial-gradient(#334155 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.outdoor-contrast-mode #canvas-firma-inspector {
+  background-color: #ffffff !important;
+  background-image: radial-gradient(#cbd5e1 1px, transparent 1px) !important;
+  border: 3px solid #facc15 !important;
+}
+

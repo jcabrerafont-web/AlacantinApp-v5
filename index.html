@@ -89,6 +89,16 @@
           <i class="fa-solid fa-pen text-[10px] text-slate-400 ml-auto hidden sm:inline group-hover:text-amber-400 transition-colors"></i>
         </button>
 
+        <!-- Selector Modular RBAC de Rol / Acceso Rápido Inspector -->
+        <div class="hidden sm:flex items-center gap-1.5 bg-slate-800/90 border border-emerald-500/40 rounded-lg px-2 py-1">
+          <i class="fa-solid fa-user-shield text-emerald-400 text-xs"></i>
+          <select id="selector-rol-rbac" onchange="app.cambiarRolRBAC(this.value)" title="Arquitectura Modular RBAC - Seleccionar Rol Activo" class="bg-transparent text-xs font-bold text-emerald-300 focus:outline-none cursor-pointer">
+            <option value="inspector" class="bg-slate-900 text-emerald-300">Rol: Inspector Zootécnico CNZ</option>
+            <option value="criador" class="bg-slate-900 text-amber-300">Rol: Criador / Titular REGA</option>
+            <option value="direccion" class="bg-slate-900 text-sky-300">Rol: Dirección Técnica ESGA025</option>
+          </select>
+        </div>
+
         <!-- Indicador Online / Offline -->
         <div id="net-status-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
           <span class="h-2 w-2 rounded-full bg-emerald-400 pulse-online"></span>
@@ -110,33 +120,44 @@
       </div>
     </div>
 
-    <!-- Navegación por 5 Pestañas Obligatorias -->
+    <!-- Navegación Principal y Acceso Directo a Modo Inspección In Situ -->
     <nav class="max-w-7xl mx-auto px-2 sm:px-6 border-t border-slate-800/80 bg-slate-900/60 overflow-x-auto no-scrollbar">
-      <div class="flex space-x-1 sm:space-x-2 py-1.5 min-w-max">
-        <!-- Tab 1: Registro de Ejemplares -->
-        <button onclick="app.cambiarTab('registro')" id="tab-btn-registro" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-amber-400 bg-slate-800 border border-amber-500/30">
-          <i class="fa-solid fa-id-card text-amber-400"></i>
-          <span>1. Registro de Ejemplares</span>
-        </button>
-        <!-- Tab 2: Censo con Modal -->
-        <button onclick="app.cambiarTab('censo')" id="tab-btn-censo" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-book-bookmark text-sky-400"></i>
-          <span>2. Censo & Fichas</span>
-        </button>
-        <!-- Tab 3: Inspección 100p & Puesta -->
-        <button onclick="app.cambiarTab('inspeccion')" id="tab-btn-inspeccion" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
-          <span>3. Inspección 100p & Puesta</span>
-        </button>
-        <!-- Tab 4: Pedigrí 5Gen & Fx -->
-        <button onclick="app.cambiarTab('pedigri')" id="tab-btn-pedigri" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-sitemap text-purple-400"></i>
-          <span>4. Pedigrí 5Gen & Matriz Ne</span>
-        </button>
-        <!-- Tab 5: Lotes & Familias (Gobe) -->
-        <button onclick="app.cambiarTab('lotes')" id="tab-btn-lotes" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-arrows-spin text-pink-400"></i>
-          <span>5. Lotes & Regla de Gobe</span>
+      <div class="flex items-center justify-between space-x-1 sm:space-x-2 py-1.5 min-w-max">
+        <div class="flex space-x-1 sm:space-x-2">
+          <!-- Tab 1: Registro de Ejemplares -->
+          <button onclick="app.cambiarTab('registro')" id="tab-btn-registro" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-amber-400 bg-slate-800 border border-amber-500/30">
+            <i class="fa-solid fa-id-card text-amber-400"></i>
+            <span>1. Registro de Ejemplares</span>
+          </button>
+          <!-- Tab 2: Censo con Modal -->
+          <button onclick="app.cambiarTab('censo')" id="tab-btn-censo" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+            <i class="fa-solid fa-book-bookmark text-sky-400"></i>
+            <span>2. Censo & Fichas</span>
+          </button>
+          <!-- Tab 3: Inspección 100p & Puesta -->
+          <button onclick="app.cambiarTab('inspeccion')" id="tab-btn-inspeccion" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+            <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
+            <span>3. Inspección 100p & Puesta</span>
+          </button>
+          <!-- Tab 4: Pedigrí 5Gen & Fx -->
+          <button onclick="app.cambiarTab('pedigri')" id="tab-btn-pedigri" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+            <i class="fa-solid fa-sitemap text-purple-400"></i>
+            <span>4. Pedigrí 5Gen & Matriz Ne</span>
+          </button>
+          <!-- Tab 5: Lotes & Familias (Gobe) -->
+          <button onclick="app.cambiarTab('lotes')" id="tab-btn-lotes" class="tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+            <i class="fa-solid fa-arrows-spin text-pink-400"></i>
+            <span>5. Lotes & Regla de Gobe</span>
+          </button>
+          <!-- Acceso Directo FASE 6: 📋 Modo Inspección In Situ -->
+          <button onclick="app.cambiarTab('inspeccion-insitu')" id="tab-btn-inspeccion-insitu" class="tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold transition text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 shadow-sm">
+            <span>📋 Modo Inspección In Situ</span>
+          </button>
+        </div>
+        <!-- Botón directo a la Guía Interactiva de Campo (12 Regiones ESGA025) -->
+        <button onclick="app.abrirModalGuiaCampo()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap" title="Consultar Guía Interactiva de Campo (12 Regiones Corporales ESGA025)">
+          <i class="fa-solid fa-book-open-reader text-amber-400"></i>
+          <span class="hidden lg:inline">Guía Campo 12 Regiones</span>
         </button>
       </div>
     </nav>
@@ -256,6 +277,25 @@
               </label>
               <input type="text" id="alta-codigo-id" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-sm text-amber-300 font-mono font-bold focus:outline-none">
               <p class="text-[11px] text-slate-400 mt-1">Estructura: ESGA025-AA-S-ANILLA</p>
+            </div>
+
+            <!-- Transpondedor / Chip RFID Oficial (134.2 kHz ISO 11784/85 / NFC) -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-semibold text-slate-300">
+                  Transpondedor RFID <span class="text-indigo-400 font-mono">(Opcional)</span>
+                </label>
+                <button type="button" onclick="app.capturarRfidParaAlta()" class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold" title="Capturar lectura activa del lector RFID conectado">
+                  <i class="fa-solid fa-tower-broadcast"></i> Capturar RFID
+                </button>
+              </div>
+              <div class="relative">
+                <input type="text" id="alta-rfid" placeholder="Ej: 968000010000142" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-indigo-300 font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <button type="button" onclick="app.generarChipRfidPruebaAlta()" class="absolute right-2 top-2 text-xs text-slate-400 hover:text-indigo-400" title="Generar código FDX-B oficial de prueba">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Microchip 15 dígitos ISO 11784/85 FDX-B o anilla NFC</p>
             </div>
 
             <!-- Nombre o Alias -->
@@ -385,51 +425,205 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <!-- Toma 1: Lateral Completa -->
-              <div class="space-y-1.5">
-                <span class="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                  <span>1. Toma Lateral Completa</span>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-300">1. Toma Lateral Completa</span>
                   <span class="text-[10px] text-sky-400">Cola a 70º / Pecho</span>
-                </span>
-                <div class="photo-slot" id="slot-lateral" onclick="document.getElementById('input-foto-lateral').click()">
+                </div>
+                <div class="photo-slot relative group overflow-hidden" id="slot-lateral">
+                  <!-- Placeholder cuando no hay foto -->
                   <div id="preview-lateral-placeholder" class="text-center p-3 text-slate-500">
                     <i class="fa-solid fa-camera text-2xl mb-1 text-slate-600"></i>
-                    <p class="text-xs">Pulsar para capturar</p>
+                    <p class="text-xs text-slate-400">Sin fotografía lateral</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Usa los botones para capturar</p>
                   </div>
-                  <img id="preview-lateral-img" class="hidden" alt="Toma Lateral">
+                  <!-- Imagen previa interactiva -->
+                  <img id="preview-lateral-img" class="hidden w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity" alt="Toma Lateral" onclick="app.verFotoAltaPreview('lateral')" title="Pulsar para ampliar foto">
+                  <!-- Botón suprayacente: Eliminar / Repetir Foto -->
+                  <button type="button" id="btn-eliminar-lateral" onclick="app.eliminarFoto('lateral', event)" class="hidden absolute top-2 right-2 px-2.5 py-1 rounded-md bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-700/80 text-[11px] font-semibold shadow-lg flex items-center gap-1.5 backdrop-blur-sm transition transform hover:scale-105 active:scale-95 z-10" title="Eliminar foto y volver a capturar">
+                    <i class="fa-solid fa-trash-can text-rose-400"></i>
+                    <span>Eliminar / Repetir</span>
+                  </button>
+                  <!-- Badge inferior: Capturada OK -->
+                  <div id="badge-captura-lateral" class="hidden absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-950/85 text-emerald-300 border border-emerald-700/70 text-[10px] font-bold font-mono flex items-center gap-1 backdrop-blur-sm z-10">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Capturada</span>
+                  </div>
                 </div>
-                <input type="file" id="input-foto-lateral" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('lateral', this)">
+
+                <!-- Control Doble de Captura -->
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="btn-camara-lateral" onclick="document.getElementById('input-foto-camara-lateral').click()" class="flex-1 py-1.5 px-2 rounded-lg bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 hover:border-sky-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95">
+                    <i class="fa-solid fa-camera text-sky-400"></i>
+                    <span>Tomar Foto (Cámara)</span>
+                  </button>
+                  <button type="button" id="btn-galeria-lateral" onclick="document.getElementById('input-foto-galeria-lateral').click()" class="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-medium flex items-center justify-center gap-1 transition shadow-sm active:scale-95 whitespace-nowrap" title="Elegir fotografía existente desde la galería o archivos">
+                    <i class="fa-solid fa-images text-amber-400"></i>
+                    <span class="text-[11px]">Elegir de Galería</span>
+                  </button>
+                </div>
+
+                <!-- Inputs de archivo ocultos -->
+                <input type="file" id="input-foto-camara-lateral" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('lateral', this)">
+                <input type="file" id="input-foto-galeria-lateral" accept="image/*" class="hidden" onchange="app.procesarCapturaFoto('lateral', this)">
               </div>
 
               <!-- Toma 2: Cabeza y Cresta -->
-              <div class="space-y-1.5">
-                <span class="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                  <span>2. Cabeza y Cresta</span>
-                  <span class="text-[10px] text-sky-400">Orejilla blanca</span>
-                </span>
-                <div class="photo-slot" id="slot-cabeza" onclick="document.getElementById('input-foto-cabeza').click()">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-300">2. Cabeza y Cresta</span>
+                  <span class="text-[10px] text-sky-400">Orejilla blanca / Cresta</span>
+                </div>
+                <div class="photo-slot relative group overflow-hidden" id="slot-cabeza">
+                  <!-- Placeholder cuando no hay foto -->
                   <div id="preview-cabeza-placeholder" class="text-center p-3 text-slate-500">
                     <i class="fa-solid fa-camera text-2xl mb-1 text-slate-600"></i>
-                    <p class="text-xs">Pulsar para capturar</p>
+                    <p class="text-xs text-slate-400">Sin fotografía de cabeza</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Usa los botones para capturar</p>
                   </div>
-                  <img id="preview-cabeza-img" class="hidden" alt="Toma Cabeza">
+                  <!-- Imagen previa interactiva -->
+                  <img id="preview-cabeza-img" class="hidden w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity" alt="Toma Cabeza" onclick="app.verFotoAltaPreview('cabeza')" title="Pulsar para ampliar foto">
+                  <!-- Botón suprayacente: Eliminar / Repetir Foto -->
+                  <button type="button" id="btn-eliminar-cabeza" onclick="app.eliminarFoto('cabeza', event)" class="hidden absolute top-2 right-2 px-2.5 py-1 rounded-md bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-700/80 text-[11px] font-semibold shadow-lg flex items-center gap-1.5 backdrop-blur-sm transition transform hover:scale-105 active:scale-95 z-10" title="Eliminar foto y volver a capturar">
+                    <i class="fa-solid fa-trash-can text-rose-400"></i>
+                    <span>Eliminar / Repetir</span>
+                  </button>
+                  <!-- Badge inferior: Capturada OK -->
+                  <div id="badge-captura-cabeza" class="hidden absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-950/85 text-emerald-300 border border-emerald-700/70 text-[10px] font-bold font-mono flex items-center gap-1 backdrop-blur-sm z-10">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Capturada</span>
+                  </div>
                 </div>
-                <input type="file" id="input-foto-cabeza" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('cabeza', this)">
+
+                <!-- Control Doble de Captura -->
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="btn-camara-cabeza" onclick="document.getElementById('input-foto-camara-cabeza').click()" class="flex-1 py-1.5 px-2 rounded-lg bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 hover:border-sky-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95">
+                    <i class="fa-solid fa-camera text-sky-400"></i>
+                    <span>Tomar Foto (Cámara)</span>
+                  </button>
+                  <button type="button" id="btn-galeria-cabeza" onclick="document.getElementById('input-foto-galeria-cabeza').click()" class="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-medium flex items-center justify-center gap-1 transition shadow-sm active:scale-95 whitespace-nowrap" title="Elegir fotografía existente desde la galería o archivos">
+                    <i class="fa-solid fa-images text-amber-400"></i>
+                    <span class="text-[11px]">Elegir de Galería</span>
+                  </button>
+                </div>
+
+                <!-- Inputs de archivo ocultos -->
+                <input type="file" id="input-foto-camara-cabeza" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('cabeza', this)">
+                <input type="file" id="input-foto-galeria-cabeza" accept="image/*" class="hidden" onchange="app.procesarCapturaFoto('cabeza', this)">
               </div>
 
               <!-- Toma 3: Tarsos y Patas -->
-              <div class="space-y-1.5">
-                <span class="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                  <span>3. Tarsos y Patas</span>
-                  <span class="text-[10px] text-sky-400">Blanco rosáceo</span>
-                </span>
-                <div class="photo-slot" id="slot-tarsos" onclick="document.getElementById('input-foto-tarsos').click()">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-300">3. Tarsos y Patas</span>
+                  <span class="text-[10px] text-sky-400">Blanco rosáceo / 4 dedos</span>
+                </div>
+                <div class="photo-slot relative group overflow-hidden" id="slot-tarsos">
+                  <!-- Placeholder cuando no hay foto -->
                   <div id="preview-tarsos-placeholder" class="text-center p-3 text-slate-500">
                     <i class="fa-solid fa-camera text-2xl mb-1 text-slate-600"></i>
-                    <p class="text-xs">Pulsar para capturar</p>
+                    <p class="text-xs text-slate-400">Sin fotografía de tarsos</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Usa los botones para capturar</p>
                   </div>
-                  <img id="preview-tarsos-img" class="hidden" alt="Toma Tarsos">
+                  <!-- Imagen previa interactiva -->
+                  <img id="preview-tarsos-img" class="hidden w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity" alt="Toma Tarsos" onclick="app.verFotoAltaPreview('tarsos')" title="Pulsar para ampliar foto">
+                  <!-- Botón suprayacente: Eliminar / Repetir Foto -->
+                  <button type="button" id="btn-eliminar-tarsos" onclick="app.eliminarFoto('tarsos', event)" class="hidden absolute top-2 right-2 px-2.5 py-1 rounded-md bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-700/80 text-[11px] font-semibold shadow-lg flex items-center gap-1.5 backdrop-blur-sm transition transform hover:scale-105 active:scale-95 z-10" title="Eliminar foto y volver a capturar">
+                    <i class="fa-solid fa-trash-can text-rose-400"></i>
+                    <span>Eliminar / Repetir</span>
+                  </button>
+                  <!-- Badge inferior: Capturada OK -->
+                  <div id="badge-captura-tarsos" class="hidden absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-emerald-950/85 text-emerald-300 border border-emerald-700/70 text-[10px] font-bold font-mono flex items-center gap-1 backdrop-blur-sm z-10">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Capturada</span>
+                  </div>
                 </div>
-                <input type="file" id="input-foto-tarsos" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('tarsos', this)">
+
+                <!-- Control Doble de Captura -->
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="btn-camara-tarsos" onclick="document.getElementById('input-foto-camara-tarsos').click()" class="flex-1 py-1.5 px-2 rounded-lg bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 hover:border-sky-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95">
+                    <i class="fa-solid fa-camera text-sky-400"></i>
+                    <span>Tomar Foto (Cámara)</span>
+                  </button>
+                  <button type="button" id="btn-galeria-tarsos" onclick="document.getElementById('input-foto-galeria-tarsos').click()" class="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-medium flex items-center justify-center gap-1 transition shadow-sm active:scale-95 whitespace-nowrap" title="Elegir fotografía existente desde la galería o archivos">
+                    <i class="fa-solid fa-images text-amber-400"></i>
+                    <span class="text-[11px]">Elegir de Galería</span>
+                  </button>
+                </div>
+
+                <!-- Inputs de archivo ocultos -->
+                <input type="file" id="input-foto-camara-tarsos" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFoto('tarsos', this)">
+                <input type="file" id="input-foto-galeria-tarsos" accept="image/*" class="hidden" onchange="app.procesarCapturaFoto('tarsos', this)">
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- GALERÍA DE FOTOS ADICIONALES (OPCIONAL)                           -->
+          <!-- ================================================================= -->
+          <div class="pt-4 border-t border-slate-800">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  <i class="fa-solid fa-camera-rotate text-amber-400"></i>
+                  <span>📸 Galería de Fotos Adicionales (Opcional)</span>
+                </h3>
+                <p class="text-xs text-slate-400">
+                  Añade fotografías complementarias con etiqueta descriptiva (ej. exposiciones, plumaje, detalles anatómicos).
+                </p>
+              </div>
+              <span id="galeria-opcional-badge" class="self-start sm:self-auto text-[11px] font-semibold text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-0.5 rounded-full">
+                0 fotos añadidas
+              </span>
+            </div>
+
+            <!-- Controles de Carga de Foto Opcional -->
+            <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-3">
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <!-- Campo de texto corto para título o etiqueta -->
+                <div class="flex-1 relative">
+                  <input type="text" 
+                         id="foto-opcional-titulo" 
+                         placeholder="Título o etiqueta opcional (ej. Foto en Exposición 2026, Detalle de ala...)" 
+                         class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="flex items-center gap-2">
+                  <!-- Botón principal con icono de cámara: Tomar Foto (Cámara) -->
+                  <button type="button" 
+                          id="btn-camara-opcional" 
+                          onclick="document.getElementById('input-foto-camara-opcional').click()" 
+                          class="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 hover:border-sky-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 whitespace-nowrap">
+                    <i class="fa-solid fa-camera text-sky-400"></i>
+                    <span>Tomar Foto (Cámara)</span>
+                  </button>
+
+                  <!-- Botón secundario de galería: Elegir de Galería -->
+                  <button type="button" 
+                          id="btn-galeria-opcional" 
+                          onclick="document.getElementById('input-foto-galeria-opcional').click()" 
+                          class="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-medium flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 whitespace-nowrap" 
+                          title="Elegir fotografía existente desde la galería">
+                    <i class="fa-solid fa-images text-amber-400"></i>
+                    <span>Elegir de Galería</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Inputs de archivo ocultos para fotos opcionales -->
+              <input type="file" id="input-foto-camara-opcional" accept="image/*" capture="environment" class="hidden" onchange="app.procesarCapturaFotoOpcional(this)">
+              <input type="file" id="input-foto-galeria-opcional" accept="image/*" class="hidden" onchange="app.procesarCapturaFotoOpcional(this)">
+
+              <!-- Cuadrícula / Grid de Previsualización -->
+              <div id="grid-galeria-opcional" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-2">
+                <!-- Se poblará dinámicamente con las miniaturas -->
+              </div>
+
+              <!-- Placeholder cuando no hay fotos opcionales -->
+              <div id="galeria-opcional-empty" class="text-center py-4 px-3 border border-dashed border-slate-800/80 rounded-lg text-slate-500 text-xs">
+                <i class="fa-solid fa-images text-slate-600 text-xl mb-1 block"></i>
+                <span>Sin fotos adicionales añadidas. Asigna un título arriba y pulsa en la Cámara o Galería para adjuntar.</span>
               </div>
             </div>
           </div>
@@ -484,45 +678,186 @@
         </div>
       </div>
 
-      <!-- Filtros y Búsqueda -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-3 shadow">
-        <div class="relative w-full md:w-80">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-sm"></i>
-          <input type="text" id="filtro-buscar" placeholder="Buscar por anilla, código o nombre..." class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-amber-500 focus:outline-none" oninput="app.filtrarCenso()">
+      <!-- Filtros y Búsqueda Avanzada del Censo -->
+      <div id="seccion-censo" class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3">
+        <!-- Fila 1: Filtros Primarios (Búsqueda General + Selectores de Sección, Sexo, Familia, REGA, Variedad y Edad) -->
+        <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+          <div class="relative flex-1 min-w-[220px]">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-sm"></i>
+            <input type="text" id="filtro-buscar" placeholder="Buscar por anilla, código, nombre o REGA..." class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-amber-500 focus:outline-none" oninput="app.filtrarCensoEjemplares()">
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Filtro Sección -->
+            <select id="filtro-seccion" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODAS">Sección: Todas</option>
+              <option value="RF">RF (Fundacional)</option>
+              <option value="RA">RA (Auxiliar)</option>
+              <option value="RN">RN (Nacimientos)</option>
+              <option value="RD">RD (Definitivo)</option>
+              <option value="RM">RM (Méritos)</option>
+            </select>
+
+            <!-- Filtro Sexo -->
+            <select id="filtro-sexo" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODOS">Sexo: Todos</option>
+              <option value="Macho">Machos (Gallos)</option>
+              <option value="Hembra">Hembras (Gallinas)</option>
+            </select>
+
+            <!-- Filtro Familia Gobe -->
+            <select id="filtro-familia" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODAS">Familia: Todas</option>
+              <option value="Familia A">Familia A</option>
+              <option value="Familia B">Familia B</option>
+              <option value="Familia C">Familia C</option>
+              <option value="Familia D">Familia D</option>
+              <option value="Familia E">Familia E</option>
+            </select>
+
+            <!-- Filtro Variedad -->
+            <select id="filtro-variedad" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODAS">Variedad: Todas</option>
+              <option value="Moteada / Exchequer">Moteada / Exchequer</option>
+            </select>
+
+            <!-- Filtro REGA -->
+            <select id="filtro-rega" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODOS">REGA: Todos</option>
+            </select>
+
+            <!-- Filtro Edad -->
+            <select id="filtro-edad" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
+              <option value="TODAS">Edad: Todas</option>
+              <option value="ADULTO">Adultos (&ge; 1 año)</option>
+              <option value="JOVEN">Jóvenes (&lt; 1 año)</option>
+            </select>
+
+            <!-- Menú Desplegable: Exportaciones Oficiales Zootécnicas (MAPA / ARCA / DAD-IS / Pedigrí) -->
+            <div class="relative inline-block text-left" id="dropdown-exportaciones-oficiales">
+              <button type="button" 
+                      onclick="app.toggleDropdownExportaciones()" 
+                      id="btn-dropdown-exportaciones" 
+                      class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-600/30 to-amber-500/20 hover:from-amber-600/40 hover:to-amber-500/30 border border-amber-500/50 text-amber-300 hover:text-white text-xs font-bold flex items-center gap-2 shadow-sm transition"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      title="Exportaciones Oficiales Zootécnicas (RD 45/2019, Reg. UE 2016/1012, FAO DAD-IS)">
+                <i class="fa-solid fa-file-export text-amber-400"></i>
+                <span>📤 Exportaciones Oficiales Zootécnicas</span>
+                <i class="fa-solid fa-chevron-down text-[10px] transition-transform duration-200" id="icon-chevron-exportaciones"></i>
+              </button>
+
+              <div id="menu-exportaciones-oficiales" 
+                   class="hidden absolute right-0 z-50 mt-2 w-80 sm:w-96 origin-top-right rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl p-3 space-y-2.5 backdrop-blur-md">
+                
+                <!-- Selector de Ámbito de Exportación -->
+                <div class="bg-slate-950/90 p-2.5 rounded-lg border border-slate-800 text-xs space-y-1.5">
+                  <div class="flex items-center justify-between text-slate-300 font-semibold text-[11px] uppercase tracking-wider">
+                    <span class="flex items-center gap-1 text-slate-400">
+                      <i class="fa-solid fa-filter text-amber-400 text-[10px]"></i> Ámbito de Exportación:
+                    </span>
+                    <span id="export-conteo-info" class="text-amber-400 font-mono text-[10px] font-bold">6 ejemplares</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 text-[11px]">
+                    <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
+                      <input type="radio" name="export-ambito" value="filtrado" checked onchange="app.actualizarConteoExportacion()" class="accent-amber-500">
+                      <span id="export-label-filtrados">Filtros activos</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
+                      <input type="radio" name="export-ambito" value="completo" onchange="app.actualizarConteoExportacion()" class="accent-amber-500">
+                      <span id="export-label-completo">Censo completo</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Opciones de Exportación Oficiales -->
+                <div class="space-y-1.5">
+                  <!-- 1. ARCA / e-Zootecnia (CSV) -->
+                  <button type="button" 
+                          onclick="app.exportarFormatoARCA()" 
+                          class="w-full text-left p-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/50 transition group flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-amber-300 group-hover:text-amber-200 flex items-center gap-1.5">
+                        <span>🇪🇸</span> Exportar Formato ARCA / e-Zootecnia (CSV)
+                      </span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono font-bold">MAPA</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-snug">
+                      Estructura estandarizada nacional para la Dirección General de Producciones y Mercados Agrarios.
+                    </p>
+                  </button>
+
+                  <!-- 2. DAD-IS / FAO (JSON) -->
+                  <button type="button" 
+                          onclick="app.exportarInformeDADIS()" 
+                          class="w-full text-left p-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-sky-500/50 transition group flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-sky-300 group-hover:text-sky-200 flex items-center gap-1.5">
+                        <span>🇺🇳</span> Exportar Informe Demográfico DAD-IS / FAO (JSON)
+                      </span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-mono font-bold">FAO</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-snug">
+                      Resumen aglutinado de censos, tamaño efectivo (Ne) y consanguinidad media.
+                    </p>
+                  </button>
+
+                  <!-- 3. Matriz Pedigrí (CSV) -->
+                  <button type="button" 
+                          onclick="app.exportarMatrizPedigriCientifica()" 
+                          class="w-full text-left p-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-emerald-500/50 transition group flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-emerald-300 group-hover:text-emerald-200 flex items-center gap-1.5">
+                        <span>📊</span> Exportar Matriz Completa de Pedigrí (CSV)
+                      </span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono font-bold">3 COLS</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-snug">
+                      Formato de 3 columnas (ID_Animal, ID_Padre, ID_Madre) saneado para programas científicos (ENDOG, CFC, R).
+                    </p>
+                  </button>
+
+                  <!-- 4. Libro Genealógico General (CSV) -->
+                  <button type="button" 
+                          onclick="app.exportarLibroCSV(); app.cerrarDropdownExportaciones();" 
+                          class="w-full text-left p-2 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 transition group flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-slate-400 group-hover:text-slate-200 flex items-center gap-1.5">
+                      <i class="fa-solid fa-file-csv text-slate-400"></i> Exportar Libro Genealógico Simple (CSV)
+                    </span>
+                    <span class="text-[9px] text-slate-500 font-mono">10 COLS</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <!-- Filtro Sección -->
-          <select id="filtro-seccion" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCenso()">
-            <option value="TODAS">Sección: Todas</option>
-            <option value="RF">RF (Fundacional)</option>
-            <option value="RA">RA (Auxiliar)</option>
-            <option value="RN">RN (Nacimientos)</option>
-            <option value="RD">RD (Definitivo)</option>
-            <option value="RM">RM (Méritos)</option>
-          </select>
+        <!-- Fila 2: Búsqueda Avanzada por Etiquetas de Fotos Opcionales (FASE 2) -->
+        <div class="pt-2.5 border-t border-slate-800/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div class="relative w-full md:w-96">
+            <i class="fa-solid fa-tags absolute left-3 top-2.5 text-amber-500 text-xs"></i>
+            <input type="text" 
+                   id="filtro-etiqueta-galeria" 
+                   placeholder="🏷️ Filtrar por etiqueta de foto (ej. Exposición, Ala, Muda, Premio...)" 
+                   class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-20 py-1.5 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-amber-500 focus:outline-none" 
+                   oninput="app.filtrarCensoEjemplares()">
+            <button type="button" 
+                    id="btn-limpiar-filtro-etiqueta" 
+                    onclick="app.limpiarFiltroEtiqueta()" 
+                    class="absolute right-2 top-1.5 hidden px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+              ✕ Limpiar
+            </button>
+          </div>
 
-          <!-- Filtro Sexo -->
-          <select id="filtro-sexo" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCenso()">
-            <option value="TODOS">Sexo: Todos</option>
-            <option value="Macho">Machos (Gallos)</option>
-            <option value="Hembra">Hembras (Gallinas)</option>
-          </select>
-
-          <!-- Filtro Familia -->
-          <select id="filtro-familia" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCenso()">
-            <option value="TODAS">Familia: Todas</option>
-            <option value="Familia A">Familia A</option>
-            <option value="Familia B">Familia B</option>
-            <option value="Familia C">Familia C</option>
-            <option value="Familia D">Familia D</option>
-            <option value="Familia E">Familia E</option>
-          </select>
-
-          <button onclick="app.exportarLibroCSV()" class="px-3 py-1.5 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-300 hover:bg-emerald-900 text-xs font-semibold flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-file-csv"></i>
-            <span>Exportar CSV</span>
-          </button>
+          <!-- Sugerencias y Chips dinámicos de etiquetas más frecuentes -->
+          <div class="flex-1 flex flex-wrap items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 font-medium flex items-center gap-1 shrink-0">
+              <i class="fa-solid fa-sparkles text-amber-400 text-[10px]"></i> Etiquetas frecuentes:
+            </span>
+            <div id="contenedor-chips-etiquetas" class="flex flex-wrap items-center gap-1.5">
+              <!-- Se generarán dinámicamente -->
+            </div>
+          </div>
         </div>
       </div>
 
@@ -559,6 +894,29 @@
     <!-- ======================================================================= -->
     <section id="tab-inspeccion" class="tab-content space-y-6">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 shadow-xl">
+        <!-- Banner de Acceso Directo a Modo Inspección In Situ (Fase 6) -->
+        <div class="mb-4 p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-amber-950/60 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-lg shrink-0">
+              <i class="fa-solid fa-clipboard-user"></i>
+            </div>
+            <div>
+              <h3 class="text-xs sm:text-sm font-extrabold text-white">¿Realizando visita oficial de campo en el aviario?</h3>
+              <p class="text-[11px] text-slate-300">Activa la interfaz de alto contraste solar, checklist 1-toque, firma manuscrita en Canvas y Acta Oficial con GPS.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" onclick="app.abrirModalGuiaCampo()" class="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-book-open-reader"></i>
+              <span>Guía 12 Regiones</span>
+            </button>
+            <button type="button" onclick="app.abrirModoInspeccionInSituDesdeTab3()" class="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition">
+              <span>📋 Modo Inspección In Situ</span>
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
           <div>
             <h2 class="text-lg font-bold text-white flex items-center gap-2">
@@ -752,53 +1110,664 @@
         </div>
 
         <!-- ================================================================= -->
-        <!-- MÓDULO ADICIONAL: CONTROL INDIVIDUAL DE PUESTA (15 DÍAS)          -->
+        <!-- MÓDULO: CONTROL OFICIAL DE PUESTA Y ANALÍTICA VISUAL (FASE 4)     -->
         <!-- ================================================================= -->
-        <div class="mt-8 pt-6 border-t border-slate-800">
-          <div class="flex items-center justify-between mb-4">
+        <div id="seccion-puesta" class="mt-8 pt-6 border-t border-slate-800 space-y-6">
+          
+          <!-- Encabezado con selector de subpestañas -->
+          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
               <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-egg text-amber-400"></i>
-                Control Oficial de Puesta Individual (Prueba de 15 Días)
+                <i class="fa-solid fa-chart-line text-amber-400"></i>
+                <span>Control Oficial de Puesta y Analítica Visual (ESGA025)</span>
               </h3>
               <p class="text-xs text-slate-400">
-                Parámetros raciales ESGA025: Peso huevo entre 55 g y 70 g · Cáscara blanco crema.
+                Parámetros raciales oficiales: Peso huevo entre 55 g y 70 g · Cáscara blanco crema.
               </p>
             </div>
-            <span class="text-xs text-pink-400 font-medium bg-pink-950/40 border border-pink-900 px-2 py-0.5 rounded">
-              Solo Hembras (Gallinas)
-            </span>
-          </div>
-
-          <form id="form-control-puesta" onsubmit="app.guardarControlPuesta(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Fecha Inicio Prueba</label>
-              <input type="date" id="puesta-inicio" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Total Huevos (15 días)</label>
-              <input type="number" id="puesta-total-huevos" min="0" max="15" placeholder="Ej: 11" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Peso Medio Huevo (g)</label>
-              <input type="number" id="puesta-peso-huevo" step="0.5" min="40" max="85" placeholder="55.0 - 70.0 g" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Color de Cáscara</label>
-              <select id="puesta-color-cascara" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
-                <option value="Blanco crema" selected>Blanco crema (Estándar oficial)</option>
-                <option value="Blanco puro">Blanco puro</option>
-                <option value="Tostado claro">Tostado claro</option>
-                <option value="Moteado / Anomalía">Moteado / Anomalía</option>
-              </select>
-            </div>
-            <div class="sm:col-span-2 lg:col-span-4 flex justify-end">
-              <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-floppy-disk"></i>
-                <span>Registrar Control de Puesta</span>
+            
+            <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button type="button" 
+                      id="btn-subtab-analitica-puesta" 
+                      onclick="app.cambiarSubtabPuesta('analitica')" 
+                      class="subtab-puesta-btn px-3 py-1.5 rounded-lg text-xs font-bold transition text-amber-400 bg-slate-800 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>📊 Analítica de Producción</span>
+              </button>
+              <button type="button" 
+                      id="btn-subtab-rfid-puesta" 
+                      onclick="app.cambiarSubtabPuesta('rfid')" 
+                      class="subtab-puesta-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-tower-broadcast text-indigo-400"></i>
+                <span>📡 Ponedero RFID Inteligente</span>
+              </button>
+              <button type="button" 
+                      id="btn-subtab-registro-puesta" 
+                      onclick="app.cambiarSubtabPuesta('registro')" 
+                      class="subtab-puesta-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-plus"></i>
+                <span>➕ Registrar Prueba (15 Días)</span>
+              </button>
+              <button type="button" 
+                      id="btn-subtab-tabla-puesta" 
+                      onclick="app.cambiarSubtabPuesta('tabla')" 
+                      class="subtab-puesta-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white hover:bg-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check"></i>
+                <span>📋 Historial de Puesta</span>
               </button>
             </div>
-          </form>
+          </div>
+
+          <!-- =============================================================== -->
+          <!-- PANEL HARDWARE: VINCULACIÓN RFID (BLUETOOTH / USB SERIAL)       -->
+          <!-- =============================================================== -->
+          <div id="panel-hardware-rfid" class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-indigo-900/40 rounded-xl p-3.5 shadow-xl">
+            <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <!-- Estado del Lector -->
+              <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center flex-shrink-0">
+                  <i class="fa-solid fa-microchip text-base"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-white">Lector RFID / Ponedero Inteligente</span>
+                    <!-- Badge reactivo de estado de conexión -->
+                    <span id="badge-rfid-estado" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      <span class="h-2 w-2 rounded-full bg-slate-500"></span>
+                      <span id="badge-rfid-estado-texto">Desconectado</span>
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400">134.2 kHz (ISO 11784/11785 FDX-B/HDX) y NFC (13.56 MHz) · Web Bluetooth & Web Serial</p>
+                </div>
+              </div>
+
+              <!-- Botones de Conexión Hardware y Simulación -->
+              <div class="flex flex-wrap items-center gap-2">
+                <!-- Botón Conectar Bluetooth -->
+                <button type="button" 
+                        id="btn-rfid-bluetooth" 
+                        onclick="app.conectarLectorBluetooth()" 
+                        class="px-3 py-1.5 rounded-lg bg-sky-950 hover:bg-sky-900 border border-sky-800 hover:border-sky-700 text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm active:scale-95" 
+                        title="Conectar lector RFID inalámbrico mediante Web Bluetooth API">
+                  <i class="fa-brands fa-bluetooth-b text-sky-400"></i>
+                  <span>Bluetooth (BLE)</span>
+                </button>
+
+                <!-- Botón Conectar Serial USB -->
+                <button type="button" 
+                        id="btn-rfid-serial" 
+                        onclick="app.conectarLectorSerial()" 
+                        class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm active:scale-95" 
+                        title="Conectar lector RFID o ponedero por cable USB / Puerto Serie COM">
+                  <i class="fa-solid fa-plug text-amber-400"></i>
+                  <span>USB / Serie</span>
+                </button>
+
+                <!-- Botón Desconectar (Oculto inicialmente) -->
+                <button type="button" 
+                        id="btn-rfid-desconectar" 
+                        onclick="app.desconectarLectorRfid()" 
+                        class="hidden px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm active:scale-95" 
+                        title="Desconectar el lector actual">
+                  <i class="fa-solid fa-power-off"></i>
+                  <span>Desconectar</span>
+                </button>
+
+                <!-- Toggle Sonido Beep -->
+                <button type="button" 
+                        id="btn-rfid-sonido" 
+                        onclick="app.alternarSonidoRfid()" 
+                        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition" 
+                        title="Activar / Desactivar señal acústica Beep de confirmación">
+                  <i id="icono-rfid-sonido" class="fa-solid fa-volume-high text-emerald-400"></i>
+                  <span id="texto-rfid-sonido">Beep</span>
+                </button>
+
+                <!-- Selector manual de simulación / prueba para dispositivos sin Bluetooth -->
+                <div class="relative">
+                  <select id="select-rfid-simulacion" 
+                          onchange="if(this.value){ app.simularLecturaRfid(this.value); this.value=''; }" 
+                          class="bg-slate-950 border border-indigo-700/60 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                    <option value="">⚡ Simular paso de gallina por el ponedero...</option>
+                    <!-- Se poblará dinámicamente con las gallinas con chip -->
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- =============================================================== -->
+          <!-- SUBPESTAÑA 1: 📊 ANALÍTICA DE PRODUCCIÓN Y CURVAS DE PUESTA      -->
+          <!-- =============================================================== -->
+          <div id="subtab-analitica-puesta" class="subtab-puesta-content space-y-5">
+            
+            <!-- Barra de Filtros y Rango de Fechas -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-lg space-y-3">
+              <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2.5">
+                  <!-- Filtro Ejemplar Individual (Gallina por anilla) -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                      <i class="fa-solid fa-feather text-pink-400"></i> Gallina:
+                    </span>
+                    <select id="filtro-analitica-animal" 
+                            onchange="app.renderizarAnaliticaPuesta()" 
+                            class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-amber-500 focus:outline-none">
+                      <option value="TODAS">Todas las gallinas reproductoras</option>
+                    </select>
+                  </div>
+
+                  <!-- Filtro Lote de Reproducción / Familia (Regla de Gobe) -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                      <i class="fa-solid fa-dna text-sky-400"></i> Lote / Familia:
+                    </span>
+                    <select id="filtro-analitica-lote" 
+                            onchange="app.renderizarAnaliticaPuesta()" 
+                            class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-amber-500 focus:outline-none">
+                      <option value="TODOS">Todos los lotes y familias</option>
+                      <optgroup label="Familias (Regla de Gobe)">
+                        <option value="Familia A">Familia A</option>
+                        <option value="Familia B">Familia B</option>
+                        <option value="Familia C">Familia C</option>
+                        <option value="Familia D">Familia D</option>
+                        <option value="Familia E">Familia E</option>
+                      </optgroup>
+                      <optgroup label="Lotes de Reproducción" id="optgroup-analitica-lotes">
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <!-- Filtro Rango de Fechas -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                      <i class="fa-solid fa-calendar text-emerald-400"></i> Rango:
+                    </span>
+                    <select id="filtro-analitica-periodo" 
+                            onchange="app.renderizarAnaliticaPuesta()" 
+                            class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-amber-500 focus:outline-none">
+                      <option value="TODAS">Todo el Histórico / Ciclo Anual</option>
+                      <option value="15DIAS">Última Prueba Oficial (15 días)</option>
+                      <option value="MENSUAL">Vista Mensual (Últimos 60 días)</option>
+                      <option value="ANUAL">Ciclo Anual 2026</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <span id="badge-total-controles-filtrados" class="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-lg">
+                    0 pruebas
+                  </span>
+                  <button type="button" 
+                          onclick="app.renderizarAnaliticaPuesta()" 
+                          title="Actualizar y refrescar visualizaciones gráficas"
+                          class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
+                    <span>Refrescar</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPIs Zootécnicos de Puesta -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+                <span class="text-[11px] text-slate-400 block font-medium">Tasa Hen-Day Media</span>
+                <span id="kpi-puesta-henday" class="text-xl font-extrabold text-amber-400 font-mono">0.0%</span>
+                <span id="kpi-puesta-henday-sub" class="text-[10px] text-slate-500 block">Intensidad de puesta</span>
+              </div>
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+                <span class="text-[11px] text-slate-400 block font-medium">Peso Medio Dinámico</span>
+                <span id="kpi-puesta-pesomedio" class="text-xl font-extrabold text-emerald-400 font-mono">0.0 g</span>
+                <span id="kpi-puesta-pesomedio-sub" class="text-[10px] text-emerald-500 block">Estándar: 55-70 g</span>
+              </div>
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+                <span class="text-[11px] text-slate-400 block font-medium">Cáscara Blanco Crema</span>
+                <span id="kpi-puesta-conformidad" class="text-xl font-extrabold text-sky-400 font-mono">0.0%</span>
+                <span id="kpi-puesta-conformidad-sub" class="text-[10px] text-slate-500 block">Conforme patrón racial</span>
+              </div>
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+                <span class="text-[11px] text-slate-400 block font-medium">Alertas Incubación</span>
+                <span id="kpi-puesta-alertas" class="text-xl font-extrabold text-rose-400 font-mono">0</span>
+                <span id="kpi-puesta-alertas-sub" class="text-[10px] text-slate-500 block">&lt;55g o &gt;70g / Defectos</span>
+              </div>
+            </div>
+
+            <!-- Banner Dinámico de Alerta de Incubación -->
+            <div id="banner-alerta-incubacion" class="hidden p-3.5 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs flex items-start gap-3">
+              <i class="fa-solid fa-triangle-exclamation text-rose-400 text-base mt-0.5 shrink-0"></i>
+              <div class="space-y-0.5">
+                <h4 class="font-bold text-rose-200">Alerta Zootécnica de Incubabilidad (ESGA025)</h4>
+                <p id="banner-alerta-incubacion-msg" class="text-rose-300/90 text-[11px] leading-relaxed">
+                  Se han detectado pruebas con huevos fuera del rango oficial de peso (55 g - 70 g) o con cáscara defectuosa. Dichos huevos quedan desaconsejados para incubación y conservación genealógica según el Protocolo CNZ.
+                </p>
+              </div>
+            </div>
+
+            <!-- Grid de Gráficos Interactivos (3 Gráficos Oficiales) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              
+              <!-- GRÁFICO 1: Curva de Intensidad de Puesta (%) -->
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                    <h4 class="text-xs font-bold text-white uppercase tracking-wider">
+                      Gráfico 1: Curva de Intensidad de Puesta (%)
+                    </h4>
+                  </div>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono font-bold">
+                    Tasa Hen-Day Production %
+                  </span>
+                </div>
+                <div class="relative w-full h-64">
+                  <canvas id="chart-intensidad-puesta" class="w-full h-full"></canvas>
+                </div>
+                <div class="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                  <span>Fórmula: (Huevos recogidos / (Gallinas &times; Días)) &times; 100</span>
+                  <span class="text-amber-400/80 font-medium">Ref. Óptima Raza: 70% - 90%</span>
+                </div>
+              </div>
+
+              <!-- GRÁFICO 2: Evolución del Peso Medio del Huevo (g) -->
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+                    <h4 class="text-xs font-bold text-white uppercase tracking-wider">
+                      Gráfico 2: Evolución del Peso Medio del Huevo (g)
+                    </h4>
+                  </div>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-bold">
+                    Umbrales 55g - 70g
+                  </span>
+                </div>
+                <div class="relative w-full h-64">
+                  <canvas id="chart-peso-huevo" class="w-full h-full"></canvas>
+                </div>
+                <div class="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                  <span class="text-emerald-400 font-medium">Zona Conforme: 55.0 g &le; Peso &le; 70.0 g</span>
+                  <span class="text-rose-400 font-medium">&lt;55g o &gt;70g = Descarte</span>
+                </div>
+              </div>
+
+              <!-- GRÁFICO 3: Distribución de Calidad de Cáscara -->
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3 lg:col-span-2">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-sky-400"></div>
+                    <h4 class="text-xs font-bold text-white uppercase tracking-wider">
+                      Gráfico 3: Distribución de Calidad de Cáscara
+                    </h4>
+                  </div>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 font-mono font-bold">
+                    Conforme Blanco Crema vs. Defectuosos
+                  </span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                  <div class="relative w-full h-56 md:col-span-1 flex items-center justify-center">
+                    <canvas id="chart-calidad-cascara" class="max-h-56"></canvas>
+                  </div>
+                  <div class="md:col-span-2 space-y-2 text-xs">
+                    <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="flex items-center gap-2 text-slate-300 font-medium">
+                          <span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span>
+                          <span>Blanco Crema (Estándar Oficial ESGA025)</span>
+                        </span>
+                        <span id="stat-cascara-crema" class="font-mono font-bold text-amber-400">0% (0)</span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="flex items-center gap-2 text-slate-300 font-medium">
+                          <span class="w-3 h-3 rounded-full bg-sky-400 inline-block"></span>
+                          <span>Blanco Puro (Tolerado sin pigmento)</span>
+                        </span>
+                        <span id="stat-cascara-blanco" class="font-mono font-bold text-sky-400">0% (0)</span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="flex items-center gap-2 text-slate-300 font-medium">
+                          <span class="w-3 h-3 rounded-full bg-orange-400 inline-block"></span>
+                          <span>Tostado Claro (Desviación cromática)</span>
+                        </span>
+                        <span id="stat-cascara-tostado" class="font-mono font-bold text-orange-400">0% (0)</span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="flex items-center gap-2 text-slate-300 font-medium">
+                          <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+                          <span>Moteado / Anomalía (Defectuoso - Descarte)</span>
+                        </span>
+                        <span id="stat-cascara-anomalia" class="font-mono font-bold text-rose-400">0% (0)</span>
+                      </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed italic">
+                      Nota zootécnica: La cutícula del huevo de la Gallina Alacantina presenta coloración blanco crema homogénea. Las cáscaras coloreadas o con rugosidad indican contaminación genética o trastornos oviductales.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- =============================================================== -->
+          <!-- SUBPESTAÑA 2: 📡 PONEDERO INTELIGENTE & LECTURA CONTINUA RFID   -->
+          <!-- =============================================================== -->
+          <div id="subtab-rfid-puesta" class="subtab-puesta-content hidden space-y-5">
+            
+            <!-- Panel Principal del Ponedero Inteligente -->
+            <div class="bg-slate-900 border border-indigo-900/40 rounded-xl p-5 shadow-2xl space-y-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="h-8 w-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/30">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                  </div>
+                  <div>
+                    <h4 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                      <span>Ponedero Inteligente ESGA025 #1</span>
+                      <span class="text-[10px] px-2 py-0.5 rounded-full font-mono bg-indigo-950 text-indigo-300 border border-indigo-800">Antena 134.2 kHz ISO 11784/85</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-400">Captura automática de transpondedor, registro horario y peso individual del huevo</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="app.simularLecturaAleatoria()" class="px-2.5 py-1 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/80 text-indigo-300 text-xs font-semibold flex items-center gap-1 transition shadow-sm" title="Simular paso de una gallina con chip al azar">
+                    <i class="fa-solid fa-shuffle text-indigo-400"></i>
+                    <span>Simular Entrada Aleatoria</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Estado 1: Esperando detección en la antena (Radar pulsante) -->
+              <div id="rfid-radar-esperando" class="p-6 rounded-xl bg-slate-950/80 border border-dashed border-slate-700 text-center space-y-4">
+                <div class="inline-flex items-center justify-center p-3 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse">
+                  <i class="fa-solid fa-wifi text-3xl transform -rotate-45"></i>
+                </div>
+                <div>
+                  <h5 class="text-sm font-bold text-white">Antena RFID en Escucha Continua</h5>
+                  <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    Pasa el transpondedor de la gallina por el lector Bluetooth/Serial o escanea con el lector USB de mano.
+                  </p>
+                </div>
+
+                <!-- Input manual / escáner de código de barras/RFID tipo cuña de teclado -->
+                <div class="max-w-md mx-auto pt-2">
+                  <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                      <i class="fa-solid fa-barcode absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                      <input type="text" 
+                             id="input-rfid-manual-scan" 
+                             placeholder="Escanear código RFID o teclear 15 dígitos..." 
+                             onkeydown="if(event.key==='Enter'){ app.procesarLecturaRfid(this.value); this.value=''; }" 
+                             class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-indigo-300 font-mono placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <button type="button" 
+                            onclick="const inp=document.getElementById('input-rfid-manual-scan'); if(inp.value){ app.procesarLecturaRfid(inp.value); inp.value=''; }" 
+                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm">
+                      Leer
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Chips de prueba rápida para hacer clic directamente -->
+                <div class="pt-3 border-t border-slate-800/80">
+                  <span class="text-[10px] text-slate-400 font-semibold block mb-2 uppercase tracking-wider">Gallinas con chip RFID en el censo (Clic para probar):</span>
+                  <div id="rfid-chips-demo-container" class="flex flex-wrap items-center justify-center gap-2">
+                    <!-- Dinámico -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Estado 2: Gallina Detectada en el Ponedero (Panel de Registro Inmediato) -->
+              <div id="rfid-panel-detectado" class="hidden p-5 rounded-xl bg-gradient-to-br from-indigo-950/40 via-slate-950 to-slate-900 border-2 border-emerald-500/60 shadow-2xl space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+                  <div class="flex items-center gap-3">
+                    <img id="rfid-detectado-foto" src="./icons/logo.png" class="h-14 w-14 rounded-xl object-cover border-2 border-emerald-500/80 shadow-md bg-slate-950" alt="Gallina Detectada">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span id="rfid-detectado-anilla" class="text-base font-bold text-white font-mono">#0002</span>
+                        <span id="rfid-detectado-codigo" class="text-xs font-mono text-amber-400">ESGA025-22-H-0002</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 animate-pulse flex items-center gap-1">
+                          <i class="fa-solid fa-check"></i> En Nido
+                        </span>
+                      </div>
+                      <p id="rfid-detectado-nombre" class="text-xs text-slate-300 font-semibold">Reina del Vinalopó · Familia A</p>
+                      <p class="text-[11px] text-indigo-400 font-mono mt-0.5">
+                        <i class="fa-solid fa-microchip mr-1"></i>Transpondedor: <span id="rfid-detectado-chip" class="font-bold">968000010000002</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="text-right">
+                    <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Hora de Entrada</span>
+                    <span id="rfid-detectado-timestamp" class="text-xs font-mono text-white font-bold">16:30:15</span>
+                  </div>
+                </div>
+
+                <!-- Formulario de Puesta y Pesaje del Huevo -->
+                <form id="form-rfid-registro-huevo" onsubmit="app.guardarHuevoPonederoRfid(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <!-- Fecha y Hora Exacta -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">
+                      Fecha y Hora de Puesta <span class="text-amber-400">*</span>
+                    </label>
+                    <input type="datetime-local" id="rfid-fecha-hora" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono">
+                  </div>
+
+                  <!-- Peso del Huevo (g) con autoenfoque y feedback de rango ESGA025 -->
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-semibold text-slate-300">
+                        Peso del Huevo (g) <span class="text-red-400">*</span>
+                      </label>
+                      <span id="rfid-peso-feedback" class="text-[10px] font-bold text-slate-400">Rango: 55.0 - 70.0 g</span>
+                    </div>
+                    <input type="number" 
+                           id="rfid-peso-huevo" 
+                           step="0.1" 
+                           min="35" 
+                           max="85" 
+                           placeholder="Ej: 62.5" 
+                           required 
+                           oninput="app.validarPesoRfid(this.value)" 
+                           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  </div>
+
+                  <!-- Color y Calidad de Cáscara -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">
+                      Coloración de la Cáscara <span class="text-red-400">*</span>
+                    </label>
+                    <select id="rfid-color-cascara" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                      <option value="Blanco crema" selected>Blanco crema (Estándar Oficial ESGA025)</option>
+                      <option value="Blanco puro">Blanco puro</option>
+                      <option value="Tostado claro">Tostado claro (Fuera de estándar)</option>
+                      <option value="Moteado / Anomalía">Moteado / Anomalía (Defectuoso)</option>
+                    </select>
+                  </div>
+
+                  <!-- Botones de Acción -->
+                  <div class="sm:col-span-3 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
+                    <button type="button" 
+                            onclick="app.resetearPonederoRfid()" 
+                            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition">
+                      <i class="fa-solid fa-arrow-rotate-left"></i>
+                      <span>Cancelar / Liberar Nido</span>
+                    </button>
+
+                    <div class="flex items-center gap-2">
+                      <button type="button" 
+                              onclick="app.transferirRfidAControl15D()" 
+                              class="px-3 py-1.5 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-800 text-purple-300 text-xs font-semibold flex items-center gap-1.5 transition" 
+                              title="Cargar esta gallina en la prueba oficial de 15 días">
+                        <i class="fa-solid fa-share"></i>
+                        <span>Pasar a Prueba 15 Días</span>
+                      </button>
+
+                      <button type="submit" 
+                              class="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition transform active:scale-95">
+                        <i class="fa-solid fa-egg text-slate-950 text-sm"></i>
+                        <span>💾 Guardar Registro de Puesta</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Estado 3: Transpondedor Desconocido (No vinculado al censo) -->
+              <div id="rfid-panel-desconocido" class="hidden p-5 rounded-xl bg-rose-950/20 border-2 border-rose-900/60 shadow-xl space-y-3">
+                <div class="flex items-center gap-3">
+                  <div class="h-10 w-10 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider">Transpondedor no vinculado en el censo</h5>
+                    <p class="text-xs text-rose-300 font-mono mt-0.5">Código Chip detectado: <strong id="rfid-desconocido-chip">--</strong></p>
+                  </div>
+                </div>
+                <p class="text-[11px] text-slate-400">
+                  Este chip RFID no coincide con ninguna gallina reproductora dada de alta en el Libro Genealógico. Puedes asignarlo ahora mismo a una gallina existente o registrar un nuevo ejemplar.
+                </p>
+                <div class="flex items-center gap-2 pt-2">
+                  <button type="button" onclick="app.abrirModalVincularChipDesconocido()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Vincular a una Gallina del Censo</span>
+                  </button>
+                  <button type="button" onclick="app.resetearPonederoRfid()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+                    Ignorar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Historial de Lecturas y Entradas Recientes del Ponedero -->
+              <div class="pt-2 space-y-2">
+                <div class="flex items-center justify-between">
+                  <h5 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>
+                    <span>Entradas y Pesajes Registrados en este Ponedero</span>
+                  </h5>
+                  <span id="badge-total-entradas-rfid" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">0 registros</span>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-800">
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                        <th class="py-2.5 px-3">Hora / Fecha</th>
+                        <th class="py-2.5 px-3">Gallina</th>
+                        <th class="py-2.5 px-3">Transpondedor RFID</th>
+                        <th class="py-2.5 px-3 text-right">Peso Huevo</th>
+                        <th class="py-2.5 px-3">Cáscara</th>
+                        <th class="py-2.5 px-3 text-center">Conformidad ESGA025</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tabla-rfid-historial-body">
+                      <tr>
+                        <td colspan="6" class="text-center py-6 text-slate-500 text-xs italic">
+                          Aún no se han registrado eventos de puesta mediante RFID en esta sesión.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- =============================================================== -->
+          <!-- SUBPESTAÑA 3: ➕ FORMULARIO DE REGISTRO DE CONTROL (15 DÍAS)    -->
+          <!-- =============================================================== -->
+          <div id="subtab-registro-puesta" class="subtab-puesta-content hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-pen-to-square text-amber-400"></i>
+                  <span>Registro de Prueba Oficial de Rendimiento (15 Días)</span>
+                </h4>
+                <span class="text-xs text-pink-400 font-medium bg-pink-950/40 border border-pink-900 px-2 py-0.5 rounded">
+                  Solo Hembras (Gallinas)
+                </span>
+              </div>
+
+              <form id="form-control-puesta" onsubmit="app.guardarControlPuesta(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="sm:col-span-2 lg:col-span-4">
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs text-slate-400">Seleccionar Gallina Reproductora Oficial</label>
+                    <button type="button" onclick="app.cambiarSubtabPuesta('rfid')" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition">
+                      <i class="fa-solid fa-tower-broadcast"></i>
+                      <span>📡 Autocompletar con Ponedero RFID</span>
+                    </button>
+                  </div>
+                  <select id="puesta-form-animal-select" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    <option value="">Selecciona una gallina...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Fecha Inicio Prueba</label>
+                  <input type="date" id="puesta-inicio" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Total Huevos (15 días)</label>
+                  <input type="number" id="puesta-total-huevos" min="0" max="15" placeholder="Ej: 12" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Peso Medio Huevo (g)</label>
+                  <input type="number" id="puesta-peso-huevo" step="0.1" min="35" max="85" placeholder="55.0 - 70.0 g" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Color y Calidad de Cáscara</label>
+                  <select id="puesta-color-cascara" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
+                    <option value="Blanco crema" selected>Blanco crema (Estándar oficial ESGA025)</option>
+                    <option value="Blanco puro">Blanco puro</option>
+                    <option value="Tostado claro">Tostado claro (Fuera de estándar)</option>
+                    <option value="Moteado / Anomalía">Moteado / Anomalía (Defectuoso)</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-4 flex items-center justify-between pt-3 border-t border-slate-800">
+                  <span class="text-[11px] text-slate-500">
+                    La prueba oficial computa 15 días continuos de recolección individual.
+                  </span>
+                  <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-lg">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>Registrar Control de Puesta</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- =============================================================== -->
+          <!-- SUBPESTAÑA 3: 📋 HISTORIAL DE CONTROLES OFICIALES DE PUESTA       -->
+          <!-- =============================================================== -->
+          <div id="subtab-tabla-puesta" class="subtab-puesta-content hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr class="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[11px]">
+                      <th class="py-3 px-3">Fecha Prueba</th>
+                      <th class="py-3 px-3">Gallina (Anilla)</th>
+                      <th class="py-3 px-3">Familia / Lote</th>
+                      <th class="py-3 px-3 text-center">Huevos (15d)</th>
+                      <th class="py-3 px-3 text-center">Hen-Day %</th>
+                      <th class="py-3 px-3 text-center">Peso Medio (g)</th>
+                      <th class="py-3 px-3">Cáscara</th>
+                      <th class="py-3 px-3 text-center">Dictamen Incubación</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabla-puesta-body" class="divide-y divide-slate-800/60 font-mono text-slate-200">
+                    <!-- Filas dinámicas -->
+                  </tbody>
+                </table>
+              </div>
+              <div id="tabla-puesta-vacia-msg" class="hidden p-8 text-center text-slate-500 text-xs">
+                No hay controles de puesta registrados para los filtros seleccionados.
+              </div>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -1039,6 +2008,605 @@
       </div>
     </section>
 
+    <!-- ======================================================================= -->
+    <!-- PESTAÑA 6 (FASE 6): 📋 MODO INSPECCIÓN ZOOTÉCNICA IN SITU & GUÍA CAMPO  -->
+    <!-- Cumplimiento: Estándar ESGA025 · Protocolo CNZ 2025 · Reg (UE) 2016/1012 -->
+    <!-- ======================================================================= -->
+    <section id="tab-inspeccion-insitu" class="tab-content space-y-6">
+      <div id="insitu-main-wrapper" class="bg-slate-900 border-2 border-emerald-500/50 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6 transition-colors">
+
+        <!-- Cabecera de Alto Contraste para Exteriores y Controles de Campo -->
+        <div class="insitu-card bg-slate-950 border-2 border-slate-700 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="flex items-start sm:items-center gap-3.5">
+            <div class="h-12 w-12 rounded-xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-emerald-500/20">
+              <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base sm:text-xl font-black text-white tracking-tight uppercase">
+                  📋 Modo Inspección Zootécnica In Situ
+                </h2>
+                <span class="px-2.5 py-0.5 rounded-md text-xs font-black bg-amber-400 text-slate-950 uppercase">
+                  ESGA025 · CNZ 2025
+                </span>
+                <span id="insitu-rbac-badge" class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-600">
+                  Rol Activo: Inspector Zootécnico
+                </span>
+              </div>
+              <p class="insitu-text-muted text-xs text-slate-300 mt-1">
+                Valoración morfológica oficial en aviario bajo Reg. (UE) 2016/1012 · Guardado 100% Offline (IndexedDB SyncQueue) y firma digital en Acta Oficial.
+              </p>
+            </div>
+          </div>
+
+          <!-- Botones de Asistencia en Campo y Modo Exterior Solar -->
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button type="button" id="btn-toggle-exterior" onclick="app.toggleModoExteriorSolar()" class="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg transition active:scale-95" title="Activar/Desactivar Modo de Alto Contraste para Luz Solar Directa">
+              <i class="fa-solid fa-sun text-base"></i>
+              <span id="texto-modo-exterior">☀️ Alto Contraste Solar: OFF</span>
+            </button>
+            <button type="button" onclick="app.toggleGuiaCampoInline()" class="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg transition active:scale-95">
+              <i class="fa-solid fa-book-open-reader text-base"></i>
+              <span>📖 Guía Campo (12 Regiones)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- GUÍA INTERACTIVA DE CAMPO DESPLEGABLE (ASISTENTE ZOOTÉCNICO)      -->
+        <!-- ================================================================= -->
+        <div id="insitu-guia-inline-drawer" class="hidden insitu-card bg-slate-950 border-2 border-amber-400 rounded-xl p-4 sm:p-5 space-y-4 shadow-2xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-compass-drafting text-amber-400 text-xl"></i>
+              <div>
+                <h3 class="text-sm sm:text-base font-black text-white uppercase">
+                  Asistente Zootécnico de Campo · Las 12 Regiones Corporales (Estándar ESGA025)
+                </h3>
+                <p class="text-xs text-slate-300">
+                  Pulsa sobre cualquier región en el esquema anatómico o en la lista para consultar el estándar oficial, baremo y taras descalificantes.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="app.abrirModalGuiaCampo()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition">
+                <i class="fa-solid fa-expand mr-1"></i> Pantalla Completa
+              </button>
+              <button type="button" onclick="app.toggleGuiaCampoInline()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition">
+                <i class="fa-solid fa-xmark mr-1"></i> Cerrar Guía
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            <!-- Esquema Visual SVG Interactivo de la Gallina Alacantina (5 cols) -->
+            <div class="lg:col-span-5 bg-slate-900 border border-slate-700 rounded-xl p-3 flex flex-col items-center">
+              <div class="w-full flex items-center justify-between text-[11px] font-bold text-amber-300 mb-2 px-1">
+                <span>ESQUEMA ZOOTÉCNICO OFICIAL ESGA025</span>
+                <span class="font-mono text-emerald-400">Cola ≥ 70º · Pecho Plano</span>
+              </div>
+              <svg viewBox="0 0 420 310" class="w-full max-w-[380px] h-auto select-none">
+                <defs>
+                  <linearGradient id="alacBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#1e293b" />
+                    <stop offset="100%" stop-color="#0f172a" />
+                  </linearGradient>
+                </defs>
+                <!-- Cuadrícula de referencia zootécnica -->
+                <line x1="20" y1="260" x2="400" y2="260" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 4" />
+                <!-- Guía de ángulo de cola 70º sobre horizontal -->
+                <line x1="150" y1="185" x2="290" y2="185" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" />
+                <line x1="150" y1="185" x2="105" y2="60" stroke="#10b981" stroke-width="2.5" stroke-dasharray="5 3" />
+                <path d="M 185 185 A 35 35 0 0 0 137 152" fill="none" stroke="#10b981" stroke-width="2" />
+                <text x="172" y="168" fill="#10b981" font-size="11" font-weight="bold" font-family="monospace">70º mín.</text>
+
+                <!-- Guía de perfil de pecho recto/plano -->
+                <line x1="305" y1="120" x2="292" y2="215" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="4 2" />
+                <text x="312" y="175" fill="#fbbf24" font-size="10" font-weight="bold">Pecho Plano</text>
+
+                <!-- Silueta estilizada del Gallo Alacantino -->
+                <!-- Cola erguida a 70º -->
+                <path d="M 145 175 Q 105 90 65 75 Q 95 115 112 165 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+                <path d="M 155 170 Q 118 75 82 55 Q 112 105 128 165 Z" fill="#1e293b" stroke="#10b981" stroke-width="2" />
+                <!-- Tronco, dorso y pecho recto -->
+                <path d="M 130 165 Q 195 140 255 145 L 285 95 L 308 102 L 302 145 L 292 210 Q 235 225 185 208 Z" fill="url(#alacBodyGrad)" stroke="#e2e8f0" stroke-width="2" />
+                <!-- Ala ceñida -->
+                <path d="M 185 158 Q 245 155 260 185 Q 215 198 175 182 Z" fill="#334155" stroke="#94a3b8" stroke-width="1.5" />
+                <!-- Cabeza, cresta sencilla 5-6 dientes, pico y barbillas -->
+                <path d="M 278 75 L 285 60 L 293 72 L 300 58 L 306 72 L 313 60 L 318 74 L 325 65 L 326 82 Z" fill="#ef4444" stroke="#fca5a5" stroke-width="1.2" />
+                <circle cx="302" cy="90" r="14" fill="#1e293b" stroke="#e2e8f0" stroke-width="1.8" />
+                <!-- Pico -->
+                <polygon points="315,87 334,92 315,96" fill="#fcd34d" />
+                <!-- Barbilla -->
+                <ellipse cx="314" cy="105" rx="6" ry="10" fill="#ef4444" />
+                <!-- Orejilla Blanca Pura -->
+                <ellipse cx="294" cy="97" rx="6.5" ry="4.5" fill="#ffffff" stroke="#38bdf8" stroke-width="1.5" />
+                <!-- Ojo rojo anaranjado -->
+                <circle cx="306" cy="88" r="2.8" fill="#f97316" />
+                <!-- Muslo y Tarsos blanco-rosáceos -->
+                <line x1="225" y1="212" x2="225" y2="258" stroke="#fecdd3" stroke-width="4.5" stroke-linecap="round" />
+                <line x1="250" y1="212" x2="255" y2="258" stroke="#fecdd3" stroke-width="4.5" stroke-linecap="round" />
+                <!-- 4 Dedos -->
+                <line x1="212" y1="258" x2="242" y2="258" stroke="#fecdd3" stroke-width="3" />
+                <line x1="242" y1="258" x2="272" y2="258" stroke="#fecdd3" stroke-width="3" />
+
+                <!-- Puntos Interactivos de las 12 Regiones -->
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(1)"><circle cx="298" cy="82" r="9" fill="#f59e0b" stroke="#000" stroke-width="1.5"/><text x="298" y="86" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">1</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(2)"><circle cx="305" cy="62" r="9" fill="#ef4444" stroke="#fff" stroke-width="1.5"/><text x="305" y="66" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">2</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(3)"><circle cx="316" cy="82" r="9" fill="#f97316" stroke="#000" stroke-width="1.5"/><text x="316" y="86" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">3</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(4)"><circle cx="326" cy="103" r="9" fill="#eab308" stroke="#000" stroke-width="1.5"/><text x="326" y="107" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">4</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(5)"><circle cx="282" cy="98" r="9" fill="#ffffff" stroke="#0284c7" stroke-width="2"/><text x="282" y="102" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">5</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(6)"><circle cx="276" cy="126" r="9" fill="#38bdf8" stroke="#000" stroke-width="1.5"/><text x="276" y="130" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">6</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(7)"><circle cx="205" cy="145" r="9" fill="#a855f7" stroke="#fff" stroke-width="1.5"/><text x="205" y="149" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">7</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(8)"><circle cx="298" cy="175" r="9" fill="#10b981" stroke="#000" stroke-width="1.5"/><text x="298" y="179" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">8</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(9)"><circle cx="225" cy="175" r="9" fill="#6366f1" stroke="#fff" stroke-width="1.5"/><text x="225" y="179" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">9</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(10)"><circle cx="115" cy="110" r="10" fill="#10b981" stroke="#000" stroke-width="1.5"/><text x="115" y="114" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">10</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(11)"><circle cx="222" cy="235" r="10" fill="#f43f5e" stroke="#fff" stroke-width="1.5"/><text x="222" y="239" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">11</text></g>
+                <g class="cursor-pointer" onclick="app.seleccionarRegionGuiaCampo(12)"><circle cx="258" cy="255" r="10" fill="#14b8a6" stroke="#000" stroke-width="1.5"/><text x="258" y="259" text-anchor="middle" fill="#000" font-size="9" font-weight="bold">12</text></g>
+              </svg>
+              <p class="text-[11px] text-slate-400 text-center mt-1">
+                Toca los números <strong>(1 al 12)</strong> para ver la ficha morfológica de la región.
+              </p>
+            </div>
+
+            <!-- Detalle de la Región Seleccionada + Botones de las 12 Regiones (7 cols) -->
+            <div class="lg:col-span-7 space-y-3">
+              <div id="guia-campo-botones-12" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                <!-- Se puebla dinámicamente con las 12 regiones -->
+              </div>
+              <div id="guia-campo-detalle-activa" class="p-4 rounded-xl bg-slate-900 border-2 border-amber-500/50 space-y-2 text-xs">
+                <!-- Detalle dinámico de la región seleccionada -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BLOQUE 1: DATOS OFICIALES DE LA VISITA, GPS, REGA Y ANIMAL        -->
+        <!-- ================================================================= -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <!-- Datos del Inspector Oficial, Aviario REGA y Coordenadas GPS (6 cols) -->
+          <div class="lg:col-span-6 insitu-card bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 class="text-xs sm:text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-user-check"></i>
+                <span>1. Acreditación del Inspector & Georreferencia In Situ</span>
+              </h3>
+              <span id="insitu-offline-pill" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono">
+                SyncQueue Activo
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">ID Oficial del Inspector (CNZ)</label>
+                <input type="text" id="insitu-inspector-id" value="INSP-CNZ-025" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-amber-300 font-mono font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">Nombre del Inspector / Calificador</label>
+                <input type="text" id="insitu-inspector-nombre" value="Dr. Zootecnista CNZ ESGA025" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-white font-semibold focus:ring-2 focus:ring-amber-400 focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">REGA del Aviario Inspeccionado</label>
+                <select id="insitu-rega-select" onchange="app.filtrarAnimalesInSituPorRega(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-emerald-300 font-mono font-bold focus:ring-2 focus:ring-emerald-400 focus:outline-none">
+                  <option value="TODOS">Todas las Explotaciones REGA</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">Fecha y Hora de Inspección</label>
+                <input type="datetime-local" id="insitu-fecha-hora" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-white font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none">
+              </div>
+            </div>
+
+            <!-- Barra de Coordenadas GPS Exactas de la Inspección -->
+            <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div class="text-xs">
+                <span class="text-[11px] font-bold text-slate-400 block uppercase">Coordenadas GPS Exactas del Acta:</span>
+                <span class="font-mono font-bold text-emerald-400">
+                  Lat: <span id="insitu-gps-lat">38.267100</span> · Lng: <span id="insitu-gps-lng">-0.698300</span>
+                  <span class="text-slate-400 text-[11px]">(±<span id="insitu-gps-prec">5</span>m)</span>
+                </span>
+              </div>
+              <button type="button" onclick="app.capturarGPSInspeccionInSitu()" class="px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow transition active:scale-95 whitespace-nowrap">
+                <i class="fa-solid fa-location-crosshairs"></i>
+                <span id="btn-insitu-gps-texto">📍 Capturar GPS In Situ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Selección Rápida de Ejemplar a Evaluar en Campo (6 cols) -->
+          <div class="lg:col-span-6 insitu-card bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 class="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-feather-pointed"></i>
+                  <span>2. Ejemplar Sometido a Valoración In Situ</span>
+                </h3>
+                <span id="insitu-contador-ejemplares" class="text-[11px] font-mono font-bold text-slate-400">0 ejemplares</span>
+              </div>
+
+              <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1">
+                  <select id="insitu-animal-select" onchange="app.cargarAnimalInSitu(this.value)" class="w-full bg-slate-900 border-2 border-emerald-500/70 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-bold focus:ring-2 focus:ring-emerald-400 focus:outline-none">
+                    <option value="">-- Seleccionar Ejemplar por Anilla / Código ESGA025 --</option>
+                  </select>
+                </div>
+                <button type="button" onclick="app.siguienteAnimalInSitu()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition whitespace-nowrap" title="Pasar al siguiente ejemplar del aviario">
+                  <span>Siguiente Ave</span>
+                  <i class="fa-solid fa-forward-step"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tarjeta Resumen de Alto Contraste del Animal -->
+            <div id="insitu-animal-card" class="p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <img id="insitu-animal-foto" src="./icons/logo.png" alt="Ejemplar" class="h-14 w-14 rounded-xl object-cover border-2 border-amber-400 bg-slate-950 shrink-0">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span id="insitu-animal-anilla" class="text-base sm:text-lg font-black text-white font-mono">ANILLA #----</span>
+                    <span id="insitu-animal-seccion" class="px-2.5 py-0.5 rounded text-xs font-black bg-sky-900 text-sky-200 border border-sky-500">RN</span>
+                    <span id="insitu-animal-sexo" class="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-amber-300">Macho</span>
+                  </div>
+                  <p id="insitu-animal-detalles" class="text-xs text-slate-300 font-medium mt-0.5">
+                    Selecciona un ejemplar arriba para iniciar la inspección in situ.
+                  </p>
+                  <p id="insitu-animal-rega-txt" class="text-[11px] font-mono text-emerald-400 mt-0.5">
+                    REGA: -- · Familia: --
+                  </p>
+                </div>
+              </div>
+              <div class="text-left sm:text-right w-full sm:w-auto border-t sm:border-t-0 border-slate-800 pt-2 sm:pt-0">
+                <span class="text-[10px] font-bold text-slate-400 uppercase block">Peso / Consang. Fx</span>
+                <span id="insitu-animal-peso-fx" class="text-xs sm:text-sm font-mono font-black text-amber-300">-- kg · Fx: 0.0%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BLOQUE 2: CHECKLIST VISUAL 1-TOQUE DE DEFECTOS DESCALIFICABLES    -->
+        <!-- ================================================================= -->
+        <div class="insitu-card bg-slate-950 border-2 border-rose-700/80 rounded-xl p-4 sm:p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-rose-400 uppercase tracking-wide flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>
+                <span>3. Checklist Visual de Defectos Descalificables (Estándar ESGA025 · 1 Solo Toque)</span>
+              </h3>
+              <p class="insitu-text-muted text-xs text-slate-300 mt-0.5">
+                Toca cualquier tarjeta si detectas la tara morfológica. Un solo defecto descalificable dictamina automáticamente <strong>NO APTO / BAJA</strong>.
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="insitu-badge-descalificado" class="hidden px-3 py-1 rounded-lg bg-red-600 text-white font-black text-xs uppercase tracking-wider shadow-lg animate-pulse">
+                🚫 DESCALIFICADO (NO APTO)
+              </span>
+              <button type="button" onclick="app.limpiarDefectosInSitu()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+                Limpiar Taras
+              </button>
+            </div>
+          </div>
+
+          <!-- 5 Tarjetas Táctiles de Un Solo Toque para Exteriores -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <!-- Tara 1: Orejilla roja o amarilla -->
+            <button type="button" id="card-def-orejilla" onclick="app.toggleDefectoInSitu('orejilla')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-ear-listen"></i>
+                </span>
+                <span id="status-def-orejilla" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Orejilla roja o amarilla</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">El estándar exige orejilla blanco puro (descalifica &gt; 1/3 rojo o esmalte amarillo).</p>
+              </div>
+            </button>
+
+            <!-- Tara 2: Pecho prominente/redondeado -->
+            <button type="button" id="card-def-pecho" onclick="app.toggleDefectoInSitu('pecho')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-shield-halved"></i>
+                </span>
+                <span id="status-def-pecho" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Pecho prominente / redondeado</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">El estándar ESGA025 exige pecho de perfil recto y plano, nunca abombado.</p>
+              </div>
+            </button>
+
+            <!-- Tara 3: Cola llevada a menos de 70º o defectuosa -->
+            <button type="button" id="card-def-cola" onclick="app.toggleDefectoInSitu('cola')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-compass-drafting"></i>
+                </span>
+                <span id="status-def-cola" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Cola a menos de 70º o defectuosa</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Porte bajo (&lt;70º sobre horizontal), cola ardilla o desviación lateral.</p>
+              </div>
+            </button>
+
+            <!-- Tara 4: Tarsos amarillos o emplumados -->
+            <button type="button" id="card-def-tarsos" onclick="app.toggleDefectoInSitu('tarsos')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-shoe-prints"></i>
+                </span>
+                <span id="status-def-tarsos" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Tarsos amarillos o emplumados</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Deben ser blanco-rosáceos, limpios, desnudos de plumas y con 4 dedos rectos.</p>
+              </div>
+            </button>
+
+            <!-- Tara 5: Flameado en esclavina (Moteada/Exchequer) -->
+            <button type="button" id="card-def-flameado" onclick="app.toggleDefectoInSitu('flameado')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-fire-flame-curved"></i>
+                </span>
+                <span id="status-def-flameado" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Flameado en esclavina (Moteada/Exchequer)</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Presencia de plumas rojizas/doradas extrañas en esclavina o dorso.</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BLOQUE 3: BAREMO DE 100 PUNTOS CON CONTROLES TÁCTILES GRANDES     -->
+        <!-- ================================================================= -->
+        <div class="insitu-card bg-slate-950 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-white uppercase tracking-wide flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-amber-400"></i>
+                <span>4. Baremo Morfológico Oficial de 100 Puntos (Protocolo CNZ 2025)</span>
+              </h3>
+              <p class="insitu-text-muted text-xs text-slate-300">
+                Ajusta con los botones táctiles <strong>[-0.5] / [+0.5]</strong> o desliza. Mínimo <strong>70.0 puntos</strong> para Apto Reproductor (RD).
+              </p>
+            </div>
+            <div class="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-amber-500/40">
+              <span class="text-xs font-bold text-slate-300 uppercase">Total Baremo:</span>
+              <span id="insitu-baremo-total" class="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">80.0</span>
+              <span class="text-xs font-bold text-slate-400">/ 100 p</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5" id="insitu-baremo-grid">
+            <!-- Región 1: Cabeza, cresta y cara (15p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">1. Cabeza, Cresta y Cara (Máx 15p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(2)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('cabeza', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-cabeza" min="0" max="15" step="0.5" value="12" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('cabeza', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-cabeza" class="w-14 text-right font-mono font-black text-sm text-amber-400">12.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 2: Cuello y esclavina (10p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">2. Cuello y Esclavina (Máx 10p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(6)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('cuello', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-cuello" min="0" max="10" step="0.5" value="8" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('cuello', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-cuello" class="w-14 text-right font-mono font-black text-sm text-amber-400">8.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 3: Pecho y tronco (20p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">3. Pecho Plano y Tronco (Máx 20p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(8)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('pecho', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-pecho" min="0" max="20" step="0.5" value="16" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('pecho', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-pecho" class="w-14 text-right font-mono font-black text-sm text-amber-400">16.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 4: Cola y porte 70º (20p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">4. Cola ≥ 70º y Porte (Máx 20p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(10)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('cola', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-cola" min="0" max="20" step="0.5" value="16" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('cola', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-cola" class="w-14 text-right font-mono font-black text-sm text-amber-400">16.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 5: Extremidades y tarsos (15p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">5. Extremidades y Tarsos (Máx 15p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(11)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('tarsos', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-tarsos" min="0" max="15" step="0.5" value="12" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('tarsos', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-tarsos" class="w-14 text-right font-mono font-black text-sm text-amber-400">12.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 6: Plumaje y variedad (10p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">6. Plumaje y Variedad (Máx 10p)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(12)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('plumaje', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-plumaje" min="0" max="10" step="0.5" value="8" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('plumaje', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-plumaje" class="w-14 text-right font-mono font-black text-sm text-amber-400">8.0p</span>
+              </div>
+            </div>
+
+            <!-- Región 7: Peso y desarrollo ponderal (10p) -->
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-2 md:col-span-2 lg:col-span-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-white">7. Peso y Desarrollo Ponderal (Máx 10p · Gallo 3.0-3.5kg | Gallina 2.2-2.6kg)</span>
+                <button type="button" onclick="app.abrirRegionEnGuia(7)" class="text-[10px] text-amber-400 hover:underline font-bold">📖 Ver estándar</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="app.ajustarSliderInSitu('peso', -0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">-0.5</button>
+                <input type="range" id="insitu-rng-peso" min="0" max="10" step="0.5" value="8" class="flex-1 accent-amber-400" oninput="app.recalcularInSitu()">
+                <button type="button" onclick="app.ajustarSliderInSitu('peso', 0.5)" class="h-9 w-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm border border-slate-600">+0.5</button>
+                <span id="insitu-val-peso" class="w-14 text-right font-mono font-black text-sm text-amber-400">8.0p</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BLOQUE 4: DICTAMEN ZOOTÉCNICO ÁGIL & FIRMA DIGITAL EN CANVAS      -->
+        <!-- ================================================================= -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+          <!-- Flujo Ágil de Dictamen Zootécnico (6 cols) -->
+          <div class="lg:col-span-6 insitu-card bg-slate-950 border-2 border-slate-800 rounded-xl p-4 sm:p-5 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <h3 class="text-sm sm:text-base font-black text-white uppercase tracking-wide flex items-center gap-2 border-b border-slate-800 pb-2">
+                <i class="fa-solid fa-gavel text-amber-400"></i>
+                <span>5. Dictamen Zootécnico Oficial In Situ</span>
+              </h3>
+              <p class="insitu-text-muted text-xs text-slate-300">
+                Selecciona el dictamen oficial. Al guardar el acta se invocará automáticamente <code>promover_ejemplar_inspeccion()</code> para actualizar el Libro Genealógico.
+              </p>
+
+              <!-- 3 Botones Oficiales de Dictamen Zootécnico de Alto Contraste -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <button type="button" id="btn-dictamen-apto" onclick="app.seleccionarDictamenInSitu('APTO_RD')" class="p-3.5 rounded-xl border-2 border-emerald-500 bg-emerald-950/90 text-emerald-200 font-black text-xs sm:text-sm flex flex-col items-center justify-center gap-1.5 shadow-lg transition active:scale-95">
+                  <i class="fa-solid fa-circle-check text-2xl text-emerald-400"></i>
+                  <span>[ Apto Reproductor (RD) ]</span>
+                  <span class="text-[10px] font-mono text-emerald-300 font-normal">Promociona a RD / RM</span>
+                </button>
+
+                <button type="button" id="btn-dictamen-provisional" onclick="app.seleccionarDictamenInSitu('PROVISIONAL')" class="p-3.5 rounded-xl border-2 border-slate-700 bg-slate-900 text-amber-300 font-black text-xs sm:text-sm flex flex-col items-center justify-center gap-1.5 transition active:scale-95">
+                  <i class="fa-solid fa-clock text-2xl text-amber-400"></i>
+                  <span>[ Provisional ]</span>
+                  <span class="text-[10px] font-mono text-slate-400 font-normal">Revisión en próxima muda</span>
+                </button>
+
+                <button type="button" id="btn-dictamen-noapto" onclick="app.seleccionarDictamenInSitu('NO_APTO_BAJA')" class="p-3.5 rounded-xl border-2 border-slate-700 bg-slate-900 text-rose-300 font-black text-xs sm:text-sm flex flex-col items-center justify-center gap-1.5 transition active:scale-95">
+                  <i class="fa-solid fa-ban text-2xl text-rose-400"></i>
+                  <span>[ No Apto / Baja ]</span>
+                  <span class="text-[10px] font-mono text-slate-400 font-normal">Descarte reproductivo</span>
+                </button>
+              </div>
+
+              <!-- Resumen del efecto de promoción en el Libro Genealógico -->
+              <div id="insitu-dictamen-resumen-box" class="p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-600/70 text-xs space-y-1">
+                <div class="flex items-center justify-between font-bold text-emerald-300">
+                  <span>Dictamen Seleccionado: <strong id="insitu-dictamen-texto">APTO REPRODUCTOR (RD)</strong></span>
+                  <span id="insitu-promocion-pill" class="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-mono font-black text-[10px]">RN ➔ RD</span>
+                </div>
+                <p id="insitu-dictamen-explicacion" class="text-[11px] text-slate-300">
+                  El ejemplar supera los 70 puntos reglamentarios sin taras descalificantes. Promociona al Registro Definitivo (RD).
+                </p>
+              </div>
+            </div>
+
+            <!-- Observaciones del Inspector -->
+            <div class="pt-2">
+              <label class="block text-xs font-bold text-slate-300 mb-1">Observaciones Oficiales del Acta Zootécnica</label>
+              <textarea id="insitu-observaciones" rows="2" placeholder="Anotaciones morfológicas de campo, aplomos, conformación de cresta, vigor reproductivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"></textarea>
+            </div>
+          </div>
+
+          <!-- Captura de Firma Digital Manuscrita del Inspector (6 cols) -->
+          <div class="lg:col-span-6 insitu-card bg-slate-950 border-2 border-slate-800 rounded-xl p-4 sm:p-5 space-y-3 flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 class="text-sm sm:text-base font-black text-white uppercase tracking-wide flex items-center gap-2">
+                  <i class="fa-solid fa-signature text-sky-400"></i>
+                  <span>6. Firma Digital del Inspector Zootécnico</span>
+                </h3>
+                <span id="badge-estado-firma" class="px-2.5 py-0.5 rounded text-[10px] font-black bg-amber-950 text-amber-300 border border-amber-700 uppercase">
+                  Pendiente de Confirmar
+                </span>
+              </div>
+              <p class="insitu-text-muted text-xs text-slate-300">
+                Firma manuscrita sobre el recuadro táctil. Se codifica en Base64 para el Acta Oficial y Supabase Storage.
+              </p>
+
+              <!-- Canvas HTML5 obligatorio #canvas-firma-inspector -->
+              <div class="relative rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-900">
+                <canvas id="canvas-firma-inspector" width="600" height="190" class="w-full h-44 block"></canvas>
+                <div class="absolute bottom-2 left-3 pointer-events-none text-[10px] font-mono text-slate-500">
+                  Línea de Firma Oficial · Inspector CNZ ESGA025 · Reg. (UE) 2016/1012
+                </div>
+              </div>
+
+              <!-- Botones de Limpiar y Confirmar Firma -->
+              <div class="flex items-center justify-between gap-2 pt-1">
+                <button type="button" onclick="app.limpiarFirmaInspector()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition active:scale-95">
+                  <i class="fa-solid fa-eraser text-rose-400"></i>
+                  <span>Limpiar Firma</span>
+                </button>
+                <button type="button" onclick="app.confirmarFirmaInspector()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md transition active:scale-95">
+                  <i class="fa-solid fa-check-double"></i>
+                  <span>Confirmar Firma Digital</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Botón Principal: Emitir Acta Digital y Disparar Promoción -->
+            <div class="pt-3 border-t border-slate-800">
+              <button type="button" onclick="app.guardarActaInspeccionInSitu()" class="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-amber-400 hover:from-emerald-400 hover:to-amber-300 text-slate-950 font-black text-sm sm:text-base uppercase tracking-wide shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2.5 transition transform active:scale-98">
+                <i class="fa-solid fa-file-signature text-lg"></i>
+                <span>Emitir Acta Oficial &amp; Promover Ejemplar</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- BLOQUE 5: HISTORIAL DE ACTAS DIGITALES DE INSPECCIÓN IN SITU      -->
+        <!-- ================================================================= -->
+        <div class="insitu-card bg-slate-950 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+            <h3 class="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-file-shield text-emerald-400"></i>
+              <span>Actas Oficiales de Inspección Zootécnica Emitidas (Local + Supabase)</span>
+            </h3>
+            <span id="insitu-total-actas-badge" class="text-xs font-mono font-bold text-amber-400">0 actas registradas</span>
+          </div>
+          <div id="insitu-lista-actas" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Se puebla dinámicamente -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 
   <!-- ========================================================================= -->
@@ -1060,6 +2628,7 @@
             <span id="mf-badge-seccion" class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">RD</span>
           </div>
           <p id="mf-nombre-sexo" class="text-xs text-slate-400">Gallo Reproductor · Moteada / Exchequer</p>
+          <p id="mf-criador-rega" class="text-[11px] text-amber-300 font-mono mt-0.5"><i class="fa-solid fa-warehouse mr-1 text-slate-500"></i><span id="mf-criador-nombre">Criador</span> · <span id="mf-rega-codigo">REGA: --</span></p>
         </div>
       </div>
 
@@ -1076,6 +2645,22 @@
           <div class="aspect-video bg-slate-950 border border-slate-800 rounded-lg overflow-hidden cursor-pointer" onclick="app.verFotoLightbox('tarsos')">
             <img id="mf-foto-tarsos" class="w-full h-full object-cover" alt="Tarsos">
           </div>
+        </div>
+      </div>
+
+      <!-- Galería de Fotos Adicionales (Opcional) en la Ficha -->
+      <div id="mf-galeria-opcional-seccion" class="mt-4 hidden">
+        <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800">
+          <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-camera-rotate"></i>
+            <span>Galería de Fotos Adicionales (Opcional)</span>
+          </h4>
+          <span id="mf-galeria-opcional-count" class="text-[10px] px-2 py-0.5 rounded font-mono font-semibold bg-amber-950 text-amber-300 border border-amber-800">
+            0 fotos
+          </span>
+        </div>
+        <div id="mf-galeria-opcional-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+          <!-- Se poblará dinámicamente -->
         </div>
       </div>
 
@@ -1104,6 +2689,19 @@
         <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
           <span class="text-slate-500 block text-[10px]">ESTADO VITAL</span>
           <span id="mf-estado" class="font-bold text-white">Activo</span>
+        </div>
+        <!-- Transpondedor RFID Oficial -->
+        <div class="p-2.5 rounded bg-slate-950 border border-indigo-900/40 col-span-2 sm:col-span-3 flex items-center justify-between">
+          <div>
+            <span class="text-slate-500 block text-[10px] flex items-center gap-1">
+              <i class="fa-solid fa-microchip text-indigo-400"></i> TRANSPONDEDOR RFID (134.2 kHz ISO 11784/85 / NFC)
+            </span>
+            <span id="mf-rfid" class="font-bold text-indigo-300 font-mono text-xs">Sin transpondedor vinculado</span>
+          </div>
+          <button type="button" onclick="app.abrirModalVincularRfid(app.estado.animalSeleccionadoId)" class="px-2.5 py-1 rounded-lg bg-indigo-950 hover:bg-indigo-900 border border-indigo-700 text-indigo-300 text-[11px] font-semibold flex items-center gap-1.5 transition shadow-sm active:scale-95" title="Vincular o cambiar transpondedor RFID">
+            <i class="fa-solid fa-id-card"></i>
+            <span>Vincular / Cambiar Chip</span>
+          </button>
         </div>
       </div>
 
@@ -1140,9 +2738,9 @@
           <i class="fa-solid fa-sitemap"></i>
           <span>Ver Pedigrí 5Gen</span>
         </button>
-        <button onclick="app.imprimirCertificadoModal()" class="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition">
-          <i class="fa-solid fa-print"></i>
-          <span>Certificado Genealógico PDF</span>
+        <button onclick="app.generarCertificadoPDF(app.estado.animalSeleccionadoId)" class="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition transform active:scale-95" title="📜 Generar Certificado Zootécnico (PDF)">
+          <i class="fa-solid fa-scroll text-slate-950"></i>
+          <span>📜 Generar Certificado Zootécnico (PDF)</span>
         </button>
       </div>
     </div>
@@ -1314,7 +2912,7 @@
             <span id="aviario-rega-status-pill" class="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Oficial o Provisional</span>
           </div>
           <div class="relative">
-            <input type="text" id="aviario-rega" placeholder="Ej: ES030140000001" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <input type="text" id="aviario-rega" oninput="app.alEscribirRega(this.value)" placeholder="Ej: ES030140000001" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none">
           </div>
           <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
             <input type="checkbox" id="aviario-rega-tramite" onchange="app.toggleRegaTramite(this.checked)" class="rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 h-4 w-4">
@@ -1379,6 +2977,134 @@
     </div>
   </div>
 
+  <!-- ========================================================================= -->
+  <!-- MODAL: VINCULACIÓN / ASIGNACIÓN DE CHIP RFID A EJEMPLAR (FASE 5)          -->
+  <!-- ========================================================================= -->
+  <div id="modal-vincular-rfid" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-900/50 rounded-2xl max-w-md w-full shadow-2xl p-6 relative">
+      <button onclick="app.cerrarModalVincularRfid()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3 pb-3 border-b border-slate-800">
+        <div class="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-microchip"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Vincular Transpondedor RFID</h3>
+          <p id="modal-vincular-rfid-sub" class="text-xs text-slate-400">Ejemplar #0002 · Reina del Vinalopó</p>
+        </div>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+            Código de Transpondedor (15 Dígitos FDX-B / UID NFC)
+          </label>
+          <div class="relative">
+            <input type="text" 
+                   id="modal-vincular-rfid-input" 
+                   placeholder="Ej: 968000010000002" 
+                   class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-indigo-300 font-mono font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <button type="button" onclick="app.generarChipRfidPruebaModal()" class="absolute right-2 top-2 text-xs text-slate-400 hover:text-indigo-400" title="Generar código de chip oficial de prueba">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">
+            Puedes pasar el lector por la anilla de la gallina para rellenarlo automáticamente.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-lg bg-indigo-950/30 border border-indigo-900/40 text-xs text-indigo-200 space-y-1">
+          <div class="font-semibold flex items-center gap-1.5 text-indigo-300">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Estándares compatibles</span>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            • ISO 11784/11785 FDX-B / HDX (134.2 kHz) para identificación oficial en avicultura.<br>
+            • Anillas electrónicas NFC (13.56 MHz / ISO 14443A).
+          </p>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+          <button type="button" onclick="app.cerrarModalVincularRfid()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+            Cancelar
+          </button>
+          <button type="button" onclick="app.confirmarVinculacionRfidModal()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/30">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Guardar Vinculación</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL FASE 6: GUÍA INTERACTIVA DE CAMPO (12 REGIONES CORPORALES ESGA025)  -->
+  <!-- ========================================================================= -->
+  <div id="modal-guia-campo" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-5 sm:p-6 relative space-y-5">
+      <button onclick="app.cerrarModalGuiaCampo()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1.5 text-xl bg-slate-800 rounded-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800 pr-10">
+        <div class="flex items-center gap-3">
+          <div class="h-11 w-11 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xl shrink-0">
+            <i class="fa-solid fa-book-open-reader"></i>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white uppercase">
+              Guía Interactiva de Campo · Estándar Morfológico ESGA025 (12 Regiones)
+            </h3>
+            <p class="text-xs text-slate-300">
+              Asistente Zootécnico 100% Offline · Protocolo CNZ (5 de junio de 2025) y Reglamento (UE) 2016/1012
+            </p>
+          </div>
+        </div>
+        <div class="w-full sm:w-64">
+          <input type="text" id="input-buscar-guia-campo" oninput="app.filtrarTarjetasGuiaCampo(this.value)" placeholder="🔍 Buscar región o criterio..." class="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+        </div>
+      </div>
+
+      <!-- Grid de las 12 Regiones Corporales del Estándar ESGA025 -->
+      <div id="grid-modal-guia-12-regiones" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <!-- Se puebla dinámicamente desde app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL FASE 6: ACTA DIGITAL OFICIAL DE INSPECCIÓN ZOOTÉCNICA               -->
+  <!-- ========================================================================= -->
+  <div id="modal-acta-inspeccion" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-slate-900 border-2 border-emerald-500/70 rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-5 sm:p-6 relative space-y-4">
+      <button onclick="app.cerrarModalActaInspeccion()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1.5 text-xl bg-slate-800 rounded-lg no-print">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div id="acta-digital-printable-content" class="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4 text-xs">
+        <!-- Se puebla dinámicamente con los datos del Acta Oficial, GPS, REGA, Baremo 100p y Firma Base64 -->
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 no-print">
+        <span class="text-[11px] text-slate-400">
+          <i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i>
+          Documento oficial validado con Firma Manuscrita Digital y Georreferencia GPS.
+        </span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="app.cerrarModalActaInspeccion()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+            Cerrar
+          </button>
+          <button type="button" onclick="app.imprimirActaInspeccionActual()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-lg transition">
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Imprimir / Exportar Acta PDF</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Pie de Página Oficial -->
   <footer class="bg-slate-950 border-t border-slate-900 py-4 text-center text-xs text-slate-500 no-print">
     <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
@@ -1393,7 +3119,10 @@
     </div>
   </footer>
 
-  <!-- Scripts de la Aplicación -->
+  <!-- Librerías de Exportación Oficial PDF y Códigos QR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="./pdf-engine.js"></script>
   <script src="./app.js"></script>
   <script>

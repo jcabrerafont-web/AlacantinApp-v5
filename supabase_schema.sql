@@ -39,7 +39,7 @@ END $$;
 -- Tabla 2.1: Explotaciones y Criadores Asociados
 CREATE TABLE IF NOT EXISTS explotaciones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    codigo_rega VARCHAR(50) UNIQUE,                    -- Código REGA: NULLABLE para admitir 'En trámite' o 'Sin REGA'
+    codigo_rega VARCHAR(50),                           -- Código REGA: NULLABLE para admitir 'En trámite' o 'Sin REGA'
     rega VARCHAR(50),                                  -- Alias directo REGA (NULLABLE)
     numero_socio VARCHAR(50),                          -- Nº de Socio del Club (NULLABLE, ej: 'NS-000' aspirante)
     nombre_titular VARCHAR(150) NOT NULL,
@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS animales (
     familia_origen VARCHAR(20) NOT NULL DEFAULT 'Familia A', -- Familias A, B, C, D, E para Regla de Gobe
     lote_actual VARCHAR(50),
     peso_actual_kg NUMERIC(5, 3) NOT NULL,             -- Gallo: 3.000 - 3.500 kg | Gallina: 2.200 - 2.600 kg
+    rfid_chip_id VARCHAR(60) UNIQUE,                   -- Transpondedor RFID (134.2 kHz ISO 11784/11785 FDX-B / HDX o UID NFC 13.56 MHz)
     estado estado_animal_tipo NOT NULL DEFAULT 'Activo',
     coeficiente_consanguinidad NUMERIC(7, 6) DEFAULT 0.000000, -- Wright Fx
     
@@ -90,7 +91,14 @@ CREATE TABLE IF NOT EXISTS animales (
     fotos JSONB DEFAULT jsonb_build_object(
         'lateral', NULL,  -- Toma obligatoria 1: Lateral completa
         'cabeza', NULL,   -- Toma obligatoria 2: Cabeza y cresta
-        'tarsos', NULL    -- Toma obligatoria 3: Tarsos y patas
+        'tarsos', NULL,   -- Toma obligatoria 3: Tarsos y patas
+        'galeria_opcional', '[]'::jsonb -- Galería de fotos adicionales opcionales [{url, titulo}]
+    ),
+    multimedia_urls JSONB DEFAULT jsonb_build_object(
+        'lateral', NULL,
+        'cabeza', NULL,
+        'tarsos', NULL,
+        'galeria_opcional', '[]'::jsonb
     ),
     
     geolocalizacion_alta JSONB DEFAULT jsonb_build_object(
@@ -116,6 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_animales_madre ON animales(id_madre);
 CREATE INDEX IF NOT EXISTS idx_animales_seccion ON animales(seccion_libro);
 CREATE INDEX IF NOT EXISTS idx_animales_explotacion ON animales(explotacion_id);
 CREATE INDEX IF NOT EXISTS idx_animales_familia ON animales(familia_origen);
+CREATE INDEX IF NOT EXISTS idx_animales_rfid ON animales(rfid_chip_id);
 
 -- Tabla 2.3: Inspecciones Morfológicas (Baremo 100 puntos según Protocolo CNZ 2025)
 CREATE TABLE IF NOT EXISTS inspecciones_morfologicas (
@@ -286,8 +295,9 @@ CREATE TRIGGER trg_procesar_inspeccion
     EXECUTE FUNCTION procesar_inspeccion_seccion_libro();
 
 -- Función 3.3: Actualización Masiva de Código REGA (Explotación y todos sus Animales asociados)
+-- Soporta identificadores UUID y alfanuméricos (TEXT)
 CREATE OR REPLACE FUNCTION actualizar_rega_masiva(
-    p_explotacion_id UUID,
+    p_explotacion_id TEXT,
     p_nueva_rega VARCHAR(50)
 )
 RETURNS INTEGER AS $$
@@ -299,16 +309,27 @@ BEGIN
     SET codigo_rega = p_nueva_rega,
         rega = p_nueva_rega,
         updated_at = TIMEZONE('utc'::text, NOW())
-    WHERE id = p_explotacion_id;
+    WHERE id::text = p_explotacion_id;
 
     -- 2. Actualizar todos los animales vinculados a esa explotación
     UPDATE animales
     SET codigo_rega = p_nueva_rega,
         updated_at = TIMEZONE('utc'::text, NOW())
-    WHERE explotacion_id = p_explotacion_id;
+    WHERE explotacion_id::text = p_explotacion_id;
 
     GET DIAGNOSTICS v_actualizados = ROW_COUNT;
     RETURN v_actualizados;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Sobrecarga para UUID por compatibilidad nativa
+CREATE OR REPLACE FUNCTION actualizar_rega_masiva(
+    p_explotacion_id UUID,
+    p_nueva_rega VARCHAR(50)
+)
+RETURNS INTEGER AS $$
+BEGIN
+    RETURN actualizar_rega_masiva(p_explotacion_id::text, p_nueva_rega);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -322,13 +343,24 @@ DO $$ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'explotaciones' AND column_name = 'rega') THEN
         ALTER TABLE explotaciones ADD COLUMN rega VARCHAR(50);
+    ELSE
+        ALTER TABLE explotaciones ALTER COLUMN rega DROP NOT NULL;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'explotaciones' AND column_name = 'numero_socio') THEN
         ALTER TABLE explotaciones ADD COLUMN numero_socio VARCHAR(50);
+    ELSE
+        ALTER TABLE explotaciones ALTER COLUMN numero_socio DROP NOT NULL;
     END IF;
     -- Asegurar campo codigo_rega en animales para trazabilidad directa y actualización masiva
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'animales' AND column_name = 'codigo_rega') THEN
         ALTER TABLE animales ADD COLUMN codigo_rega VARCHAR(50);
+    END IF;
+
+    -- Índice único condicional para REGAs oficiales (evita conflicto entre registros provisionales 'TEMP-REGA')
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_explotaciones_rega_oficial') THEN
+        CREATE UNIQUE INDEX idx_explotaciones_rega_oficial 
+        ON explotaciones (codigo_rega) 
+        WHERE codigo_rega IS NOT NULL AND codigo_rega NOT LIKE 'TEMP-REGA%' AND codigo_rega NOT ILIKE '%SIN REGA%';
     END IF;
 END $$;
 
