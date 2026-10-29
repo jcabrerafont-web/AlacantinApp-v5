@@ -1,5 +1,5 @@
 // ============================================================================
-// ALACANTINAPP V6 - LÓGICA DE NEGOCIO, SUPABASE AUTH, RBAC Y OFFLINE-FIRST
+// ALACANTINAPP V5 - LÓGICA DE NEGOCIO Y ARQUITECTURA OFFLINE-FIRST
 // Club Gallina Alacantina (Código Oficial ESGA025)
 // Cumplimiento: Protocolo CNZ (5 de junio de 2025), RD 45/2019, Reg. UE 2016/1012
 // ============================================================================
@@ -11,103 +11,16 @@ const app = {
   supabaseKey: localStorage.getItem('alacantina_supabase_key') || '',
   supabaseClient: null,
 
-  // Generador de estructura limpia de estado en memoria (sin datos residuales ni valores mock)
-  obtenerEstadoInicialLimpio() {
-    return {
-      usuarioActivo: null,
-      usuarioActual: null,
-      modoVisitante: true,
-      usuarios: [],
-      solicitudesInspeccion: [],
-      animales: [],
-      explotaciones: [],
-      aviario: null,
-      aviarioActivo: null,
-      gpsAviarioTemporal: null,
-      editandoAviarioId: null,
-      inspecciones: [],
-      controlesPuesta: [],
-      lotes: [],
-      lotesIncubacion: [],
-      bancoGermoplasma: [],
-      syncQueue: [],
-      animalSeleccionadoId: null,
-      fotosCapturadas: {
-        lateral: null,
-        cabeza: null,
-        tarsos: null
-      },
-      fotosOpcionalesCapturadas: [],
-      gpsUbicacion: null,
-      filtros: {
-        busqueda: '',
-        seccion: 'TODAS',
-        sexo: 'TODOS',
-        familia: 'TODAS',
-        variedad: 'TODAS',
-        rega: 'TODOS',
-        edad: 'TODAS',
-        etiquetaGaleria: ''
-      },
-      rfid: {
-        dispositivo: null,
-        caracteristicaTx: null,
-        lectorSerial: null,
-        tipoConexion: null,
-        estado: 'desconectado',
-        nombreDispositivo: null,
-        ultimoChipLeido: null,
-        ultimaLecturaTs: null,
-        animalDetectado: null,
-        sonidoActivo: true,
-        bufferRecepcion: '',
-        historialEntradas: []
-      },
-      inspeccionInSitu: {
-        rolRBAC: 'visitante',
-        modoExteriorSolar: false,
-        animalActualId: null,
-        dictamenSeleccionado: 'APTO_RD',
-        dictamenManual: false,
-        defectos: {
-          orejilla: false,
-          pecho: false,
-          cola: false,
-          tarsos: false,
-          flameado: false
-        },
-        firmaBase64: null,
-        firmaConfirmada: false,
-        trazosFirma: 0,
-        gpsInSitu: {
-          latitud: null,
-          longitud: null,
-          precision_m: null
-        },
-        regionGuiaActiva: 1,
-        actaSeleccionada: null
-      }
-    };
-  },
-
   // Estado reactivo de la aplicación
   estado: {
-    usuarioActivo: null,
-    usuarioActual: null,
-    modoVisitante: true,
-    usuarios: [],
-    solicitudesInspeccion: [],
     animales: [],
     explotaciones: [],
-    aviario: null,
     aviarioActivo: null,
     gpsAviarioTemporal: null,
     editandoAviarioId: null,
     inspecciones: [],
     controlesPuesta: [],
     lotes: [],
-    lotesIncubacion: [],
-    bancoGermoplasma: [],
     syncQueue: [],
     animalSeleccionadoId: null,
     fotosCapturadas: {
@@ -144,7 +57,7 @@ const app = {
     },
     // Estado reactivo del Modo Inspección Zootécnica In Situ y Guía de Campo (Fase 6)
     inspeccionInSitu: {
-      rolRBAC: 'visitante',
+      rolRBAC: localStorage.getItem('alacantina_rol_rbac') || 'inspector',
       modoExteriorSolar: false,
       animalActualId: null,
       dictamenSeleccionado: 'APTO_RD',
@@ -211,9 +124,6 @@ const app = {
     this.actualizarKPIs();
     this.recalcularBaremo();
     this.renderizarLotes();
-    this.poblarSimuladorAcoplamientos();
-    this.renderizarModuloIncubacion();
-    this.renderizarModuloGermoplasma();
     this.actualizarBadgeAviario();
     this.actualizarVistaRegistroAviario();
     this.renderizarGaleriaOpcionalAlta();
@@ -229,7 +139,7 @@ const app = {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'puesta') {
       this.cambiarTab('inspeccion');
-    } else if (['registro', 'censo', 'inspeccion', 'pedigri', 'lotes', 'mapa-gis', 'germoplasma', 'inspeccion-insitu', 'admin'].includes(hash)) {
+    } else if (['registro', 'censo', 'inspeccion', 'pedigri', 'lotes', 'inspeccion-insitu'].includes(hash)) {
       this.cambiarTab(hash);
     }
   },
@@ -261,20 +171,8 @@ const app = {
           if (!db.objectStoreNames.contains('lotes')) {
             db.createObjectStore('lotes', { keyPath: 'id' });
           }
-          if (!db.objectStoreNames.contains('lotesIncubacion')) {
-            db.createObjectStore('lotesIncubacion', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('bancoGermoplasma')) {
-            db.createObjectStore('bancoGermoplasma', { keyPath: 'id' });
-          }
           if (!db.objectStoreNames.contains('syncQueue')) {
             db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
-          }
-          if (!db.objectStoreNames.contains('usuarios')) {
-            db.createObjectStore('usuarios', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('solicitudesInspeccion')) {
-            db.createObjectStore('solicitudesInspeccion', { keyPath: 'id' });
           }
         };
 
@@ -339,46 +237,12 @@ const app = {
     }
   },
 
-  // Configuración de Supabase y observador reactivo de sesión Auth
+  // Configuración de Supabase
   iniciarSupabaseClient() {
     if (this.supabaseUrl && this.supabaseKey && window.supabase) {
       try {
         this.supabaseClient = window.supabase.createClient(this.supabaseUrl, this.supabaseKey);
         console.log('[Supabase] Cliente inicializado.');
-
-        if (this.supabaseClient.auth && typeof this.supabaseClient.auth.onAuthStateChange === 'function') {
-          this.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_OUT') {
-              this.estado.usuarioActivo = null;
-              this.estado.usuarioActual = null;
-              this.estado.aviarioActivo = null;
-              this.estado.aviario = null;
-              this.estado.animales = [];
-              this.estado.explotaciones = [];
-              this.estado.controlesPuesta = [];
-              this.estado.lotes = [];
-              this.actualizarPastillaUsuario();
-              this.actualizarBadgeAviario();
-              this.actualizarVistaRegistroAviario();
-              this.aplicarPermisosRBAC();
-            } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
-              const perfil = await this.sincronizarUsuarioDesdeAuth(session.user);
-              if (perfil) {
-                this.estado.usuarioActivo = perfil;
-                this.estado.usuarioActual = perfil;
-                this.estado.modoVisitante = false;
-                localStorage.setItem('alacantina_v6_session', JSON.stringify(perfil));
-                await this.inicializarAviarioActivo();
-                await this.cargarDatos();
-                this.actualizarPastillaUsuario();
-                this.actualizarBadgeAviario();
-                this.actualizarVistaRegistroAviario();
-                this.aplicarPermisosRBAC();
-                this.sincronizarInputsInspectorAutenticado();
-              }
-            }
-          });
-        }
       } catch (err) {
         console.warn('[Supabase] No se pudo inicializar cliente:', err);
         this.supabaseClient = null;
@@ -418,89 +282,6 @@ const app = {
   // =========================================================================
   // 2. CARGA Y SINCRONIZACIÓN DE DATOS REALES (ESTADO CERO + SUPABASE AUTH)
   // =========================================================================
-
-  // Asegura que IndexedDB tenga la semilla base de la aplicación sin cargar en memoria datos de otro usuario
-  async asegurarSemillaBaseIndexedDB() {
-    let animalesLocales = await this.db.getAll('animales');
-    if (!animalesLocales || animalesLocales.length === 0) {
-      await this.cargarSemillaInicial(false);
-    }
-
-    let controlesLocales = await this.db.getAll('controlesPuesta');
-    if (!controlesLocales || controlesLocales.length === 0) {
-      await this.db.putBatch('controlesPuesta', this.obtenerControlesPuestaSemilla());
-    }
-
-    let usuariosLocales = await this.db.getAll('usuarios');
-    if (!usuariosLocales || usuariosLocales.length === 0) {
-      await this.db.putBatch('usuarios', this.obtenerUsuariosSemillaV6());
-    }
-
-    let solicitudesLocales = await this.db.getAll('solicitudesInspeccion');
-    if (!solicitudesLocales || solicitudesLocales.length === 0) {
-      await this.db.putBatch('solicitudesInspeccion', this.obtenerSolicitudesInspeccionSemillaV6());
-    }
-
-    let lotesIncLocales = await this.db.getAll('lotesIncubacion');
-    if (!lotesIncLocales || lotesIncLocales.length === 0) {
-      await this.db.putBatch('lotesIncubacion', this.obtenerLotesIncubacionSemilla());
-    }
-
-    let germoLocales = await this.db.getAll('bancoGermoplasma');
-    if (!germoLocales || germoLocales.length === 0) {
-      await this.db.putBatch('bancoGermoplasma', this.obtenerGermoplasmaSemilla());
-    }
-  },
-
-  // Determina si un registro de IndexedDB (animal, explotación, control de puesta, lote) pertenece al usuario activo
-  perteneceAUsuarioActivo(registro, usuario = null, aviario = null) {
-    if (!registro) return false;
-    const u = usuario || this.estado.usuarioActivo;
-
-    // Si está en Modo Visitante (solo lectura del censo público), permitir lectura pública
-    if (!u) {
-      return Boolean(this.estado.modoVisitante);
-    }
-
-    // Inspectores Zootécnicos y Administradores tienen visibilidad global de auditoría
-    if (u.rol === 'admin' || u.rol === 'inspector') {
-      return true;
-    }
-
-    const av = aviario || this.estado.aviario || this.estado.aviarioActivo;
-
-    // 1. Coincidencia directa por user.id (usuario_id)
-    if (registro.usuario_id && u.id) {
-      return String(registro.usuario_id) === String(u.id);
-    }
-
-    // 2. Coincidencia por explotación vinculada al usuario
-    const expIdUsuario = av?.id || u.explotacion_id;
-    if (expIdUsuario) {
-      if (registro.explotacion_id && String(registro.explotacion_id) === String(expIdUsuario)) {
-        return true;
-      }
-      if (registro.id && String(registro.id) === String(expIdUsuario)) {
-        return true;
-      }
-    }
-
-    // 3. Coincidencia por código REGA oficial (siempre que no sea provisional genérico de otro usuario)
-    const regaUsuario = (av?.codigo_rega || av?.rega || u.rega || '').trim().toUpperCase();
-    const regaRegistro = (registro.codigo_rega || registro.rega || '').trim().toUpperCase();
-    if (regaUsuario && regaRegistro && regaUsuario !== 'TEMP-REGA-001' && regaUsuario === regaRegistro) {
-      return true;
-    }
-
-    // 4. Si el registro es un control de puesta o lote vinculado a un animal propio
-    if (registro.animal_id && Array.isArray(this.estado.animales)) {
-      const animalPropio = this.estado.animales.find(a => a.id === registro.animal_id);
-      if (animalPropio) return true;
-    }
-
-    return false;
-  },
-
   async cargarDatos() {
     // Purga preventiva de cualquier registro semilla legado si existiera en el navegador
     const idsAnimalesFicticios = new Set(['alac-001', 'alac-002', 'alac-003', 'alac-004', 'alac-005', 'alac-006', 'alac-demo-audit']);
@@ -556,29 +337,14 @@ const app = {
           a.variedad = varNorm;
           this.db.put('animales', a);
         }
-        if (!a.usuario_id) {
-          if (a.explotacion_id === 'exp-01') {
-            a.usuario_id = 'usr-criador-01';
-            a.codigo_rega = a.codigo_rega || 'ES030140001234';
-            a.titular_nombre = a.titular_nombre || 'Juan Pérez Soler';
-            modificado = true;
-          } else if (a.explotacion_id === 'exp-02') {
-            a.usuario_id = 'usr-aspirante-02';
-            a.codigo_rega = a.codigo_rega || 'TEMP-REGA-001';
-            a.titular_nombre = a.titular_nombre || 'Pedro García Orts';
-            modificado = true;
-          }
-        }
-        if (modificado) {
-          await this.db.put('animales', a);
-        }
-      }
+      });
     }
 
-    // AISLAMIENTO MULTIUSUARIO EN MEMORIA (filtrar estrictamente por el user.id activo)
-    const u = this.estado.usuarioActivo;
-    this.estado.usuarios = usuariosLocales;
+    this.estado.animales = animalesLocales;
+    this.estado.explotaciones = explotacionesLocales;
     this.estado.inspecciones = inspeccionesLocales;
+    this.estado.controlesPuesta = controlesLocales;
+    this.estado.lotes = lotesLocales;
 
     // Calcular consanguinidad en cliente para los ejemplares reales
     this.recalcularConsanguinidadCenso();
@@ -655,30 +421,6 @@ const app = {
         this.actualizarKPIs();
         this.ejecutarAuditoriaIntegridad(false);
       }
-      // Sincronizar perfiles de usuarios y solicitudes de inspección si existen tablas en Supabase
-      try {
-        const { data: usuariosRemotos, error: errU } = await this.supabaseClient.from('perfiles_usuarios').select('*');
-        if (!errU && usuariosRemotos && usuariosRemotos.length > 0) {
-          await this.db.putBatch('usuarios', usuariosRemotos);
-          this.estado.usuarios = await this.db.getAll('usuarios');
-          this.renderizarTablaUsuariosAdmin();
-        }
-      } catch (_) {}
-
-      try {
-        const { data: solicitudesRemotas, error: errS } = await this.supabaseClient.from('solicitudes_inspeccion').select('*');
-        if (!errS && solicitudesRemotas && solicitudesRemotas.length > 0) {
-          await this.db.putBatch('solicitudesInspeccion', solicitudesRemotas);
-          const todasSol = await this.db.getAll('solicitudesInspeccion');
-          const u = this.estado.usuarioActivo;
-          if (u && (u.rol === 'admin' || u.rol === 'inspector')) {
-            this.estado.solicitudesInspeccion = todasSol;
-          } else if (u) {
-            this.estado.solicitudesInspeccion = todasSol.filter(s => String(s.usuario_id) === String(u.id));
-          }
-          this.renderizarSolicitudesInspeccion();
-        }
-      } catch (_) {}
     } catch (e) {
       console.warn('[Supabase] Error sincronizando desde nube:', e);
     }
@@ -811,30 +553,6 @@ const app = {
           }
           await this.db.delete('syncQueue', item.id);
           sincronizados++;
-        } else if (item.tipo === 'USUARIO_PERFIL' || item.tipo === 'CAMBIO_ROL_ADMIN') {
-          try {
-            await this.supabaseClient.from('perfiles_usuarios').upsert(item.payload);
-          } catch (_) {}
-          await this.db.delete('syncQueue', item.id);
-          sincronizados++;
-        } else if (item.tipo === 'SOLICITUD_INSPECCION') {
-          try {
-            await this.supabaseClient.from('solicitudes_inspeccion').upsert(item.payload);
-          } catch (_) {}
-          await this.db.delete('syncQueue', item.id);
-          sincronizados++;
-        } else if (item.tipo === 'LOTE_INCUBACION') {
-          try {
-            await this.supabaseClient.from('lotes_incubacion').upsert(item.payload);
-          } catch (_) {}
-          await this.db.delete('syncQueue', item.id);
-          sincronizados++;
-        } else if (item.tipo === 'BANCO_GERMOPLASMA') {
-          try {
-            await this.supabaseClient.from('banco_germoplasma').upsert(item.payload);
-          } catch (_) {}
-          await this.db.delete('syncQueue', item.id);
-          sincronizados++;
         }
       } catch (err) {
         console.error('[SyncQueue] Error al sincronizar item:', item, err);
@@ -843,27 +561,22 @@ const app = {
 
     this.estado.syncQueue = await this.db.getAll('syncQueue');
     this.actualizarContadorSyncQueue();
-    if (sincronizados > 0) {
-      this.mostrarNotificacionToast(`☁️ Sincronizado: ${sincronizados} registro(s) subidos a Supabase.`, 'success');
-    }
     if (manual) {
       alert(`Sincronización completada. Se enviaron ${sincronizados} elementos a Supabase.`);
     }
   },
 
-  // Subir imagen en Base64 (WebP optimizado < 300 KB o JPEG/PNG) al Storage Bucket 'fotos-alacantina'
+  // Subir imagen en Base64 al Storage Bucket 'fotos-alacantina'
   async subirFotoStorage(animalId, tipoFoto, base64Data) {
     if (!this.supabaseClient) return null;
     try {
       const blob = this.base64ToBlob(base64Data);
-      const mimeType = blob.type || 'image/webp';
-      const ext = mimeType.includes('webp') ? 'webp' : (mimeType.includes('png') ? 'png' : 'jpg');
-      const filePath = `${animalId}/${tipoFoto}_${Date.now()}.${ext}`;
+      const filePath = `${animalId}/${tipoFoto}_${Date.now()}.jpg`;
 
       const { data, error } = await this.supabaseClient.storage
         .from('fotos-alacantina')
         .upload(filePath, blob, {
-          contentType: mimeType,
+          contentType: 'image/jpeg',
           upsert: true
         });
 
@@ -894,30 +607,12 @@ const app = {
   actualizarContadorSyncQueue() {
     const count = this.estado.syncQueue ? this.estado.syncQueue.length : 0;
     const badge = document.getElementById('sync-pending-count');
-    const btnSync = document.getElementById('btn-sync-queue');
-    const labelSync = document.getElementById('sync-monitor-label');
-
-    if (count > 0) {
-      if (badge) {
+    if (badge) {
+      if (count > 0) {
         badge.textContent = count;
         badge.classList.remove('hidden');
-      }
-      if (labelSync) {
-        labelSync.textContent = `☁️ ${count} ${count === 1 ? 'pendiente' : 'pendientes'}`;
-      }
-      if (btnSync) {
-        btnSync.className = 'relative px-2.5 py-1.5 rounded-xl bg-amber-950/90 hover:bg-amber-900/90 text-amber-300 border border-amber-500/70 text-xs font-bold flex items-center gap-1.5 transition shadow-sm';
-      }
-    } else {
-      if (badge) {
-        badge.textContent = '0';
+      } else {
         badge.classList.add('hidden');
-      }
-      if (labelSync) {
-        labelSync.textContent = '☁️ Sincronizado';
-      }
-      if (btnSync) {
-        btnSync.className = 'relative px-2.5 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-700/70 text-xs font-bold flex items-center gap-1.5 transition shadow-sm';
       }
     }
   },
@@ -1097,70 +792,7 @@ const app = {
     );
   },
 
-  /**
-   * Compresor WebP transparente en cliente (Canvas HTML5):
-   * Convierte cualquier imagen de cámara o galería a formato WebP optimizado (< 300 KB)
-   * garantizando máxima fluidez offline/online sin perder calidad de inspección zootécnica.
-   */
-  comprimirImagenWebP(img, maxDim = 1280, maxBytes = 300 * 1024) {
-    const canvas = document.createElement('canvas');
-    let width = img.width || 1200;
-    let height = img.height || 900;
-
-    if (width > height && width > maxDim) {
-      height = Math.round((height * maxDim) / width);
-      width = maxDim;
-    } else if (height > maxDim) {
-      width = Math.round((width * maxDim) / height);
-      height = maxDim;
-    }
-
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, width, height);
-
-    // Comprobar soporte nativo de codificación image/webp en Canvas y ajustar calidad iterativamente (< 300 KB)
-    let quality = 0.84;
-    let dataUrl = canvas.toDataURL('image/webp', quality);
-    const mimeType = dataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
-    if (mimeType === 'image/jpeg') {
-      dataUrl = canvas.toDataURL('image/jpeg', quality);
-    }
-
-    const calcularBytesBase64 = (b64) => {
-      const idx = b64.indexOf(';base64,');
-      if (idx === -1) return b64.length;
-      return Math.ceil(((b64.length - (idx + 8)) * 3) / 4);
-    };
-
-    let bytes = calcularBytesBase64(dataUrl);
-    while (bytes > maxBytes && quality > 0.38) {
-      quality = Math.max(0.35, Number((quality - 0.1).toFixed(2)));
-      dataUrl = canvas.toDataURL(mimeType, quality);
-      bytes = calcularBytesBase64(dataUrl);
-    }
-
-    // Si aún supera 300 KB por resolución extrema, reducir escala un 20% adicional
-    if (bytes > maxBytes) {
-      canvas.width = Math.round(width * 0.8);
-      canvas.height = Math.round(height * 0.8);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      dataUrl = canvas.toDataURL(mimeType, 0.72);
-      bytes = calcularBytesBase64(dataUrl);
-    }
-
-    const kb = (bytes / 1024).toFixed(1);
-    console.log(`[Compresor WebP] Imagen optimizada en cliente: ${mimeType} · ${canvas.width}x${canvas.height}px · ${kb} KB (< 300 KB)`);
-    return {
-      dataUrl,
-      bytes,
-      kb,
-      mimeType
-    };
-  },
-
-  // Procesamiento y compresión WebP (< 300 KB) en cliente de las 3 tomas fotográficas obligatorias
+  // Procesamiento y compresión en cliente de las 3 tomas fotográficas obligatorias
   procesarCapturaFoto(tipoToma, inputElement) {
     const file = inputElement.files[0];
     if (!file) return;
@@ -1169,12 +801,29 @@ const app = {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Procesar en Canvas a formato WebP optimizado (< 300 KB) antes de guardar en IndexedDB o subir a Supabase
-        const comprimida = this.comprimirImagenWebP(img, 1280, 300 * 1024);
-        const base64Webp = comprimida.dataUrl;
+        // Redimensionar y comprimir en canvas para optimizar almacenamiento y offline
+        const canvas = document.createElement('canvas');
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const base64Jpeg = canvas.toDataURL('image/jpeg', 0.82);
 
         // Guardar en el estado temporal
-        this.estado.fotosCapturadas[tipoToma] = base64Webp;
+        this.estado.fotosCapturadas[tipoToma] = base64Jpeg;
 
         // Actualizar UI
         const slot = document.getElementById(`slot-${tipoToma}`);
@@ -1184,16 +833,13 @@ const app = {
         const badgeCaptura = document.getElementById(`badge-captura-${tipoToma}`);
 
         if (previewImg) {
-          previewImg.src = base64Webp;
+          previewImg.src = base64Jpeg;
           previewImg.classList.remove('hidden');
         }
         if (placeholder) placeholder.classList.add('hidden');
         if (slot) slot.classList.add('filled');
         if (btnEliminar) btnEliminar.classList.remove('hidden');
-        if (badgeCaptura) {
-          badgeCaptura.textContent = `✓ WebP (${comprimida.kb} KB)`;
-          badgeCaptura.classList.remove('hidden');
-        }
+        if (badgeCaptura) badgeCaptura.classList.remove('hidden');
       };
       img.src = e.target.result;
     };
@@ -1234,7 +880,7 @@ const app = {
   },
 
   // =========================================================================
-  // GESTOR DE FOTOGRAFÍAS OPCIONALES CON TITULADO / ETIQUETADO (COMPRESOR WEBP)
+  // GESTOR DE FOTOGRAFÍAS OPCIONALES CON TITULADO / ETIQUETADO
   // =========================================================================
   procesarCapturaFotoOpcional(inputElement) {
     const file = inputElement.files && inputElement.files[0];
@@ -1248,15 +894,30 @@ const app = {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Compresión transparente en cliente a formato WebP (< 300 KB) en Canvas
-        const comprimida = this.comprimirImagenWebP(img, 1280, 300 * 1024);
-        const base64Webp = comprimida.dataUrl;
+        // Compresión y escalado Canvas JPEG cliente (máx 1200px, 0.82 calidad)
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+
+        if (width > maxDim && width >= height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const base64Jpeg = canvas.toDataURL('image/jpeg', 0.82);
 
         // Incorporar al estado reactivo
         this.estado.fotosOpcionalesCapturadas.push({
-          url: base64Webp,
-          formato: 'WebP',
-          tamano_kb: Number(comprimida.kb),
+          url: base64Jpeg,
           titulo: titulo || `Foto adicional #${this.estado.fotosOpcionalesCapturadas.length + 1}`,
           fecha: new Date().toISOString()
         });
@@ -1404,26 +1065,20 @@ const app = {
   async guardarNuevoAnimal(event) {
     event.preventDefault();
 
-    const u = this.estado.usuarioActivo;
-    if (!u || this.estado.modoVisitante) {
-      alert('Debes iniciar sesión con una cuenta de usuario activa para dar de alta ejemplares.');
-      return;
-    }
-
-    // 1. Vincular estrictamente el aviario del usuario autenticado (app.estado.aviario)
-    let aviario = this.estado.aviario || this.estado.aviarioActivo;
+    // 1. Vincular automáticamente la explotación / aviario activo
+    let aviario = this.estado.aviarioActivo;
     if (!aviario) {
       const selectVal = document.getElementById('alta-explotacion')?.value;
       if (selectVal) {
-        aviario = this.estado.explotaciones.find(e => e.id === selectVal && this.perteneceAUsuarioActivo(e, u));
+        aviario = this.estado.explotaciones.find(e => e.id === selectVal);
       }
     }
 
     if (!aviario) {
-      if (confirm('No tienes ningún aviario o explotación activa configurada en tu cuenta.\n¿Deseas configurar tu aviario ahora para vincular tu código REGA y ubicación?')) {
+      if (confirm('No tienes ningún aviario o explotación activa seleccionada.\n¿Deseas configurar tu aviario ahora para vincular automáticamente el código REGA y ubicación oficial?')) {
         this.abrirModalAviario(true);
+        return;
       }
-      return;
     }
 
     const explotacionId = aviario ? aviario.id : (document.getElementById('alta-explotacion')?.value || null);
@@ -1463,9 +1118,9 @@ const app = {
 
     const calibre = sexo === 'Macho' ? 20.0 : 18.0;
 
-    // GPS: Heredar dinámicamente las coordenadas reales del aviario del usuario logueado si no se capturó GPS puntual
+    // GPS: Heredar automáticamente las coordenadas del aviario activo si no se capturó GPS específico
     let gpsFinal = this.estado.gpsUbicacion;
-    if (!gpsFinal && aviario && aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
+    if (!gpsFinal && aviario && aviario.latitud && aviario.longitud) {
       gpsFinal = {
         latitud: Number(aviario.latitud),
         longitud: Number(aviario.longitud),
@@ -1480,7 +1135,6 @@ const app = {
 
     const nuevoAnimal = {
       id: 'alac-' + Date.now(),
-      usuario_id: u.id,
       codigo_identificacion: codigoId,
       numero_anilla: anilla,
       calibre_anilla_mm: calibre,
@@ -2264,8 +1918,7 @@ const app = {
     const animal = this.estado.animales.find(a => a.id === animalId);
     if (!animal) return;
 
-    const datosInsp = this.obtenerDatosInspectorActivo();
-    const calificador = document.getElementById('inspeccion-calificador').value.trim() || datosInsp.nombre || 'Inspector Zootécnico';
+    const calificador = document.getElementById('inspeccion-calificador').value.trim() || 'Calificador Oficial CNZ';
 
     const defOrejilla = document.getElementById('chk-def-orejilla').checked;
     const defPecho = document.getElementById('chk-def-pecho').checked;
@@ -2295,9 +1948,6 @@ const app = {
       animal_id: animalId,
       fecha_inspeccion: new Date().toISOString().split('T')[0],
       calificador_oficial: calificador,
-      inspector_id: datosInsp.id,
-      inspector_usuario_id: datosInsp.usuario_id,
-      firma_inspector_base64: datosInsp.firma_base64 || null,
       cabeza_cresta_cara: c1,
       cuello_esclavina: c2,
       pecho_tronco: c3,
@@ -2373,15 +2023,9 @@ const app = {
     const colorConforme = colorCascara.includes('crema');
     const conforme = (enRangoPeso && colorConforme);
 
-    const u = this.estado.usuarioActivo;
-    const aviario = this.estado.aviario || this.estado.aviarioActivo;
-
     const nuevoControl = {
       id: 'puesta-' + Date.now(),
       animal_id: animalId,
-      usuario_id: u?.id || animal.usuario_id || null,
-      explotacion_id: aviario?.id || animal.explotacion_id || null,
-      codigo_rega: aviario?.codigo_rega || aviario?.rega || animal.codigo_rega || u?.rega || null,
       fecha_inicio: fInicio,
       fecha_fin: fFin,
       total_huevos_15d: totalHuevos,
@@ -2423,7 +2067,7 @@ const app = {
   },
 
   cambiarSubtabPuesta(subtab) {
-    const tabs = ['analitica', 'rfid', 'registro', 'tabla', 'incubacion'];
+    const tabs = ['analitica', 'rfid', 'registro', 'tabla'];
     tabs.forEach(t => {
       const btn = document.getElementById(`btn-subtab-${t}-puesta`);
       const panel = document.getElementById(`subtab-${t}-puesta`);
@@ -2451,8 +2095,6 @@ const app = {
       this.poblarSelectoresRfid();
     } else if (subtab === 'tabla') {
       this.renderizarTablaHistorialPuesta();
-    } else if (subtab === 'incubacion') {
-      this.renderizarModuloIncubacion();
     } else if (subtab === 'registro') {
       const selectAnimal = document.getElementById('puesta-form-animal-select');
       const inspAnimal = document.getElementById('inspeccion-animal-select')?.value;
@@ -2466,30 +2108,25 @@ const app = {
   },
 
   poblarSelectoresAnaliticaPuesta() {
-    const gallinasPropias = (this.estado.animales || []).filter(a => a.sexo === 'Hembra' && this.perteneceAUsuarioActivo(a));
-    const lotesPropios = (this.estado.lotes || []).filter(l => this.perteneceAUsuarioActivo(l));
-
     // 1. Selector de gallina para analítica
     const selectAnimal = document.getElementById('filtro-analitica-animal');
     if (selectAnimal) {
       const valActual = selectAnimal.value;
       selectAnimal.innerHTML = '<option value="TODAS">Todas las gallinas reproductoras</option>';
-      gallinasPropias.forEach(a => {
+      this.estado.animales.filter(a => a.sexo === 'Hembra').forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
         opt.textContent = `#${a.numero_anilla} - ${a.nombre || a.codigo_identificacion} (${a.familia_origen})`;
         selectAnimal.appendChild(opt);
       });
-      if (valActual && (valActual === 'TODAS' || gallinasPropias.some(a => a.id === valActual))) {
-        selectAnimal.value = valActual;
-      }
+      if (valActual) selectAnimal.value = valActual;
     }
 
     // 2. Selector de lotes para analítica
     const optgroupLotes = document.getElementById('optgroup-analitica-lotes');
     if (optgroupLotes) {
       optgroupLotes.innerHTML = '';
-      lotesPropios.forEach(lote => {
+      (this.estado.lotes || []).forEach(lote => {
         const opt = document.createElement('option');
         opt.value = lote.codigo_lote || lote.id;
         opt.textContent = `${lote.codigo_lote} (${lote.familia_macho} → ${lote.familia_receptora})`;
@@ -2502,15 +2139,13 @@ const app = {
     if (selectFormAnimal) {
       const valActual = selectFormAnimal.value;
       selectFormAnimal.innerHTML = '<option value="">Selecciona una gallina...</option>';
-      gallinasPropias.forEach(a => {
+      this.estado.animales.filter(a => a.sexo === 'Hembra').forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
         opt.textContent = `#${a.numero_anilla} (${a.codigo_identificacion}) - ${a.nombre || 'Gallina'} [${a.familia_origen}]`;
         selectFormAnimal.appendChild(opt);
       });
-      if (valActual && gallinasPropias.some(a => a.id === valActual)) {
-        selectFormAnimal.value = valActual;
-      }
+      if (valActual) selectFormAnimal.value = valActual;
     }
   },
 
@@ -2519,12 +2154,7 @@ const app = {
     const loteFamilia = document.getElementById('filtro-analitica-lote')?.value || 'TODOS';
     const periodo = document.getElementById('filtro-analitica-periodo')?.value || 'TODAS';
 
-    // Aislar estrictamente para el usuario/aviario autenticado
-    let lista = (this.estado.controlesPuesta || []).filter(c => {
-      if (this.perteneceAUsuarioActivo(c)) return true;
-      const animal = this.estado.animales.find(a => a.id === c.animal_id);
-      return Boolean(animal && this.perteneceAUsuarioActivo(animal));
-    });
+    let lista = [...(this.estado.controlesPuesta || [])];
 
     // Filtro por animal
     if (animalId && animalId !== 'TODAS') {
@@ -3763,15 +3393,9 @@ const app = {
     const colorConforme = colorCascara.includes('crema');
     const conforme = enRangoPeso && colorConforme;
 
-    const u = this.estado.usuarioActivo;
-    const aviario = this.estado.aviario || this.estado.aviarioActivo;
-
     const nuevoControl = {
       id: 'puesta-rfid-' + Date.now(),
       animal_id: animal.id,
-      usuario_id: u?.id || animal.usuario_id || null,
-      explotacion_id: aviario?.id || animal.explotacion_id || null,
-      codigo_rega: aviario?.codigo_rega || aviario?.rega || animal.codigo_rega || u?.rega || null,
       fecha_inicio: fechaSolo,
       fecha_fin: fechaSolo,
       hora_registro: fechaHora,
@@ -4243,51 +3867,36 @@ const app = {
     `;
   },
 
-  // Simulador de Apareamiento Preventivo (Gallo x Gallina - 5 Generaciones Wright)
+  // Simulador de Apareamiento Preventivo (Gallo x Gallina)
   simularCrucePreventivo() {
-    const machoId = document.getElementById('sim-macho')?.value;
-    const hembraId = document.getElementById('sim-hembra')?.value;
+    const machoId = document.getElementById('sim-macho').value;
+    const hembraId = document.getElementById('sim-hembra').value;
     const resultadoEl = document.getElementById('sim-fx-resultado');
     const recEl = document.getElementById('sim-recomendacion');
-    const boxEl = document.getElementById('sim-resultado-box');
 
     if (!machoId || !hembraId) {
-      if (resultadoEl) resultadoEl.textContent = '--';
-      if (recEl) recEl.textContent = 'Selecciona ambos reproductores para simular el apareamiento.';
+      resultadoEl.textContent = '--';
+      recEl.textContent = 'Selecciona ambos reproductores para simular el apareamiento.';
       return;
     }
 
-    const { fx, ancestrosComunes } = this.calcularFxWright5Gen(machoId, hembraId, this.estado.animales);
-    const fxPct = (fx * 100).toFixed(2);
-    const diag = this.obtenerDiagnosticoColorWright(fx);
+    const fx = this.zootecnia.calcularFxDescendencia(machoId, hembraId, this.estado.animales);
+    const fxPct = (fx * 100).toFixed(3);
 
-    if (resultadoEl) {
-      resultadoEl.textContent = `${fx.toFixed(4)} (${fxPct}%)`;
-      resultadoEl.className = `font-mono font-bold text-sm ${diag.textClass}`;
-    }
-    if (boxEl) {
-      boxEl.className = `p-3.5 rounded-lg border space-y-1.5 ${diag.borderClass}`;
-    }
+    resultadoEl.textContent = `${fx.toFixed(5)} (${fxPct}%)`;
 
-    const macho = (this.estado.animales || []).find(a => a.id === machoId);
-    const rotacionGobe = {
-      'Familia A': 'Familia B',
-      'Familia B': 'Familia C',
-      'Familia C': 'Familia D',
-      'Familia D': 'Familia E',
-      'Familia E': 'Familia A'
-    };
-    const famSugerida = macho?.familia_origen ? (rotacionGobe[macho.familia_origen] || 'Familia B') : 'Familia B';
-
-    if (recEl) {
-      recEl.className = `text-[11px] font-semibold ${diag.textClass}`;
-      recEl.innerHTML = `
-        <div><strong>${diag.etiqueta}</strong> (${fxPct}%).</div>
-        <div class="text-slate-300 font-normal mt-0.5">
-          ${ancestrosComunes.length > 0 ? `Ancestros comunes en 5 gen: ${ancestrosComunes.map(c => '#' + this.escaparHtml(c.anilla)).join(', ')}. ` : ''}
-          Regla de Gobe: El gallo #${this.escaparHtml(macho?.numero_anilla || '')} (${this.escaparHtml(macho?.familia_origen || '')}) rota óptimamente hacia hembras de <strong>${this.escaparHtml(famSugerida)}</strong>.
-        </div>
-      `;
+    if (fx > 0.0625) {
+      resultadoEl.className = 'font-mono font-bold text-sm text-red-400';
+      recEl.className = 'text-[11px] text-red-400 font-semibold';
+      recEl.innerHTML = `⚠️ <strong>CRUCE DESACONSEJADO:</strong> Consanguinidad esperada elevada (${fxPct}%). Alto riesgo de depresión consanguínea y pérdida de vigor híbrido según CNZ.`;
+    } else if (fx > 0.03) {
+      resultadoEl.className = 'font-mono font-bold text-sm text-amber-400';
+      recEl.className = 'text-[11px] text-amber-400 font-semibold';
+      recEl.innerHTML = `⚡ <strong>CRUCE MODERADO:</strong> Consanguinidad tolerable (${fxPct}%). Se recomienda compensar en la siguiente generación con otra familia.`;
+    } else {
+      resultadoEl.className = 'font-mono font-bold text-sm text-emerald-400';
+      recEl.className = 'text-[11px] text-emerald-400 font-semibold';
+      recEl.innerHTML = `✓ <strong>CRUCE ÓPTIMO RECOMENDADO:</strong> Consanguinidad muy baja (${fxPct}%). Cumple con el objetivo de mantenimiento de la variabilidad genética ESGA025.`;
     }
   },
 
@@ -4855,25 +4464,24 @@ const app = {
 
     // 2. Recopilar datos de Explotación Ganadera y Criador Asociado
     let explotacion = this.estado.explotaciones.find(e => e.id === animal.explotacion_id);
-    if (!explotacion && (this.estado.aviario || this.estado.aviarioActivo)) {
-      explotacion = this.estado.aviario || this.estado.aviarioActivo;
+    if (!explotacion && this.estado.aviarioActivo) {
+      explotacion = this.estado.aviarioActivo;
     }
     if (!explotacion) {
       explotacion = {
-        nombre_titular: animal.titular_nombre || this.estado.usuarioActivo?.nombre || '',
-        nombre_criadero: 'Aviario Registrado ESGA025',
-        codigo_rega: animal.codigo_rega || this.estado.usuarioActivo?.rega || 'TEMP-REGA-001',
-        numero_socio: this.estado.usuarioActivo?.numero_socio || 'NS-000',
+        nombre_titular: animal.titular_nombre || 'Criador Asociado ESGA025',
+        nombre_criadero: 'Aviario Oficial Alacantina',
+        codigo_rega: animal.codigo_rega || 'Sin REGA',
+        numero_socio: 'Aspirante',
         municipio: 'Alicante',
         provincia: 'Alicante',
-        latitud: animal.geolocalizacion_alta?.latitud ?? null,
-        longitud: animal.geolocalizacion_alta?.longitud ?? null
+        latitud: animal.geolocalizacion_alta?.latitud,
+        longitud: animal.geolocalizacion_alta?.longitud
       };
     }
 
-    // 3. Recopilar Evaluación Morfológica Oficial (Baremo 100 Puntos CNZ) e Inspector Dinámico
+    // 3. Recopilar Evaluación Morfológica Oficial (Baremo 100 Puntos CNZ)
     const inspeccion = this.estado.inspecciones.find(i => i.animal_id === animal.id) || null;
-    const inspector = this.obtenerDatosInspectorActivo(inspeccion);
 
     // 4. Recopilar Control Oficial de Rendimiento y Puesta (15 Días)
     const controlPuesta = this.estado.controlesPuesta
@@ -4895,7 +4503,6 @@ const app = {
           ancestros,
           explotacion,
           inspeccion,
-          inspector,
           controlPuesta,
           fotos
         });
@@ -4908,7 +4515,7 @@ const app = {
         console.error('[App] Error al generar certificado zootécnico:', err);
         this.mostrarNotificacionToast('⚠️ Error al generar PDF cliente. Abriendo vista de impresión...', 'error');
         window.PDFEngine.abrirVentanaImpresionDirecta(
-          await window.PDFEngine.construirHtmlCertificado(animal, { ancestros, explotacion, inspeccion, inspector, controlPuesta, fotos }),
+          await window.PDFEngine.construirHtmlCertificado(animal, { ancestros, explotacion, inspeccion, controlPuesta, fotos }),
           `Certificado_ESGA025_${anillaLimpia}.pdf`
         );
       }
@@ -4968,10 +4575,10 @@ const app = {
       sugerenciaText.textContent = `Recomendación Gobe: Para cubrir hembras de ${familiaReceptora}, asignar un macho procedente de ${familiaOrigenSugerida}.`;
     }
 
-    // Filtrar select de gallos destacando los de esa familia (solo animales del usuario/aviario activo)
+    // Filtrar select de gallos destacando los de esa familia
     const selectGallo = document.getElementById('lote-gallo');
     if (selectGallo) {
-      const machos = this.estado.animales.filter(a => a.sexo === 'Macho' && this.perteneceAUsuarioActivo(a));
+      const machos = this.estado.animales.filter(a => a.sexo === 'Macho');
       selectGallo.innerHTML = '<option value="">-- Seleccionar Gallo Reproductor --</option>';
       machos.forEach(m => {
         const esSugerido = m.familia_origen === familiaOrigenSugerida;
@@ -4986,13 +4593,6 @@ const app = {
 
   async guardarNuevoLote(event) {
     event.preventDefault();
-
-    const u = this.estado.usuarioActivo;
-    const aviario = this.estado.aviario || this.estado.aviarioActivo;
-    if (!u || this.estado.modoVisitante) {
-      alert('Debes iniciar sesión con tu cuenta de criador para registrar lotes de reproducción.');
-      return;
-    }
 
     const codigo = document.getElementById('lote-codigo').value.trim();
     const receptora = document.getElementById('lote-familia-receptora').value;
@@ -5018,9 +4618,6 @@ const app = {
       temporada: temporada,
       rotacion_siguiente_familia: siguienteRotacion[receptora] || 'Familia A',
       activo: (estado === 'Activo'),
-      usuario_id: u.id,
-      explotacion_id: aviario?.id || u.explotacion_id || null,
-      codigo_rega: aviario?.codigo_rega || aviario?.rega || u.rega || 'TEMP-REGA-001',
       notas: `Lote de apareamiento de temporada ${temporada} conforme a la Regla de Gobe.`
     };
 
@@ -5047,15 +4644,13 @@ const app = {
     const cont = document.getElementById('lista-lotes-container');
     if (!cont) return;
 
-    const lotesVisibles = (this.estado.lotes || []).filter(l => this.perteneceAUsuarioActivo(l));
-
-    if (lotesVisibles.length === 0) {
-      cont.innerHTML = '<p class="text-xs text-slate-500">No hay lotes de apareamiento registrados para este aviario/usuario actualmente.</p>';
+    if (!this.estado.lotes || this.estado.lotes.length === 0) {
+      cont.innerHTML = '<p class="text-xs text-slate-500">No hay lotes de apareamiento registrados actualmente.</p>';
       return;
     }
 
     cont.innerHTML = '';
-    lotesVisibles.forEach(l => {
+    this.estado.lotes.forEach(l => {
       const gallo = this.estado.animales.find(a => a.id === l.id_gallo);
       const card = document.createElement('div');
       card.className = 'p-3 rounded-lg bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs';
@@ -5174,28 +4769,10 @@ const app = {
     if (tabName === 'puesta') {
       tabName = 'inspeccion';
     }
-
-    const rolActual = this.obtenerRolUsuarioActual();
-
-    // Protección RBAC estricta para el Panel de Administración (Vista exclusiva Administrador)
-    if (tabName === 'admin' && rolActual !== 'administrador') {
-      this.mostrarNotificacionToast('🔒 Acceso restringido: El Panel de Administración es exclusivo para usuarios con rol Administrador.', 'warning');
-      tabName = 'censo';
-    }
-
-    // Protección Modo Visitante (Solo lectura: Censo, Pedigrí y Guía de Campo ESGA025)
-    if (rolActual === 'visitante' && ['registro', 'lotes', 'inspeccion-insitu', 'admin'].includes(tabName)) {
-      this.mostrarNotificacionToast('👀 Modo Visitante (Solo Lectura): Inicia sesión o regístrate para gestionar el censo, lotes o inspecciones.', 'info');
-      tabName = 'censo';
-    }
-
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-nav-btn').forEach(btn => {
       if (btn.id === 'tab-btn-inspeccion-insitu') {
         btn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold transition text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 shadow-sm';
-      } else if (btn.id === 'tab-btn-admin') {
-        const ocultoAdmin = rolActual !== 'administrador' ? ' hidden' : '';
-        btn.className = `tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold transition text-purple-300 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 shadow-sm${ocultoAdmin}`;
       } else {
         btn.className = 'tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800';
       }
@@ -5208,8 +4785,6 @@ const app = {
     if (targetBtn) {
       if (tabName === 'inspeccion-insitu') {
         targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition text-slate-950 bg-emerald-400 border-2 border-amber-300 shadow-lg';
-      } else if (tabName === 'admin') {
-        targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition text-white bg-purple-600 border-2 border-amber-300 shadow-lg';
       } else {
         targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-amber-400 bg-slate-800 border border-amber-500/30';
       }
@@ -5220,38 +4795,10 @@ const app = {
     if (tabName === 'inspeccion') {
       setTimeout(() => {
         this.renderizarAnaliticaPuesta();
-        if (typeof this.renderizarModuloIncubacion === 'function') {
-          this.renderizarModuloIncubacion();
-        }
-      }, 50);
-    } else if (tabName === 'lotes') {
-      setTimeout(() => {
-        this.renderizarLotes();
-        if (typeof this.poblarSimuladorAcoplamientos === 'function') {
-          this.poblarSimuladorAcoplamientos();
-        }
-      }, 50);
-    } else if (tabName === 'mapa-gis') {
-      setTimeout(() => {
-        if (typeof this.actualizarMapaGIS === 'function') {
-          this.actualizarMapaGIS();
-        }
-      }, 80);
-    } else if (tabName === 'germoplasma') {
-      setTimeout(() => {
-        if (typeof this.renderizarModuloGermoplasma === 'function') {
-          this.renderizarModuloGermoplasma();
-        }
       }, 50);
     } else if (tabName === 'inspeccion-insitu') {
       setTimeout(() => {
         this.refrescarVistaInspeccionInSitu();
-        this.renderizarSolicitudesInspeccion();
-      }, 50);
-    } else if (tabName === 'admin') {
-      setTimeout(() => {
-        this.renderizarTablaUsuariosAdmin();
-        this.renderizarSolicitudesInspeccion();
       }, 50);
     }
   },
@@ -5386,15 +4933,6 @@ const app = {
     this.sugerirMachoGobe(document.getElementById('lote-familia-receptora')?.value || 'Familia B');
     this.poblarSelectoresAnaliticaPuesta();
     this.poblarSelectoresRfid();
-    if (typeof this.poblarSimuladorAcoplamientos === 'function') {
-      this.poblarSimuladorAcoplamientos();
-    }
-    if (typeof this.renderizarModuloIncubacion === 'function') {
-      this.renderizarModuloIncubacion();
-    }
-    if (typeof this.renderizarModuloGermoplasma === 'function') {
-      this.renderizarModuloGermoplasma();
-    }
   },
 
   // Modales de Configuración y SyncQueue
@@ -5523,8 +5061,7 @@ const app = {
         } catch (e) {
           console.warn('[Aviario] Error al parsear aviario guardado:', e);
         }
-        return false;
-      }) || null;
+      }
     }
 
     // 3. Si no hay aviario configurado y no se ha activado el modo visitante en esta sesión:
@@ -5535,12 +5072,6 @@ const app = {
         this.abrirModalAviario(true);
       }, 150);
     }
-
-    // Sobreescribir estrictamente tanto app.estado.aviario como app.estado.aviarioActivo
-    this.estado.aviario = expUsuario;
-    this.estado.aviarioActivo = expUsuario;
-    localStorage.setItem('alacantina_aviario_activo_id', expUsuario.id);
-    localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(expUsuario));
   },
 
   // Abrir Modal de Configuración / Bienvenida
@@ -5554,7 +5085,7 @@ const app = {
     const selectExistentes = document.getElementById('select-aviarios-existentes');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
 
-    // Poblar selector de explotaciones existentes visibles para este usuario
+    // Poblar selector de explotaciones existentes si las hay
     if (selectExistentes) {
       selectExistentes.innerHTML = '<option value="">-- O seleccionar explotación existente registrada --</option>';
       if (this.estado.explotaciones && this.estado.explotaciones.length > 0) {
@@ -5571,23 +5102,21 @@ const app = {
       }
     }
 
-    const aviarioActual = this.estado.aviario || this.estado.aviarioActivo;
-
     // Configurar textos de bienvenida o edición
-    if (esBienvenida && !aviarioActual) {
+    if (esBienvenida && !this.estado.aviarioActivo) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
       if (subtituloEl) subtituloEl.textContent = 'Bienvenido a AlacantinApp v6. Configura tu explotación zootécnica real o selecciona un rol en Estado Cero.';
     } else if (this.estado.aviarioActivo) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
-      if (subtituloEl) subtituloEl.textContent = 'Actualiza los datos de tu explotación ganadera, código REGA oficial (ES + 12 dígitos) o geolocalización GPS.';
+      if (subtituloEl) subtituloEl.textContent = 'Actualiza los datos de tu explotación ganadera, código REGA oficial o geolocalización GPS.';
     }
 
     // Resetear temporal GPS
     this.estado.gpsAviarioTemporal = null;
 
     // Si hay un aviario activo, precargar sus datos en el formulario
-    if (aviarioActual) {
-      const av = aviarioActual;
+    if (this.estado.aviarioActivo) {
+      const av = this.estado.aviarioActivo;
       this.estado.editandoAviarioId = av.id;
 
       if (selectExistentes) selectExistentes.value = av.id;
@@ -5600,19 +5129,17 @@ const app = {
       const regaTramiteCheck = document.getElementById('aviario-rega-tramite');
       const munInput = document.getElementById('aviario-municipio');
       const provInput = document.getElementById('aviario-provincia');
-      const telInput = document.getElementById('aviario-telefono');
       const pill = document.getElementById('aviario-rega-status-pill');
 
-      if (titularInput) titularInput.value = av.nombre_titular || this.estado.usuarioActual?.nombre || '';
+      if (titularInput) titularInput.value = av.nombre_titular || '';
       if (nombreInput) nombreInput.value = av.nombre_criadero || '';
-      if (socioInput) socioInput.value = av.numero_socio || this.estado.usuarioActual?.numero_socio || '';
+      if (socioInput) socioInput.value = av.numero_socio || '';
       if (socioAspCheck) socioAspCheck.checked = (!av.numero_socio || av.numero_socio === 'NS-000');
-      if (telInput) telInput.value = av.telefono || this.estado.usuarioActual?.telefono || '';
 
-      const regaActual = av.codigo_rega || av.rega || this.estado.usuarioActual?.rega || '';
+      const regaActual = av.codigo_rega || av.rega || '';
       if (regaInput) regaInput.value = regaActual;
 
-      const esTempRega = (!regaActual || regaActual.startsWith('TEMP-REGA') || regaActual === 'NS-000' || regaActual.toLowerCase().includes('sin rega'));
+      const esTempRega = (!regaActual || regaActual.startsWith('TEMP-REGA') || regaActual.toLowerCase().includes('sin rega'));
       if (regaTramiteCheck) regaTramiteCheck.checked = esTempRega;
 
       if (pill) {
@@ -5635,7 +5162,7 @@ const app = {
       const badgeGps = document.getElementById('aviario-gps-badge');
       const btnGpsTexto = document.getElementById('btn-gps-aviario-texto');
 
-      if (av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
+      if (av.latitud && av.longitud) {
         if (latEl) latEl.textContent = Number(av.latitud).toFixed(6);
         if (lngEl) lngEl.textContent = Number(av.longitud).toFixed(6);
         if (precEl) precEl.textContent = av.geolocalizacion_precision || '--';
@@ -5663,24 +5190,13 @@ const app = {
           alertaCambio.classList.add('hidden');
         }
       }
-      this.alEscribirRega(regaActual);
     } else {
-      // Formulario limpio para nuevo aviario, precargando datos del usuario actual si existe
+      // Formulario limpio para nuevo aviario
       this.estado.editandoAviarioId = null;
       const form = document.getElementById('form-config-aviario');
       if (form) form.reset();
 
-      const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-      const titularInput = document.getElementById('aviario-titular');
-      const socioInput = document.getElementById('aviario-socio');
-      const regaInput = document.getElementById('aviario-rega');
-      const telInput = document.getElementById('aviario-telefono');
       const provInput = document.getElementById('aviario-provincia');
-
-      if (titularInput && u?.nombre) titularInput.value = u.nombre;
-      if (socioInput && u?.numero_socio) socioInput.value = u.numero_socio;
-      if (regaInput && u?.rega) regaInput.value = u.rega;
-      if (telInput && u?.telefono) telInput.value = u.telefono;
       if (provInput) provInput.value = 'Alicante';
 
       const latEl = document.getElementById('aviario-lat');
@@ -5713,8 +5229,13 @@ const app = {
 
   // Saltar por ahora / Modo Visitante
   saltarModoVisitante() {
-    this.entrarComoVisitante();
+    sessionStorage.setItem('alacantina_modo_visitante', 'true');
+    this.estado.aviarioActivo = null;
+    localStorage.removeItem('alacantina_aviario_activo_id');
+    localStorage.removeItem('alacantina_aviario_activo_datos');
     this.cerrarModalAviario();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
   },
 
   // Iniciar con rol de prueba / evaluación vinculado a un censo vacío (Estado Cero: 0 ejemplares, 0 aviarios ficticios)
@@ -5760,7 +5281,6 @@ const app = {
     const inputRega = document.getElementById('aviario-rega');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
-    const msgVal = document.getElementById('aviario-rega-validacion-msg');
 
     if (checked) {
       if (inputRega) {
@@ -5772,11 +5292,6 @@ const app = {
         pill.textContent = 'En trámite (Provisional)';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
       }
-      if (msgVal) {
-        msgVal.textContent = '🟡 REGA provisional en trámite (Rol Aspirante NS-000). Cuando introduzcas un REGA oficial (ES + 12 dígitos) serás promovido automáticamente a Criador Oficial.';
-        msgVal.className = 'text-[11px] font-semibold mt-1 text-amber-300';
-        msgVal.classList.remove('hidden');
-      }
     } else {
       if (inputRega && inputRega.value.startsWith('TEMP-REGA')) {
         inputRega.value = '';
@@ -5786,48 +5301,26 @@ const app = {
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
       }
       if (alertaCambio) alertaCambio.classList.add('hidden');
-      if (msgVal) msgVal.classList.add('hidden');
     }
   },
 
-  // Observador en tiempo real al escribir código REGA (Validación ES + 12 dígitos y aviso de promoción)
+  // Observador en tiempo real al escribir código REGA
   alEscribirRega(valor) {
     const v = (valor || '').trim().toUpperCase();
     const checkTramite = document.getElementById('aviario-rega-tramite');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
-    const msgVal = document.getElementById('aviario-rega-validacion-msg');
 
-    const esProvisional = (!v || v.startsWith('TEMP-REGA') || v === 'NS-000' || v.includes('SIN REGA'));
-    const esRegaOficialValido = /^ES\d{12}$/i.test(v);
+    const esProvisional = (!v || v.startsWith('TEMP-REGA') || v.includes('SIN REGA'));
 
     if (checkTramite) checkTramite.checked = esProvisional;
     if (pill) {
       if (esProvisional) {
         pill.textContent = 'En trámite (Provisional)';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
-      } else if (esRegaOficialValido) {
-        pill.textContent = '✓ REGA Oficial Válido';
+      } else {
+        pill.textContent = 'REGA Oficial';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-      } else {
-        pill.textContent = 'Formato incompleto (ES + 12 dígitos)';
-        pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
-      }
-    }
-
-    if (msgVal) {
-      if (esRegaOficialValido) {
-        msgVal.textContent = '🟢 Código REGA oficial válido (ES + 12 dígitos). Al guardar, tu cuenta quedará acreditada como Criador Oficial con acceso total.';
-        msgVal.className = 'text-[11px] font-bold mt-1 text-emerald-400';
-        msgVal.classList.remove('hidden');
-      } else if (esProvisional) {
-        msgVal.textContent = '🟡 Identificador provisional (Aspirante). Introduce un REGA con formato ES + 12 dígitos (ej. ES030140001234) para promoción automática a Criador Oficial.';
-        msgVal.className = 'text-[11px] font-semibold mt-1 text-amber-300';
-        msgVal.classList.remove('hidden');
-      } else {
-        msgVal.textContent = '⚠️ El código REGA oficial debe tener exactamente el prefijo ES seguido de 12 dígitos numéricos (ej. ES030140001234), o marca "En trámite".';
-        msgVal.className = 'text-[11px] font-semibold mt-1 text-rose-400';
-        msgVal.classList.remove('hidden');
       }
     }
 
@@ -5923,7 +5416,6 @@ const app = {
     const regaTramiteCheck = document.getElementById('aviario-rega-tramite');
     const munInput = document.getElementById('aviario-municipio');
     const provInput = document.getElementById('aviario-provincia');
-    const telInput = document.getElementById('aviario-telefono');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
 
@@ -5931,7 +5423,6 @@ const app = {
     if (nombreInput) nombreInput.value = av.nombre_criadero || '';
     if (socioInput) socioInput.value = av.numero_socio || '';
     if (socioAspCheck) socioAspCheck.checked = (!av.numero_socio || av.numero_socio === 'NS-000');
-    if (telInput) telInput.value = av.telefono || this.estado.usuarioActual?.telefono || '';
 
     const regaActual = av.codigo_rega || av.rega || '';
     if (regaInput) regaInput.value = regaActual;
@@ -5957,7 +5448,7 @@ const app = {
     const precEl = document.getElementById('aviario-prec');
     const badgeGps = document.getElementById('aviario-gps-badge');
 
-    if (av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
+    if (av.latitud && av.longitud) {
       if (latEl) latEl.textContent = Number(av.latitud).toFixed(6);
       if (lngEl) lngEl.textContent = Number(av.longitud).toFixed(6);
       if (precEl) precEl.textContent = av.geolocalizacion_precision || '--';
@@ -5982,7 +5473,6 @@ const app = {
         alertaCambio.classList.add('hidden');
       }
     }
-    this.alEscribirRega(regaActual);
   },
 
   // Seleccionar aviario activo desde el selector desplegable en Tab 1
@@ -5990,7 +5480,6 @@ const app = {
     if (!explotacionId) return;
     const exp = this.estado.explotaciones.find(e => e.id === explotacionId);
     if (exp) {
-      this.estado.aviario = exp;
       this.estado.aviarioActivo = exp;
       localStorage.setItem('alacantina_aviario_activo_id', exp.id);
       localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(exp));
@@ -6000,7 +5489,7 @@ const app = {
     }
   },
 
-  // Guardar configuración del aviario y ejecutar actualización masiva + promoción automática por REGA
+  // Guardar configuración del aviario y ejecutar actualización masiva si procede
   async guardarConfigAviario(event) {
     event.preventDefault();
 
@@ -6012,7 +5501,6 @@ const app = {
     const regaTramite = document.getElementById('aviario-rega-tramite').checked;
     const municipio = document.getElementById('aviario-municipio').value.trim();
     const provincia = document.getElementById('aviario-provincia').value.trim() || 'Alicante';
-    const telefono = (document.getElementById('aviario-telefono')?.value || '').trim();
 
     if (!titular) {
       alert('Por favor, introduce el Nombre del Criador o Razón Social.');
@@ -6023,18 +5511,9 @@ const app = {
       return;
     }
 
-    // Validar formato estándar REGA (ES + 12 dígitos) si no está en trámite
-    const esProvisionalInput = regaTramite || !rega || rega.startsWith('TEMP-REGA') || rega === 'NS-000';
-    if (!esProvisionalInput && !/^ES\d{12}$/i.test(rega)) {
-      alert('⚠️ El código REGA oficial debe cumplir el formato estándar español: "ES" seguido de 12 dígitos numéricos (ejemplo: ES030140001234).\n\nSi todavía tienes el REGA en trámite, marca la casilla "En trámite / Sin REGA".');
-      return;
-    }
-
     // Regla de Socio Aspirante
     if (socioAspirante || !socio) {
-      socio = /^ES\d{12}$/i.test(rega) ? ('SOC-' + rega.slice(-3)) : 'NS-000';
-    } else if (socio === 'NS-000' && /^ES\d{12}$/i.test(rega)) {
-      socio = 'SOC-' + rega.slice(-3);
+      socio = 'NS-000';
     }
 
     // Regla de REGA en trámite / Sin REGA
@@ -6067,7 +5546,6 @@ const app = {
       }
     }
 
-    const uActivo = this.estado.usuarioActivo || this.estado.usuarioActual;
     const editandoId = this.estado.editandoAviarioId;
     let expFinal = null;
     let animalesActualizadosCount = 0;
@@ -6085,7 +5563,6 @@ const app = {
       const regaAnterior = expExistente.codigo_rega || expExistente.rega;
       const huboCambioRega = (regaAnterior !== rega);
 
-      expExistente.usuario_id = expExistente.usuario_id || uActivo?.id || null;
       expExistente.nombre_titular = titular;
       expExistente.nombre_criadero = nombreCriadero || titular;
       expExistente.numero_socio = socio;
@@ -6093,7 +5570,6 @@ const app = {
       expExistente.rega = rega;
       expExistente.municipio = municipio;
       expExistente.provincia = provincia;
-      if (telefono) expExistente.telefono = telefono;
       if (lat !== null) expExistente.latitud = lat;
       if (lng !== null) expExistente.longitud = lng;
       if (prec !== null) expExistente.geolocalizacion_precision = prec;
@@ -6104,15 +5580,14 @@ const app = {
       // 1. Guardar explotación actualizada en IndexedDB
       await this.db.put('explotaciones', expExistente);
 
-      // 2. Si hubo cambio de REGA: Ejecutar actualización masiva de los animales de esta explotación/usuario
+      // 2. Si hubo cambio de REGA: Ejecutar actualización masiva de todos los animales asociados
       if (huboCambioRega) {
         console.log(`[Aviario] Cambio de REGA detectado de ${regaAnterior} a ${rega}. Actualizando ejemplares asociados...`);
         
-        // Actualizar en IndexedDB únicamente los animales pertenecientes a esta explotación o usuario
+        // Actualizar en IndexedDB
         const todosAnimales = await this.db.getAll('animales');
         for (const a of todosAnimales) {
-          const esDelUsuarioOExplotacion = (a.explotacion_id === expExistente.id) || (uActivo?.id && a.usuario_id === uActivo.id);
-          if (esDelUsuarioOExplotacion) {
+          if (a.explotacion_id === expExistente.id || a.codigo_rega === regaAnterior) {
             a.codigo_rega = rega;
             a.titular_nombre = titular;
             await this.db.put('animales', a);
@@ -6122,7 +5597,7 @@ const app = {
 
         // Actualizar en estado reactivo en memoria
         this.estado.animales.forEach(a => {
-          if (a.explotacion_id === expExistente.id || (uActivo?.id && a.usuario_id === uActivo.id)) {
+          if (a.explotacion_id === expExistente.id || a.codigo_rega === regaAnterior) {
             a.codigo_rega = rega;
             a.titular_nombre = titular;
           }
@@ -6245,7 +5720,6 @@ const app = {
 
       const nuevaExp = {
         id: nuevoId,
-        usuario_id: uActivo?.id || null,
         codigo_rega: rega,
         rega: rega,
         numero_socio: socio,
@@ -6253,7 +5727,6 @@ const app = {
         nombre_criadero: nombreCriadero || titular,
         municipio: municipio,
         provincia: provincia,
-        telefono: telefono || '',
         latitud: lat,
         longitud: lng,
         geolocalizacion_precision: prec,
@@ -6291,24 +5764,14 @@ const app = {
       }
     }
 
-    // Establecer como aviario activo (app.estado.aviario y app.estado.aviarioActivo) y persistir
-    this.estado.aviario = expFinal;
+    // Establecer como aviario activo y persistir
     this.estado.aviarioActivo = expFinal;
     localStorage.setItem('alacantina_aviario_activo_id', expFinal.id);
     localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(expFinal));
     sessionStorage.removeItem('alacantina_modo_visitante');
 
-    if (uActivo) {
-      uActivo.explotacion_id = expFinal.id;
-      if (lat !== null) uActivo.latitud = lat;
-      if (lng !== null) uActivo.longitud = lng;
-    }
-
     this.estado.gpsAviarioTemporal = null;
     this.estado.editandoAviarioId = null;
-
-    // Verificar y ejecutar Promoción Automática de Rol si se introdujo un REGA Oficial Válido (ES + 12 dígitos)
-    const fuePromovidoACriador = await this.verificarYPromoverRolPorRega(rega, telefono, titular, socio);
 
     // Actualizar cola y UI completa
     this.estado.syncQueue = await this.db.getAll('syncQueue');
@@ -6316,17 +5779,12 @@ const app = {
     this.poblarSelectores();
     this.actualizarBadgeAviario();
     this.actualizarVistaRegistroAviario();
-    this.actualizarPastillaUsuario();
-    this.aplicarPermisosRBAC();
-    this.renderizarTablaUsuariosAdmin();
     this.renderizarCenso();
 
     // Cerrar el modal
     this.cerrarModalAviario();
 
-    if (fuePromovidoACriador) {
-      alert(`🎉 ¡PROMOCIÓN AUTOMÁTICA A CRIADOR OFICIAL!\n\nSe ha validado tu código REGA oficial (${rega}).\nTu cuenta ha sido actualizada automáticamente de "Aspirante" a "Criador Oficial" en Supabase y se han liberado todas las funciones del Libro Genealógico ESGA025.`);
-    } else if (animalesActualizadosCount > 0) {
+    if (animalesActualizadosCount > 0) {
       alert(`¡Aviario guardado con éxito!\nCódigo REGA: ${rega}\nSe han actualizado automáticamente ${animalesActualizadosCount} ejemplar(es) asociados a esta explotación.`);
     } else {
       alert(`¡Aviario "${expFinal.nombre_criadero || expFinal.nombre_titular}" guardado y configurado como activo!\nLos nuevos registros se vincularán automáticamente.`);
@@ -6335,87 +5793,64 @@ const app = {
 
   // Indicador visual en cabecera (Badge de Aviario Activo)
   actualizarBadgeAviario() {
-    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-    const aviario = (!u || this.estado.modoVisitante) ? null : (this.estado.aviario || this.estado.aviarioActivo);
+    const aviario = this.estado.aviarioActivo;
     const nombreEl = document.getElementById('badge-aviario-nombre');
     const subtextoEl = document.getElementById('badge-aviario-subtexto');
     const estadoEl = document.getElementById('badge-aviario-estado');
 
-    if (aviario && u) {
-      const nombreMostrar = aviario.nombre_criadero || aviario.nombre_titular || u.nombre || 'Aviario Activo';
-      const regaRaw = (u.rega && /^ES\d{12}$/i.test(u.rega.trim()))
-        ? u.rega.trim().toUpperCase()
-        : (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001');
-      const esProvisional = !/^ES\d{12}$/i.test(regaRaw);
-      const regaMostrar = esProvisional ? 'TEMP-REGA-001' : regaRaw;
+    if (aviario) {
+      const nombreMostrar = aviario.nombre_criadero || aviario.nombre_titular || 'Aviario Activo';
+      const rega = aviario.codigo_rega || aviario.rega;
+      const esProvisional = !rega || rega.startsWith('TEMP-REGA') || rega.toLowerCase().includes('sin rega');
 
       if (nombreEl) nombreEl.textContent = nombreMostrar;
       if (subtextoEl) {
         if (esProvisional) {
-          subtextoEl.textContent = `REGA: ${regaMostrar} (En trámite)`;
+          subtextoEl.textContent = rega ? `REGA: ${rega} (Provisional)` : 'Sin REGA';
           subtextoEl.className = 'text-[10px] text-amber-400 font-mono truncate';
         } else {
-          subtextoEl.textContent = `REGA: ${regaMostrar}`;
+          subtextoEl.textContent = `REGA: ${rega}`;
           subtextoEl.className = 'text-[10px] text-emerald-300 font-mono truncate';
         }
       }
       if (estadoEl) {
         if (esProvisional) {
           estadoEl.textContent = 'En trámite';
-          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-amber-950 text-amber-400 border border-amber-800 hidden lg:inline';
+          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-amber-950 text-amber-400 border border-amber-800 hidden md:inline';
         } else {
           estadoEl.textContent = 'Oficial';
-          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden lg:inline';
+          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden md:inline';
         }
       }
     } else {
-      // Modo visitante o sin sesión activa
-      if (nombreEl) nombreEl.textContent = 'Sin Sesión';
+      // Modo visitante o no configurado
+      if (nombreEl) nombreEl.textContent = 'Modo Visitante';
       if (subtextoEl) {
-        subtextoEl.textContent = 'Sin REGA · Modo Lectura';
+        subtextoEl.textContent = 'Sin REGA · Configurar Aviario';
         subtextoEl.className = 'text-[10px] text-slate-400 font-mono truncate';
       }
       if (estadoEl) {
         estadoEl.textContent = 'Visitante';
-        estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700 hidden lg:inline';
+        estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700 hidden md:inline';
       }
     }
   },
 
-  // Actualizar tarjeta compacta e indicadores en la pestaña de Registro (Tab 1) y Censo (Tab 2)
+  // Actualizar tarjeta compacta e indicadores en la pestaña de Registro (Tab 1)
   actualizarVistaRegistroAviario() {
-    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-    const aviario = (!u || this.estado.modoVisitante) ? null : (this.estado.aviario || this.estado.aviarioActivo);
+    const aviario = this.estado.aviarioActivo;
     const boxInfo = document.getElementById('registro-aviario-info-box');
     const boxAviso = document.getElementById('registro-aviso-sin-aviario');
 
-    // Elementos de la ficha del aviario en Tab 2 (Censo) - IDs actuales en index.html
-    const censoTitulo = document.getElementById('censo-aviario-titulo');
-    const censoRegaPill = document.getElementById('censo-aviario-rega-pill');
-    const censoListosPill = document.getElementById('censo-aviario-listos-pill');
-    const censoSub = document.getElementById('censo-aviario-sub');
-
-    // Elementos alternativos legacy
-    const censoNombre = document.getElementById('censo-card-aviario-nombre');
-    const censoRega = document.getElementById('censo-card-aviario-rega');
-    const censoTitular = document.getElementById('censo-card-aviario-titular');
-    const censoGps = document.getElementById('censo-card-aviario-gps');
-    const censoTel = document.getElementById('censo-card-aviario-tel');
-
-    if (aviario && u) {
+    if (aviario) {
       if (boxInfo) boxInfo.classList.remove('hidden');
       if (boxAviso) boxAviso.classList.add('hidden');
 
-      const titular = u.nombre || aviario.nombre_titular || u.email || 'Usuario Autenticado';
-      const nombre = aviario.nombre_criadero || `Aviario de ${titular}`;
-      const regaRaw = (u.rega && /^ES\d{12}$/i.test(u.rega.trim()))
-        ? u.rega.trim().toUpperCase()
-        : (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001');
-      const esProvisional = !/^ES\d{12}$/i.test(regaRaw);
-      const rega = esProvisional ? 'TEMP-REGA-001' : regaRaw;
-      const socio = u.numero_socio || aviario.numero_socio || (esProvisional ? 'NS-000' : ('SOC-' + rega.slice(-3)));
+      const nombre = aviario.nombre_criadero || aviario.nombre_titular || 'Aviario Activo';
+      const rega = aviario.codigo_rega || aviario.rega || 'Sin REGA';
+      const socio = aviario.numero_socio || 'NS-000';
+      const titular = aviario.nombre_titular || 'Criador Asociado';
       const munProv = `${aviario.municipio || 'Alicante'}, ${aviario.provincia || 'Alicante'}`;
-      const telefono = u.telefono || aviario.telefono || 'Sin teléfono';
       
       const elNombre = document.getElementById('reg-box-aviario-nombre');
       const elRega = document.getElementById('reg-box-aviario-rega');
@@ -6427,15 +5862,17 @@ const app = {
       if (elNombre) elNombre.textContent = nombre;
       if (elRega) {
         elRega.textContent = `REGA: ${rega}`;
-        elRega.className = esProvisional
-          ? 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono'
-          : 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
+        if (rega.startsWith('TEMP-REGA') || rega === 'Sin REGA') {
+          elRega.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
+        } else {
+          elRega.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
+        }
       }
       if (elSocio) elSocio.textContent = `Socio: ${socio}`;
-      if (elTitular) elTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${this.escaparHtml(titular)}`;
-      if (elMun) elMun.innerHTML = `<i class="fa-solid fa-map-pin text-slate-500 mr-1"></i>${this.escaparHtml(munProv)}`;
+      if (elTitular) elTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${titular}`;
+      if (elMun) elMun.innerHTML = `<i class="fa-solid fa-map-pin text-slate-500 mr-1"></i>${munProv}`;
       if (elGps) {
-        if (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
+        if (aviario.latitud && aviario.longitud) {
           const lat = Number(aviario.latitud).toFixed(4);
           const lng = Number(aviario.longitud).toFixed(4);
           elGps.innerHTML = `<i class="fa-solid fa-satellite-dish mr-1"></i>GPS Aviario Heredado (${lat}, ${lng})`;
@@ -6446,72 +5883,15 @@ const app = {
         }
       }
 
-      // Calcular ejemplares listos para valorar (RN/RA) en este aviario
-      const listosCount = (this.estado.animales || []).filter(a =>
-        this.perteneceAUsuarioActivo(a, u, aviario) &&
-        (a.seccion_libro === 'RN' || a.seccion_libro === 'RA')
-      ).length;
-
-      // Actualizar Ficha del Aviario en Tab 2 (Censo) - IDs de index.html
-      if (censoTitulo) censoTitulo.textContent = nombre;
-      if (censoRegaPill) {
-        censoRegaPill.textContent = `REGA: ${rega}`;
-        censoRegaPill.className = esProvisional
-          ? 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40'
-          : 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-      }
-      if (censoListosPill) {
-        censoListosPill.textContent = `Listos para valorar (RN/RA): ${listosCount} ${listosCount === 1 ? 'ave' : 'aves'}`;
-      }
-      if (censoSub) {
-        const gpsStr = (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) ? 'GPS Verificado' : 'GPS Pendiente';
-        censoSub.textContent = `Titular: ${titular} · ${munProv} · Tel: ${telefono} · ${gpsStr}`;
-      }
-
-      // Actualizar también IDs alternativos si existen
-      if (censoNombre) censoNombre.textContent = nombre;
-      if (censoRega) {
-        censoRega.textContent = `REGA: ${rega}`;
-        censoRega.className = esProvisional
-          ? 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30'
-          : 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-      }
-      if (censoTitular) censoTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${this.escaparHtml(titular)}`;
-      if (censoGps) {
-        if (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
-          censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-emerald-400 mr-1"></i>GPS: ${Number(aviario.latitud).toFixed(4)}, ${Number(aviario.longitud).toFixed(4)}`;
-        } else {
-          censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>GPS: ${this.escaparHtml(munProv)}`;
-        }
-      }
-      if (censoTel) censoTel.innerHTML = `<i class="fa-solid fa-phone text-amber-400 mr-1"></i>Tel: ${this.escaparHtml(telefono)}`;
-
       // Sincronizar selección en el dropdown de alta-explotacion si existe
       const selectExp = document.getElementById('alta-explotacion');
       if (selectExp && selectExp.value !== aviario.id) {
         selectExp.value = aviario.id;
       }
     } else {
-      // Modo visitante o sin sesión activa
+      // Modo visitante
       if (boxInfo) boxInfo.classList.add('hidden');
       if (boxAviso) boxAviso.classList.remove('hidden');
-
-      if (censoTitulo) censoTitulo.textContent = 'Modo Visitante (Consulta Pública)';
-      if (censoRegaPill) {
-        censoRegaPill.textContent = 'Sin REGA · Modo Lectura';
-        censoRegaPill.className = 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700';
-      }
-      if (censoListosPill) censoListosPill.textContent = 'Solo Lectura';
-      if (censoSub) censoSub.textContent = '👤 Visitante (Modo Lectura) · Inicia sesión para gestionar tu aviario';
-
-      if (censoNombre) censoNombre.textContent = 'Modo Visitante (Consulta Pública)';
-      if (censoRega) {
-        censoRega.textContent = 'Sin REGA';
-        censoRega.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700';
-      }
-      if (censoTitular) censoTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>Visitante`;
-      if (censoGps) censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>GPS: Modo Lectura`;
-      if (censoTel) censoTel.innerHTML = `<i class="fa-solid fa-phone text-amber-400 mr-1"></i>Tel: --`;
     }
   },
 
@@ -6519,65 +5899,6 @@ const app = {
   // 11. FASE 6: MODO INSPECCIÓN ZOOTÉCNICA IN SITU, FIRMA DIGITAL Y GUÍA CAMPO
   // Cumplimiento: Estándar ESGA025 · Protocolo CNZ 2025 · Reg. (UE) 2016/1012
   // =========================================================================
-
-  // Extraer dinámicamente Nombre, ID/DNI y Firma Digital del perfil del usuario autenticado con rol Inspector Zootécnico / Administrador
-  obtenerDatosInspectorActivo(actaPrevia = null) {
-    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-    const rol = this.obtenerRolUsuarioActual();
-    const esInspectorAutenticado = u && (rol === 'inspector' || rol === 'administrador');
-
-    const inputNombreVal = (document.getElementById('insitu-inspector-nombre')?.value || '').trim();
-    const inputIdVal = (document.getElementById('insitu-inspector-id')?.value || '').trim();
-    const inputTab3Val = (document.getElementById('inspeccion-calificador')?.value || '').trim();
-
-    const nombreDinamico = (esInspectorAutenticado && u.nombre)
-      ? u.nombre
-      : (actaPrevia?.calificador_oficial || inputNombreVal || inputTab3Val || u?.nombre || '');
-
-    const idDinamico = (esInspectorAutenticado && (u.dni || u.numero_socio || u.id))
-      ? (u.dni || u.numero_socio || u.id)
-      : (actaPrevia?.inspector_id || inputIdVal || u?.dni || u?.numero_socio || u?.id || '');
-
-    const firmaDinamica = this.estado.inspeccionInSitu?.firmaBase64
-      || (esInspectorAutenticado ? u.firma_base64 : null)
-      || actaPrevia?.firma_inspector_base64
-      || actaPrevia?.firma_storage_url
-      || u?.firma_base64
-      || null;
-
-    return {
-      nombre: nombreDinamico,
-      id: idDinamico,
-      dni: u?.dni || idDinamico,
-      rol: rol,
-      firma_base64: firmaDinamica
-    };
-  },
-
-  // Sincronizar campos de Calificador/Inspector en DOM (Fase 1 Tab 3 y Fase 6 Tab 6) con el perfil autenticado
-  sincronizarInputsInspectorAutenticado() {
-    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-    const rol = this.obtenerRolUsuarioActual();
-    const inpInspId = document.getElementById('insitu-inspector-id');
-    const inpInspNombre = document.getElementById('insitu-inspector-nombre');
-    const inpCalifTab3 = document.getElementById('inspeccion-calificador');
-
-    if (u && (rol === 'inspector' || rol === 'administrador' || rol === 'criador' || rol === 'aspirante')) {
-      const idInspector = u.dni || u.numero_socio || u.id || '';
-      const nombreInspector = u.nombre || u.email || '';
-      if (inpInspId) inpInspId.value = idInspector;
-      if (inpInspNombre) inpInspNombre.value = nombreInspector;
-      if (inpCalifTab3) inpCalifTab3.value = nombreInspector;
-      if (u.firma_base64 && this.estado.inspeccionInSitu) {
-        this.estado.inspeccionInSitu.firmaBase64 = u.firma_base64;
-        this.estado.inspeccionInSitu.firmaConfirmada = true;
-      }
-    } else {
-      if (inpInspId) inpInspId.value = '';
-      if (inpInspNombre) inpInspNombre.value = '';
-      if (inpCalifTab3) inpCalifTab3.value = '';
-    }
-  },
 
   inicializarModuloInspeccionInSitu() {
     // 1. Inicializar fecha/hora actual en el campo de inspección in situ
@@ -6588,24 +5909,22 @@ const app = {
       inputFechaHora.value = new Date(now - offset).toISOString().slice(0, 16);
     }
 
-    // 2. Sincronizar rol RBAC y datos reales del Inspector autenticado
-    const rolGuardado = this.obtenerRolUsuarioActual();
+    // 2. Sincronizar rol RBAC inicial
+    const rolGuardado = localStorage.getItem('alacantina_rol_rbac') || 'inspector';
     this.estado.inspeccionInSitu.rolRBAC = rolGuardado;
+    const selectRol = document.getElementById('selector-rol-rbac');
+    if (selectRol) selectRol.value = rolGuardado;
     this.actualizarBadgeRBACInSitu(rolGuardado);
-    this.sincronizarInputsInspectorAutenticado();
 
-    // 3. Heredar coordenadas GPS iniciales del aviario activo del usuario si existen
-    const av = this.estado.aviario || this.estado.aviarioActivo;
-    if (av && av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
+    // 3. Heredar coordenadas GPS iniciales del aviario activo si existe
+    if (this.estado.aviarioActivo && this.estado.aviarioActivo.latitud && this.estado.aviarioActivo.longitud) {
       this.estado.inspeccionInSitu.gpsInSitu = {
-        latitud: Number(av.latitud),
-        longitud: Number(av.longitud),
-        precision_m: Number(av.geolocalizacion_precision) || 5
+        latitud: Number(this.estado.aviarioActivo.latitud),
+        longitud: Number(this.estado.aviarioActivo.longitud),
+        precision_m: Number(this.estado.aviarioActivo.geolocalizacion_precision) || 5
       };
-    } else {
-      this.estado.inspeccionInSitu.gpsInSitu = null;
+      this.actualizarUIGpsInSitu();
     }
-    this.actualizarUIGpsInSitu();
 
     // 4. Inicializar selectores, Canvas de firma digital, Guía de 12 Regiones y Actas
     this.poblarSelectoresInSitu();
@@ -6615,7 +5934,7 @@ const app = {
     this.recalcularInSitu();
     this.renderizarHistorialActasInSitu();
 
-    // Preseleccionar primer ejemplar aspirante (RN) o primer animal del censo visible
+    // Preseleccionar primer ejemplar aspirante (RN) o primer animal del censo
     if (this.estado.animales && this.estado.animales.length > 0 && !this.estado.inspeccionInSitu.animalActualId) {
       const aspirante = this.estado.animales.find(a => a.seccion_libro === 'RN') || this.estado.animales[0];
       if (aspirante) {
@@ -6627,7 +5946,6 @@ const app = {
   },
 
   refrescarVistaInspeccionInSitu() {
-    this.sincronizarInputsInspectorAutenticado();
     this.poblarSelectoresInSitu();
     this.redimensionarCanvasFirma();
     this.renderizarHistorialActasInSitu();
@@ -6723,7 +6041,7 @@ const app = {
     if (btnTxt) btnTxt.textContent = '🛰️ Localizando GPS...';
 
     if (!navigator.geolocation) {
-      this.mostrarNotificacionToast('⚠️ Navegador sin soporte GPS.', 'error');
+      this.mostrarNotificacionToast('⚠️ Navegador sin soporte GPS. Usando coordenadas REGA del aviario.', 'error');
       if (btnTxt) btnTxt.textContent = '📍 Capturar GPS In Situ';
       return;
     }
@@ -6743,21 +6061,18 @@ const app = {
         );
       },
       (err) => {
-        console.warn('[GPS InSitu] Error al capturar GPS:', err);
-        const av = this.estado.aviario || this.estado.aviarioActivo;
-        if (av && av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
+        console.warn('[GPS InSitu] Fallback a coordenadas de explotación:', err);
+        const av = this.estado.aviarioActivo || this.estado.explotaciones[0];
+        if (av && av.latitud && av.longitud) {
           this.estado.inspeccionInSitu.gpsInSitu = {
             latitud: Number(av.latitud),
             longitud: Number(av.longitud),
             precision_m: Number(av.geolocalizacion_precision) || 6
           };
           this.actualizarUIGpsInSitu();
-          if (btnTxt) btnTxt.textContent = '📍 GPS Aviario';
-          this.mostrarNotificacionToast('📍 Usando coordenadas GPS registradas de la explotación.', 'info');
-        } else {
-          if (btnTxt) btnTxt.textContent = '📍 Capturar GPS In Situ';
-          this.mostrarNotificacionToast('⚠️ No se pudo obtener ubicación GPS.', 'error');
         }
+        if (btnTxt) btnTxt.textContent = '📍 GPS Aviario (Fallback)';
+        this.mostrarNotificacionToast('📍 Usando coordenadas GPS oficiales de la explotación REGA.', 'info');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -6893,19 +6208,12 @@ const app = {
       pesoFxEl.textContent = `${animal.peso_actual_kg ? animal.peso_actual_kg.toFixed(3) : '--'} kg · Fx: ${fxPct}%`;
     }
 
-    // Actualizar GPS solo si la explotación o el ejemplar tienen coordenadas reales
-    if (exp && exp.latitud !== null && exp.latitud !== undefined && exp.longitud !== null && exp.longitud !== undefined) {
+    // Actualizar GPS si la explotación tiene coordenadas
+    if (exp && exp.latitud && exp.longitud) {
       this.estado.inspeccionInSitu.gpsInSitu = {
         latitud: Number(exp.latitud),
         longitud: Number(exp.longitud),
         precision_m: Number(exp.geolocalizacion_precision) || 5
-      };
-      this.actualizarUIGpsInSitu();
-    } else if (animal.geolocalizacion_alta?.latitud && animal.geolocalizacion_alta?.longitud) {
-      this.estado.inspeccionInSitu.gpsInSitu = {
-        latitud: Number(animal.geolocalizacion_alta.latitud),
-        longitud: Number(animal.geolocalizacion_alta.longitud),
-        precision_m: Number(animal.geolocalizacion_alta.precision_m) || 5
       };
       this.actualizarUIGpsInSitu();
     }
@@ -7274,9 +6582,8 @@ const app = {
     const canvas = document.getElementById('canvas-firma-inspector');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const datosInsp = this.obtenerDatosInspectorActivo();
-    const inspectorId = datosInsp.id || 'ID-SIN-ASIGNAR';
-    const inspectorNombre = datosInsp.nombre || 'Inspector Autenticado';
+    const inspectorId = document.getElementById('insitu-inspector-id')?.value || 'INSP-CNZ-025';
+    const inspectorNombre = document.getElementById('insitu-inspector-nombre')?.value || 'Dr. Zootecnista CNZ';
 
     ctx.save();
     ctx.strokeStyle = this.estado.inspeccionInSitu.modoExteriorSolar ? '#0f172a' : '#38bdf8';
@@ -7289,7 +6596,7 @@ const app = {
     ctx.bezierCurveTo(465, 65, 495, 115, 520, 95);
     ctx.stroke();
 
-    // Subrayado y sello técnico con los datos reales del Inspector autenticado
+    // Subrayado y sello técnico
     ctx.beginPath();
     ctx.moveTo(110, 140);
     ctx.lineTo(485, 132);
@@ -7302,11 +6609,11 @@ const app = {
     this.estado.inspeccionInSitu.trazosFirma = 3;
   },
 
-  async confirmarFirmaInspector() {
+  confirmarFirmaInspector() {
     const canvas = document.getElementById('canvas-firma-inspector');
     if (!canvas) return false;
 
-    // Si el inspector pulsa confirmar sin haber trazado manualmente, trazamos su rúbrica digital acreditada con su nombre e ID reales
+    // Si el inspector pulsa confirmar sin haber trazado manualmente, trazamos su rúbrica digital acreditada en el canvas
     if (this.estado.inspeccionInSitu.trazosFirma === 0) {
       this.generarRubricaAutomaticaEnCanvas();
     }
@@ -7315,23 +6622,13 @@ const app = {
     this.estado.inspeccionInSitu.firmaBase64 = dataUrl;
     this.estado.inspeccionInSitu.firmaConfirmada = true;
 
-    // Guardar también la firma digital en el perfil del usuario autenticado (Inspector / Admin)
-    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
-    if (u) {
-      u.firma_base64 = dataUrl;
-      this.estado.usuarioActivo = u;
-      this.estado.usuarioActual = u;
-      await this.db.put('usuarios', u);
-      localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
-    }
-
     const badge = document.getElementById('badge-estado-firma');
     if (badge) {
       badge.textContent = '✓ Firma Digital Confirmada (Base64)';
       badge.className = 'px-2.5 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500 uppercase';
     }
 
-    this.mostrarNotificacionToast('✍️ Firma manuscrita del inspector confirmada y vinculada a tu perfil.', 'success');
+    this.mostrarNotificacionToast('✍️ Firma manuscrita del inspector confirmada y codificada en Base64.', 'success');
     return true;
   },
 
@@ -7340,11 +6637,13 @@ const app = {
   // =========================================================================
   async guardarActaInspeccionInSitu() {
     // Verificar rol RBAC
-    if (this.estado.inspeccionInSitu.rolRBAC === 'criador' || this.estado.inspeccionInSitu.rolRBAC === 'aspirante') {
-      if (!confirm('Estás en el rol de Criador/Aspirante. La emisión de Actas Oficiales corresponde al Inspector Zootécnico CNZ.\n¿Deseas conmutar automáticamente al modo Inspector y emitir el acta con tus datos de sesión?')) {
+    if (this.estado.inspeccionInSitu.rolRBAC === 'criador') {
+      if (!confirm('Estás en el rol "Criador". La emisión de Actas Oficiales corresponde al Inspector Zootécnico CNZ.\n¿Deseas conmutar automáticamente al rol "Inspector Zootécnico CNZ" y emitir el acta?')) {
         return;
       }
       this.cambiarRolRBAC('inspector');
+      const selRol = document.getElementById('selector-rol-rbac');
+      if (selRol) selRol.value = 'inspector';
     }
 
     const animalId = this.estado.inspeccionInSitu.animalActualId || document.getElementById('insitu-animal-select')?.value;
@@ -7361,19 +6660,11 @@ const app = {
 
     // Confirmar firma automáticamente si aún no se pulsó Confirmar
     if (!this.estado.inspeccionInSitu.firmaConfirmada || !this.estado.inspeccionInSitu.firmaBase64) {
-      await this.confirmarFirmaInspector();
+      this.confirmarFirmaInspector();
     }
 
-    // Extraer dinámicamente Nombre, ID/DNI y Firma Digital del usuario autenticado
-    const datosInspector = this.obtenerDatosInspectorActivo();
-    const inspectorId = datosInspector.id;
-    const inspectorNombre = datosInspector.nombre;
-
-    if (!inspectorNombre || !inspectorId) {
-      alert('Por favor, verifica que tu perfil de Inspector Zootécnico tenga Nombre e ID/DNI válidos.');
-      return;
-    }
-
+    const inspectorId = (document.getElementById('insitu-inspector-id')?.value || 'INSP-CNZ-025').trim();
+    const inspectorNombre = (document.getElementById('insitu-inspector-nombre')?.value || 'Dr. Zootecnista CNZ ESGA025').trim();
     const fechaHoraVal = document.getElementById('insitu-fecha-hora')?.value || new Date().toISOString().slice(0, 16);
     const fechaSolo = fechaHoraVal.split('T')[0];
 
@@ -7423,7 +6714,6 @@ const app = {
     const gps = this.estado.inspeccionInSitu.gpsInSitu || { latitud: null, longitud: null, precision_m: null };
     const obsInput = (document.getElementById('insitu-observaciones')?.value || '').trim();
     const codigoActa = `ACTA-ESGA025-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
-    const uActivo = this.estado.usuarioActivo || this.estado.usuarioActual;
 
     const nuevaActa = {
       id: 'insp-acta-' + Date.now(),
@@ -7437,18 +6727,16 @@ const app = {
       codigo_rega: codigoRega,
       nombre_aviario: nombreAviario,
       titular_aviario: titularAviario,
-      inspector_usuario_id: uActivo?.id || null,
       inspector_id: inspectorId,
-      inspector_dni: datosInspector.dni || inspectorId,
       calificador_oficial: inspectorNombre,
       rol_rbac: this.estado.inspeccionInSitu.rolRBAC,
       fecha_inspeccion: fechaSolo,
       fecha_hora_inspeccion: fechaHoraVal,
-      coordenadas_gps: gps ? {
+      coordenadas_gps: {
         latitud: gps.latitud,
         longitud: gps.longitud,
         precision_m: gps.precision_m
-      } : null,
+      },
       cabeza_cresta_cara: c1,
       cuello_esclavina: c2,
       pecho_tronco: c3,
@@ -7468,7 +6756,7 @@ const app = {
       calificacion: calificacionTexto,
       seccion_anterior: seccionAnterior,
       seccion_promovida: seccionPromovida,
-      firma_inspector_base64: datosInspector.firma_base64 || this.estado.inspeccionInSitu.firmaBase64,
+      firma_inspector_base64: this.estado.inspeccionInSitu.firmaBase64,
       firma_storage_url: null,
       observaciones: obsInput || `Acta Oficial de Inspección Zootécnica In Situ (${codigoActa}). Dictamen: ${calificacionTexto}. Puntuación: ${total.toFixed(1)}/100p. REGA: ${codigoRega}.`
     };
@@ -7600,8 +6888,6 @@ const app = {
       return;
     }
 
-    const datosInspActivo = this.obtenerDatosInspectorActivo();
-
     cont.innerHTML = lista.slice(0, 10).map(insp => {
       const animal = (this.estado.animales || []).find(a => a.id === insp.animal_id);
       const anilla = insp.numero_anilla || animal?.numero_anilla || '----';
@@ -7637,7 +6923,7 @@ const app = {
           <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400 font-mono">
             <span><i class="fa-solid fa-warehouse text-amber-400 mr-1"></i>REGA: ${this.escaparHtml(rega)}</span>
             <span><i class="fa-solid fa-location-dot text-sky-400 mr-1"></i>GPS: ${gpsTxt}</span>
-            <span><i class="fa-solid fa-user-check text-emerald-400 mr-1"></i>${this.escaparHtml(inspectorMostrar)}</span>
+            <span><i class="fa-solid fa-user-check text-emerald-400 mr-1"></i>${this.escaparHtml(insp.inspector_id || 'INSP-CNZ-025')}</span>
           </div>
         </div>
       `;
@@ -7655,7 +6941,6 @@ const app = {
     const modal = document.getElementById('modal-acta-inspeccion');
     if (!contenedor || !modal) return;
 
-    const datosInsp = this.obtenerDatosInspectorActivo(acta);
     const codigoActa = acta.codigo_acta || `ACTA-ESGA025-${acta.id.toUpperCase()}`;
     const fechaHora = acta.fecha_hora_inspeccion ? acta.fecha_hora_inspeccion.replace('T', ' ') : acta.fecha_inspeccion;
     const rega = acta.codigo_rega || animal?.codigo_rega || 'Sin REGA';
@@ -7699,7 +6984,7 @@ const app = {
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-amber-400 uppercase block">Explotación Ganadera (REGA)</span>
           <strong class="text-sm font-mono text-white block mt-0.5">${this.escaparHtml(rega)}</strong>
-          <span class="text-[11px] text-slate-400">${this.escaparHtml(acta.nombre_aviario || acta.titular_aviario || 'Aviario Asociado')}</span>
+          <span class="text-[11px] text-slate-400">${this.escaparHtml(acta.nombre_aviario || acta.titular_aviario || 'Aviario Oficial ESGA025')}</span>
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-sky-400 uppercase block">Georreferencia GPS In Situ</span>
@@ -7708,7 +6993,7 @@ const app = {
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-emerald-400 uppercase block">Inspector Zootécnico Acreditado</span>
-          <strong class="text-xs font-mono text-white block mt-0.5">ID/DNI: ${this.escaparHtml(inspectorId)}</strong>
+          <strong class="text-xs font-mono text-white block mt-0.5">ID: ${this.escaparHtml(inspectorId)}</strong>
           <span class="text-[11px] text-slate-400">${this.escaparHtml(inspectorNombre)}</span>
         </div>
       </div>
@@ -7771,8 +7056,8 @@ const app = {
           <p>Almacenamiento: IndexedDB <code>SyncQueue</code> / Supabase Storage (Base64)</p>
         </div>
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-2 text-center min-w-[240px]">
-          ${firmaBase64
-            ? `<img src="${firmaBase64}" alt="Firma Inspector" class="h-20 mx-auto object-contain">`
+          ${acta.firma_inspector_base64
+            ? `<img src="${acta.firma_inspector_base64}" alt="Firma Inspector" class="h-20 mx-auto object-contain">`
             : `<div class="h-16 flex items-center justify-center text-slate-500 font-mono text-xs">Firmado: ${this.escaparHtml(inspectorId)}</div>`
           }
           <span class="block text-[10px] font-mono text-slate-400 border-t border-slate-800 pt-1 mt-1">
@@ -9467,6 +8752,3 @@ window.addEventListener('DOMContentLoaded', () => {
   window.app = app;
   app.init();
 });
-
-
-
