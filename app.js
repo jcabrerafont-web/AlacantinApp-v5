@@ -72,13 +72,22 @@ const app = {
       firmaBase64: null,
       firmaConfirmada: false,
       trazosFirma: 0,
-      gpsInSitu: {
-        latitud: 38.2671,
-        longitud: -0.6983,
-        precision_m: 5
-      },
+      gpsInSitu: null,
       regionGuiaActiva: 1,
       actaSeleccionada: null
+    },
+    // Estado reactivo de Auditoría Zootécnica, Respaldos y Cierre Censal Anual (Fase 6 v6)
+    auditoria: {
+      alertas: [],
+      categoriaActiva: 'TODAS',
+      panelVisible: true,
+      simulacionActiva: false,
+      ultimaEjecucion: null
+    },
+    cierreAnual: {
+      firmasInicializadas: false,
+      firmaCriadorBase64: null,
+      firmaSecretarioBase64: null
     }
   },
   chartsPuesta: {
@@ -91,7 +100,7 @@ const app = {
   // 1. INICIALIZACIÓN DE LA APLICACIÓN Y BASE DE DATOS LOCAL (INDEXEDDB)
   // =========================================================================
   async init() {
-    console.log('[AlacantinApp] Iniciando aplicación v5 (ESGA025)...');
+    console.log('[AlacantinApp v6] Iniciando aplicación en Estado Cero Oficial (ESGA025)...');
     
     // Iniciar IndexedDB local
     await this.db.init();
@@ -102,10 +111,10 @@ const app = {
     // Registrar observadores de red online/offline
     this.configurarObservadoresRed();
 
-    // Cargar datos (de IndexedDB primero, y luego sincronizar con Supabase si online)
+    // Cargar datos reales (Estado Cero por defecto: 0 ejemplares y 0 aviarios ficticios)
     await this.cargarDatos();
 
-    // Comprobar e inicializar aviario activo o desplegar bienvenida
+    // Comprobar e inicializar aviario activo real o desplegar bienvenida
     this.inicializarAviarioActivo();
 
     // Actualizar interfaz inicial
@@ -124,6 +133,7 @@ const app = {
     this.configurarWedgeRfid();
     this.poblarSelectoresRfid();
     this.inicializarModuloInspeccionInSitu();
+    this.ejecutarAuditoriaIntegridad(false);
 
     // Comprobar si hay hash en la URL para cambiar de pestaña directamente
     const hash = window.location.hash.replace('#', '');
@@ -134,9 +144,9 @@ const app = {
     }
   },
 
-  // Módulo de Base de Datos IndexedDB
+  // Módulo de Base de Datos IndexedDB (Limpio para Producción - Estado Cero)
   db: {
-    dbName: 'AlacantinDB_v5',
+    dbName: 'AlacantinDB_v6_Oficial',
     version: 1,
     instance: null,
 
@@ -270,87 +280,61 @@ const app = {
   },
 
   // =========================================================================
-  // 2. CARGA Y SINCRONIZACIÓN DE DATOS (LOCAL + NUBE)
+  // 2. CARGA Y SINCRONIZACIÓN DE DATOS REALES (ESTADO CERO + SUPABASE AUTH)
   // =========================================================================
   async cargarDatos() {
+    // Purga preventiva de cualquier registro semilla legado si existiera en el navegador
+    const idsAnimalesFicticios = new Set(['alac-001', 'alac-002', 'alac-003', 'alac-004', 'alac-005', 'alac-006', 'alac-demo-audit']);
+    const idsExpFicticias = new Set(['exp-01', 'exp-02']);
+    const idsInspFicticias = new Set(['insp-01', 'insp-02']);
+    const idsLotesFicticios = new Set(['lote-01']);
+
     let animalesLocales = await this.db.getAll('animales');
     let explotacionesLocales = await this.db.getAll('explotaciones');
     let inspeccionesLocales = await this.db.getAll('inspecciones');
     let controlesLocales = await this.db.getAll('controlesPuesta');
     let lotesLocales = await this.db.getAll('lotes');
-    this.estado.syncQueue = await this.db.getAll('syncQueue');
 
-    // Si la BD local está vacía, cargar los datos semilla oficiales ESGA025
-    if (!animalesLocales || animalesLocales.length === 0) {
-      console.log('[AlacantinApp] Cargando datos semilla iniciales de la raza ESGA025...');
-      await this.cargarSemillaInicial(false);
-      animalesLocales = await this.db.getAll('animales');
-      explotacionesLocales = await this.db.getAll('explotaciones');
-      inspeccionesLocales = await this.db.getAll('inspecciones');
-      controlesLocales = await this.db.getAll('controlesPuesta');
-      lotesLocales = await this.db.getAll('lotes');
+    // Eliminar de raíz cualquier registro ficticio residual en IndexedDB
+    for (const a of (animalesLocales || [])) {
+      if (idsAnimalesFicticios.has(a.id)) {
+        await this.db.delete('animales', a.id);
+      }
+    }
+    for (const e of (explotacionesLocales || [])) {
+      if (idsExpFicticias.has(e.id)) {
+        await this.db.delete('explotaciones', e.id);
+      }
+    }
+    for (const i of (inspeccionesLocales || [])) {
+      if (idsInspFicticias.has(i.id)) {
+        await this.db.delete('inspecciones', i.id);
+      }
+    }
+    for (const c of (controlesLocales || [])) {
+      if (String(c.id || '').startsWith('puesta-sem-') || c.id === 'puesta-demo-audit') {
+        await this.db.delete('controlesPuesta', c.id);
+      }
+    }
+    for (const l of (lotesLocales || [])) {
+      if (idsLotesFicticios.has(l.id)) {
+        await this.db.delete('lotes', l.id);
+      }
     }
 
-    // Asegurar controles de puesta semilla si está vacía
-    if (!controlesLocales || controlesLocales.length === 0) {
-      controlesLocales = this.obtenerControlesPuestaSemilla();
-      await this.db.putBatch('controlesPuesta', controlesLocales);
-    }
+    animalesLocales = (await this.db.getAll('animales')) || [];
+    explotacionesLocales = (await this.db.getAll('explotaciones')) || [];
+    inspeccionesLocales = (await this.db.getAll('inspecciones')) || [];
+    controlesLocales = (await this.db.getAll('controlesPuesta')) || [];
+    lotesLocales = (await this.db.getAll('lotes')) || [];
+    this.estado.syncQueue = (await this.db.getAll('syncQueue')) || [];
 
-    // Garantizar que los ejemplares semilla cuenten con galerías opcionales con etiquetas para la FASE 2
-    const galeriasSemilla = {
-      'alac-001': [
-        { url: './icons/logo.png', titulo: 'Exposición 2026 - Campeón Adulto' },
-        { url: './icons/icon-512.png', titulo: 'Detalle de cresta y orejilla' }
-      ],
-      'alac-002': [
-        { url: './icons/icon-192.png', titulo: 'Premio Especial Hembra Fundadora' },
-        { url: './icons/logo.png', titulo: 'Detalle de ala y remeras' }
-      ],
-      'alac-003': [
-        { url: './icons/logo.png', titulo: 'Exposición 2026 Crevillent' },
-        { url: './icons/icon-192.png', titulo: 'Tarsos y porte erguido 70º' }
-      ],
-      'alac-004': [
-        { url: './icons/icon-512.png', titulo: 'Muda otoñal de plumaje' },
-        { url: './icons/logo.png', titulo: 'Premio Mejor Puesta 2025' }
-      ],
-      'alac-005': [
-        { url: './icons/icon-192.png', titulo: 'Detalle de ala en crecimiento' },
-        { url: './icons/logo.png', titulo: 'Muda juvenil primaveral' }
-      ],
-      'alac-006': [
-        { url: './icons/icon-512.png', titulo: 'Exposición 2026 Joven Promesa' },
-        { url: './icons/logo.png', titulo: 'Tarsos sin plumas descalificantes' }
-      ]
-    };
-
-    if (animalesLocales && animalesLocales.length > 0) {
-      // Mapeo oficial de chips RFID para ejemplares semilla
-      const rfidSemilla = {
-        'alac-001': '968000010000001',
-        'alac-002': '968000010000002',
-        'alac-003': '968000010000045',
-        'alac-004': '968000010000046',
-        'alac-005': '968000010000142',
-        'alac-006': '968000010000143'
-      };
-
+    // Normalizar nomenclatura de variedad 100% en femenino en ejemplares reales registrados
+    if (animalesLocales.length > 0) {
       animalesLocales.forEach(a => {
-        // Galerías opcionales
-        if (galeriasSemilla[a.id]) {
-          const galActual = a.fotos?.galeria_opcional || a.multimedia_urls?.galeria_opcional || [];
-          if (!Array.isArray(galActual) || galActual.length === 0) {
-            if (!a.fotos) a.fotos = {};
-            if (!a.multimedia_urls) a.multimedia_urls = {};
-            a.fotos.galeria_opcional = galeriasSemilla[a.id];
-            a.multimedia_urls.galeria_opcional = galeriasSemilla[a.id];
-            this.db.put('animales', a);
-          }
-        }
-        // Asignar chip RFID oficial si no lo tiene
-        if (!a.rfid_chip_id && rfidSemilla[a.id]) {
-          a.rfid_chip_id = rfidSemilla[a.id];
+        const varNorm = this.normalizarVariedadFemenino(a.variedad);
+        if (a.variedad !== varNorm) {
+          a.variedad = varNorm;
           this.db.put('animales', a);
         }
       });
@@ -362,10 +346,10 @@ const app = {
     this.estado.controlesPuesta = controlesLocales;
     this.estado.lotes = lotesLocales;
 
-    // Calcular consanguinidad en cliente para todos los ejemplares
+    // Calcular consanguinidad en cliente para los ejemplares reales
     this.recalcularConsanguinidadCenso();
 
-    // Si hay conexión con Supabase, descargar últimas actualizaciones
+    // Si hay conexión con Supabase y sesión activa, sincronizar registros reales
     if (navigator.onLine && this.supabaseClient) {
       this.sincronizarDesdeSupabase();
     }
@@ -373,403 +357,69 @@ const app = {
     this.actualizarContadorSyncQueue();
   },
 
-  // Carga del censo inicial oficial con las 5 Familias de Gobe y ejemplares RF, RA, RN, RD, RM
+  // Inicialización en Estado Cero (0 ejemplares, 0 aviarios ficticios)
   async cargarSemillaInicial(forzar = false) {
-    if (forzar) {
-      await this.db.clear('animales');
-      await this.db.clear('explotaciones');
-      await this.db.clear('inspecciones');
-      await this.db.clear('controlesPuesta');
-      await this.db.clear('lotes');
-    }
+    await this.db.clear('animales');
+    await this.db.clear('explotaciones');
+    await this.db.clear('inspecciones');
+    await this.db.clear('controlesPuesta');
+    await this.db.clear('lotes');
+    await this.db.clear('syncQueue');
 
-    const explotacionesSemilla = [
-      {
-        id: 'exp-01',
-        codigo_rega: 'ES030140000001',
-        rega: 'ES030140000001',
-        numero_socio: 'SOC-001',
-        nombre_titular: 'Vicent Soler Mas',
-        nombre_criadero: 'Criadero El Palmeral - ESGA025',
-        municipio: 'Elche',
-        provincia: 'Alicante',
-        latitud: 38.2671,
-        longitud: -0.6983,
-        geolocalizacion_precision: 5,
-        telefono: '600123456',
-        activo: true
-      },
-      {
-        id: 'exp-02',
-        codigo_rega: 'ES030590000002',
-        rega: 'ES030590000002',
-        numero_socio: 'SOC-002',
-        nombre_criadero: 'Aviario Crevillent Zootecnia',
-        nombre_titular: 'Antoni Bernabeu',
-        municipio: 'Crevillent',
-        provincia: 'Alicante',
-        latitud: 38.2492,
-        longitud: -0.8091,
-        geolocalizacion_precision: 6,
-        telefono: '611987654',
-        activo: true
-      }
-    ];
+    localStorage.removeItem('alacantina_aviario_activo_id');
+    localStorage.removeItem('alacantina_aviario_activo_datos');
 
-    const animalesSemilla = [
-      // 1. Patriarcas Fundacionales (RF)
-      {
-        id: 'alac-001',
-        codigo_identificacion: 'ESGA025-22-M-0001',
-        numero_anilla: '0001',
-        calibre_anilla_mm: 20.0,
-        nombre: 'Patriarca I (Tronco Norte)',
-        sexo: 'Macho',
-        fecha_nacimiento: '2022-03-15',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RF',
-        id_padre: null,
-        id_madre: null,
-        explotacion_id: 'exp-01',
-        familia_origen: 'Familia A',
-        peso_actual_kg: 3.350,
-        rfid_chip_id: '968000010000001',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.0,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/logo.png', titulo: 'Exposición 2026 - Campeón Adulto' },
-            { url: './icons/icon-512.png', titulo: 'Detalle de cresta y orejilla' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/logo.png', titulo: 'Exposición 2026 - Campeón Adulto' },
-            { url: './icons/icon-512.png', titulo: 'Detalle de cresta y orejilla' }
-          ]
-        },
-        notas: 'Fundador de la Familia A. Cola erguida a 70º y excelente pecho recto sin quilla desvaída.'
-      },
-      {
-        id: 'alac-002',
-        codigo_identificacion: 'ESGA025-22-H-0002',
-        numero_anilla: '0002',
-        calibre_anilla_mm: 18.0,
-        nombre: 'Reina del Vinalopó',
-        sexo: 'Hembra',
-        fecha_nacimiento: '2022-04-10',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RF',
-        id_padre: null,
-        id_madre: null,
-        explotacion_id: 'exp-01',
-        familia_origen: 'Familia A',
-        peso_actual_kg: 2.450,
-        rfid_chip_id: '968000010000002',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.0,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-192.png', titulo: 'Premio Especial Hembra Fundadora' },
-            { url: './icons/logo.png', titulo: 'Detalle de ala y remeras' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-192.png', titulo: 'Premio Especial Hembra Fundadora' },
-            { url: './icons/logo.png', titulo: 'Detalle de ala y remeras' }
-          ]
-        },
-        notas: 'Matriarca fundacional de alta prolificidad y excelente cáscara blanco crema.'
-      },
-      // 2. Macho de Familia B
-      {
-        id: 'alac-003',
-        codigo_identificacion: 'ESGA025-23-M-0045',
-        numero_anilla: '0045',
-        calibre_anilla_mm: 20.0,
-        nombre: 'Gobernador de Crevillent',
-        sexo: 'Macho',
-        fecha_nacimiento: '2023-02-18',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RD',
-        id_padre: 'alac-001',
-        id_madre: 'alac-002',
-        explotacion_id: 'exp-02',
-        familia_origen: 'Familia B',
-        peso_actual_kg: 3.280,
-        rfid_chip_id: '968000010000045',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.0,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/logo.png', titulo: 'Exposición 2026 Crevillent' },
-            { url: './icons/icon-192.png', titulo: 'Tarsos y porte erguido 70º' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/logo.png', titulo: 'Exposición 2026 Crevillent' },
-            { url: './icons/icon-192.png', titulo: 'Tarsos y porte erguido 70º' }
-          ]
-        },
-        notas: 'Aprobado en inspección zootécnica oficial con 88 puntos. Muy buen porte.'
-      },
-      // 3. Hembra de Familia B
-      {
-        id: 'alac-004',
-        codigo_identificacion: 'ESGA025-23-H-0046',
-        numero_anilla: '0046',
-        calibre_anilla_mm: 18.0,
-        nombre: 'Dama de Elche',
-        sexo: 'Hembra',
-        fecha_nacimiento: '2023-03-01',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RM',
-        id_padre: 'alac-001',
-        id_madre: 'alac-002',
-        explotacion_id: 'exp-01',
-        familia_origen: 'Familia B',
-        peso_actual_kg: 2.380,
-        rfid_chip_id: '968000010000046',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.0,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-512.png', titulo: 'Muda otoñal de plumaje' },
-            { url: './icons/logo.png', titulo: 'Premio Mejor Puesta 2025' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-512.png', titulo: 'Muda otoñal de plumaje' },
-            { url: './icons/logo.png', titulo: 'Premio Mejor Puesta 2025' }
-          ]
-        },
-        notas: 'Registro de Méritos (RM) por calificación superior a 92 puntos y puesta media de 62 g.'
-      },
-      // 4. Nueva Generación (Aspirante RN)
-      {
-        id: 'alac-005',
-        codigo_identificacion: 'ESGA025-24-M-0142',
-        numero_anilla: '0142',
-        calibre_anilla_mm: 20.0,
-        nombre: 'Joven Lucero',
-        sexo: 'Macho',
-        fecha_nacimiento: '2024-04-12',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RN',
-        id_padre: 'alac-003',
-        id_madre: 'alac-004',
-        explotacion_id: 'exp-02',
-        familia_origen: 'Familia C',
-        peso_actual_kg: 3.150,
-        rfid_chip_id: '968000010000142',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.25,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-192.png', titulo: 'Detalle de ala en crecimiento' },
-            { url: './icons/logo.png', titulo: 'Muda juvenil primaveral' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/logo.png', titulo: 'Detalle de ala en crecimiento' },
-            { url: './icons/logo.png', titulo: 'Muda juvenil primaveral' }
-          ]
-        },
-        notas: 'Aspirante en Registro de Nacimientos pendiente de inspección oficial de aptitud.'
-      },
-      // 5. Hembra Familia C
-      {
-        id: 'alac-006',
-        codigo_identificacion: 'ESGA025-24-H-0143',
-        numero_anilla: '0143',
-        calibre_anilla_mm: 18.0,
-        nombre: 'Palmera Blanca',
-        sexo: 'Hembra',
-        fecha_nacimiento: '2024-04-20',
-        variedad: 'Moteada / Exchequer',
-        seccion_libro: 'RD',
-        id_padre: 'alac-003',
-        id_madre: 'alac-002',
-        explotacion_id: 'exp-01',
-        familia_origen: 'Familia C',
-        peso_actual_kg: 2.300,
-        rfid_chip_id: '968000010000143',
-        estado: 'Activo',
-        coeficiente_consanguinidad: 0.125,
-        feno_zoometria: {
-          angulo_cola_grados: 70,
-          perfil_pecho: 'Recto/Plano',
-          color_tarsos: 'Blanco rosáceo',
-          color_orejillas: 'Blanco'
-        },
-        fotos: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-512.png', titulo: 'Exposición 2026 Joven Promesa' },
-            { url: './icons/logo.png', titulo: 'Tarsos sin plumas descalificantes' }
-          ]
-        },
-        multimedia_urls: {
-          lateral: './icons/logo.png',
-          cabeza: './icons/icon-192.png',
-          tarsos: './icons/icon-512.png',
-          galeria_opcional: [
-            { url: './icons/icon-512.png', titulo: 'Exposición 2026 Joven Promesa' },
-            { url: './icons/logo.png', titulo: 'Tarsos sin plumas descalificantes' }
-          ]
-        },
-        notas: 'Excelente porte y tarsos blanco rosáceos impecables.'
-      }
-    ];
-
-    const inspeccionesSemilla = [
-      {
-        id: 'insp-01',
-        animal_id: 'alac-003',
-        fecha_inspeccion: '2024-05-10',
-        calificador_oficial: 'Dr. Zootecnista CNZ ESGA025',
-        cabeza_cresta_cara: 13.5,
-        cuello_esclavina: 9.0,
-        pecho_tronco: 18.0,
-        cola_porte: 18.5,
-        extremidades_tarsos: 13.0,
-        plumaje_variedad: 8.5,
-        peso_desarrollo: 9.0,
-        puntuacion_total: 89.5,
-        descalificado: false,
-        calificacion: 'Muy Bueno',
-        observaciones: 'Ejemplar con porte erguido excelente. Cola en ángulo estricto a 70º.'
-      },
-      {
-        id: 'insp-02',
-        animal_id: 'alac-004',
-        fecha_inspeccion: '2024-05-10',
-        calificador_oficial: 'Dr. Zootecnista CNZ ESGA025',
-        cabeza_cresta_cara: 14.5,
-        cuello_esclavina: 9.5,
-        pecho_tronco: 19.0,
-        cola_porte: 19.0,
-        extremidades_tarsos: 14.0,
-        plumaje_variedad: 9.5,
-        peso_desarrollo: 9.5,
-        puntuacion_total: 95.0,
-        descalificado: false,
-        calificacion: 'Excelente',
-        observaciones: 'Cumple a la perfección el estándar morfológico oficial ESGA025. Orejillas blanco puro.'
-      }
-    ];
-
-    const lotesSemilla = [
-      {
-        id: 'lote-01',
-        codigo_lote: 'LOTE-GOBE-2026-B',
-        familia_receptora: 'Familia B',
-        familia_macho: 'Familia A',
-        id_gallo: 'alac-001',
-        gallinas_ids: ['alac-004'],
-        temporada: 2026,
-        coeficiente_consanguinidad_esperado: 0.0,
-        rotacion_siguiente_familia: 'Familia C',
-        activo: true,
-        notas: 'Macho de Familia A cubriendo hembras de Familia B conforme a la regla de Gobe.'
-      }
-    ];
-
-    await this.db.putBatch('explotaciones', explotacionesSemilla);
-    await this.db.putBatch('animales', animalesSemilla);
-    await this.db.putBatch('inspecciones', inspeccionesSemilla);
-    await this.db.putBatch('controlesPuesta', this.obtenerControlesPuestaSemilla());
-    await this.db.putBatch('lotes', lotesSemilla);
+    this.estado.animales = [];
+    this.estado.explotaciones = [];
+    this.estado.inspecciones = [];
+    this.estado.controlesPuesta = [];
+    this.estado.lotes = [];
+    this.estado.syncQueue = [];
+    this.estado.aviarioActivo = null;
+    this.estado.inspeccionInSitu.gpsInSitu = null;
+    this.estado.inspeccionInSitu.animalActualId = null;
 
     if (forzar) {
-      await this.cargarDatos();
       this.poblarSelectores();
       this.renderizarCenso();
       this.actualizarKPIs();
       this.renderizarLotes();
+      this.actualizarBadgeAviario();
+      this.actualizarVistaRegistroAviario();
       this.poblarSelectoresAnaliticaPuesta();
       this.renderizarAnaliticaPuesta();
-      alert('Censo Semilla ESGA025 recargado correctamente.');
+      this.ejecutarAuditoriaIntegridad(false);
+      alert('Base de datos local restablecida en Estado Cero (0 ejemplares y 0 aviarios).');
     }
   },
 
-  // Sincronización desde Supabase cuando se tiene conexión
+  // Sincronización desde Supabase para usuarios autenticados (Supabase Auth)
   async sincronizarDesdeSupabase() {
     if (!this.supabaseClient) return;
     try {
-      console.log('[Supabase] Consultando actualizaciones remotas...');
+      // Verificar sesión autenticada en Supabase Auth cuando esté disponible
+      if (this.supabaseClient.auth && typeof this.supabaseClient.auth.getSession === 'function') {
+        const { data: sessionData } = await this.supabaseClient.auth.getSession();
+        if (sessionData?.session?.user) {
+          this.estado.usuarioAutenticado = sessionData.session.user;
+        }
+      }
+
+      console.log('[Supabase] Consultando registros reales en la nube...');
+      const { data: expRemotas, error: errE } = await this.supabaseClient.from('explotaciones').select('*');
+      if (!errE && Array.isArray(expRemotas)) {
+        await this.db.putBatch('explotaciones', expRemotas);
+        this.estado.explotaciones = expRemotas;
+      }
+
       const { data: animalesRemotos, error: errA } = await this.supabaseClient.from('animales').select('*');
-      if (!errA && animalesRemotos && animalesRemotos.length > 0) {
+      if (!errA && Array.isArray(animalesRemotos)) {
         await this.db.putBatch('animales', animalesRemotos);
         this.estado.animales = animalesRemotos;
+        this.poblarSelectores();
         this.renderizarCenso();
         this.actualizarKPIs();
+        this.ejecutarAuditoriaIntegridad(false);
       }
     } catch (e) {
       console.warn('[Supabase] Error sincronizando desde nube:', e);
@@ -970,17 +620,93 @@ const app = {
   // =========================================================================
   // 3. PESTAÑA 1: ALTA DE EJEMPLAR, GPS IN SITU Y 3 FOTOS OBLIGATORIAS
   // =========================================================================
+  obtenerVariedadesOficialesFemenino() {
+    return [
+      'Negra Moteada (Oficial)',
+      'Pinta o Exchequer (Oficial)',
+      'Blanca (Oficial)',
+      'Milflores (En proceso de reconocimiento)',
+      'Armiñada en negro (En proceso de reconocimiento)'
+    ];
+  },
+
+  normalizarVariedadFemenino(variedadRaw, fallback = 'Negra Moteada (Oficial)') {
+    const listaOficial = this.obtenerVariedadesOficialesFemenino();
+    if (!variedadRaw) return fallback;
+    const v = String(variedadRaw).trim();
+    if (listaOficial.includes(v)) return v;
+
+    const lower = v.toLowerCase();
+    if (lower.includes('exchequer') || lower.includes('pinta')) {
+      return 'Pinta o Exchequer (Oficial)';
+    }
+    if (lower.includes('motead')) {
+      return 'Negra Moteada (Oficial)';
+    }
+    if (lower.includes('blanc')) {
+      return 'Blanca (Oficial)';
+    }
+    if (lower.includes('milflores')) {
+      return 'Milflores (En proceso de reconocimiento)';
+    }
+    if (lower.includes('armiñad') || lower.includes('arminad')) {
+      return 'Armiñada en negro (En proceso de reconocimiento)';
+    }
+    return fallback;
+  },
+
+  obtenerDetalleAnatomicoVariedad(variedadRaw) {
+    const variedad = this.normalizarVariedadFemenino(variedadRaw);
+    if (variedad === 'Blanca (Oficial)') {
+      return {
+        variedad,
+        color_pico: 'Color hueso',
+        color_tarsos: 'Blanco-rosáceos (con pico hueso en Blanca)',
+        resumen_ficha: 'Pico color hueso · Tarsos blanco-rosáceos con pico hueso (Variedad Blanca).'
+      };
+    }
+    if (variedad === 'Negra Moteada (Oficial)' || variedad === 'Pinta o Exchequer (Oficial)') {
+      return {
+        variedad,
+        color_pico: 'Color córneo con manchas negras',
+        color_tarsos: 'Blanco-rosáceos con roña',
+        resumen_ficha: 'Pico color córneo con manchas negras · Tarsos blanco-rosáceos con roña (Variedades Negra Moteada y Pinta o Exchequer).'
+      };
+    }
+    return {
+      variedad,
+      color_pico: 'Color córneo con manchas negras (Moteada/Exchequer) | Color hueso (Blanca)',
+      color_tarsos: 'Blanco-rosáceos',
+      resumen_ficha: `${variedad}: Tarsos blanco-rosáceos · Estándar anatómico ESGA025 (pico color córneo con manchas negras en Moteada/Exchequer y color hueso en Blanca).`
+    };
+  },
+
   actualizarReglasSexo() {
     const sexo = document.getElementById('alta-sexo').value;
     const calibreHint = document.getElementById('alta-calibre-hint');
     const pesoHint = document.getElementById('alta-peso-feedback');
+    const pesoInput = document.getElementById('alta-peso');
 
     if (sexo === 'Macho') {
       if (calibreHint) calibreHint.textContent = 'Calibre reglamentario: 20.0 mm (Gallo Repr.)';
-      if (pesoHint) pesoHint.textContent = 'Rango oficial reproductor: Gallo 3.000 kg – 3.500 kg';
+      if (pesoInput) {
+        pesoInput.placeholder = 'Ej: 3.25';
+        const valAct = parseFloat(pesoInput.value);
+        if (!valAct || Math.abs(valAct - 2.40) < 0.005 || Math.abs(valAct - 3.20) < 0.005) {
+          pesoInput.value = '3.25';
+        }
+      }
+      if (pesoHint) pesoHint.textContent = 'Rango oficial ESGA025: Gallo 3.00 - 3.50 kg (Media: 3.25 kg) | Gallina 2.20 - 2.60 kg (Media: 2.40 kg)';
     } else {
       if (calibreHint) calibreHint.textContent = 'Calibre reglamentario: 18.0 mm (Gallina Repr.)';
-      if (pesoHint) pesoHint.textContent = 'Rango oficial reproductora: Gallina 2.200 kg – 2.600 kg';
+      if (pesoInput) {
+        pesoInput.placeholder = 'Ej: 2.40';
+        const valAct = parseFloat(pesoInput.value);
+        if (!valAct || Math.abs(valAct - 3.25) < 0.005 || Math.abs(valAct - 3.20) < 0.005) {
+          pesoInput.value = '2.40';
+        }
+      }
+      if (pesoHint) pesoHint.textContent = 'Rango oficial ESGA025: Gallo 3.00 - 3.50 kg (Media: 3.25 kg) | Gallina 2.20 - 2.60 kg (Media: 2.40 kg)';
     }
     this.autogenerarCodigoOficial();
     this.validarPesoRacial();
@@ -1020,15 +746,15 @@ const app = {
     if (!peso || isNaN(peso)) return;
 
     let dentroDeRango = false;
-    if (sexo === 'Macho' && peso >= 3.000 && peso <= 3.500) dentroDeRango = true;
-    if (sexo === 'Hembra' && peso >= 2.200 && peso <= 2.600) dentroDeRango = true;
+    if (sexo === 'Macho' && peso >= 3.00 && peso <= 3.50) dentroDeRango = true;
+    if (sexo === 'Hembra' && peso >= 2.20 && peso <= 2.60) dentroDeRango = true;
 
     if (dentroDeRango) {
       feedback.className = 'text-[11px] text-emerald-400 mt-1 font-semibold';
-      feedback.textContent = `✓ Peso dentro del estándar racial oficial (${peso.toFixed(3)} kg).`;
+      feedback.textContent = `✓ Peso dentro del estándar racial oficial ESGA025 (${peso.toFixed(2)} kg · Media ref.: ${sexo === 'Macho' ? '3.25 kg' : '2.40 kg'}).`;
     } else {
       feedback.className = 'text-[11px] text-amber-400 mt-1 font-semibold';
-      feedback.textContent = `⚠️ Peso fuera del rango estricto de reproductor (Gallo: 3.0-3.5kg | Gallina: 2.2-2.6kg).`;
+      feedback.textContent = `⚠️ Peso fuera del rango estricto ESGA025 (Gallo: 3.00-3.50 kg [Media 3.25 kg] | Gallina: 2.20-2.60 kg [Media 2.40 kg]).`;
     }
   },
 
@@ -1355,7 +1081,7 @@ const app = {
       }
     }
 
-    const explotacionId = aviario ? aviario.id : (document.getElementById('alta-explotacion')?.value || 'exp-01');
+    const explotacionId = aviario ? aviario.id : (document.getElementById('alta-explotacion')?.value || null);
     const codigoRega = aviario ? (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001') : 'TEMP-REGA-001';
     const titularNombre = aviario ? (aviario.nombre_titular || 'Criador Asociado') : 'Criador Asociado';
 
@@ -1403,6 +1129,10 @@ const app = {
       };
     }
 
+    const variedadNormalizada = this.normalizarVariedadFemenino(variedad);
+    const detalleAnatomico = this.obtenerDetalleAnatomicoVariedad(variedadNormalizada);
+    const pesoFinal = !isNaN(peso) && peso > 0 ? peso : (sexo === 'Macho' ? 3.25 : 2.40);
+
     const nuevoAnimal = {
       id: 'alac-' + Date.now(),
       codigo_identificacion: codigoId,
@@ -1411,7 +1141,7 @@ const app = {
       nombre: nombre || `Ejemplar ESGA025 #${anilla}`,
       sexo: sexo,
       fecha_nacimiento: fechaNac,
-      variedad: variedad,
+      variedad: variedadNormalizada,
       seccion_libro: seccion,
       id_padre: padreId,
       id_madre: madreId,
@@ -1419,15 +1149,16 @@ const app = {
       codigo_rega: codigoRega,
       titular_nombre: titularNombre,
       familia_origen: familia,
-      peso_actual_kg: peso,
+      peso_actual_kg: pesoFinal,
       rfid_chip_id: rfid,
       estado: 'Activo',
       coeficiente_consanguinidad: fx,
       feno_zoometria: {
         angulo_cola_grados: 70,
         perfil_pecho: 'Recto/Plano',
-        color_tarsos: 'Blanco rosáceo',
-        color_orejillas: 'Blanco'
+        color_pico: detalleAnatomico.color_pico,
+        color_tarsos: detalleAnatomico.color_tarsos,
+        color_orejillas: 'Blanco puro'
       },
       fotos: {
         lateral: this.estado.fotosCapturadas.lateral,
@@ -1739,6 +1470,9 @@ const app = {
 
     const filtrados = this.obtenerAnimalesFiltrados();
     this.actualizarConteoExportacion();
+    if (typeof this.ejecutarAuditoriaIntegridad === 'function') {
+      this.ejecutarAuditoriaIntegridad(false);
+    }
 
     if (filtrados.length === 0) {
       if (msgVacio) msgVacio.classList.remove('hidden');
@@ -1986,6 +1720,13 @@ const app = {
     document.getElementById('mf-padre-info').textContent = padre ? `${padre.numero_anilla} (${padre.codigo_identificacion})` : 'Sin registrar';
     document.getElementById('mf-madre-info').textContent = madre ? `${madre.numero_anilla} (${madre.codigo_identificacion})` : 'Sin registrar';
 
+    // Detalles anatómicos específicos por variedad (Pico y Tarsos - Estándar ESGA025)
+    const elAnatPicoTarsos = document.getElementById('mf-anatomia-pico-tarsos');
+    if (elAnatPicoTarsos) {
+      const detAnat = this.obtenerDetalleAnatomicoVariedad(animal.variedad);
+      elAnatPicoTarsos.textContent = detAnat.resumen_ficha;
+    }
+
     // Inspección morfológica resumen
     const insp = this.estado.inspecciones.find(i => i.animal_id === animal.id);
     const divInsp = document.getElementById('mf-inspeccion-resumen');
@@ -2133,12 +1874,25 @@ const app = {
     const totalPtsEl = document.getElementById('baremo-total-pts');
     const badgeVeredicto = document.getElementById('baremo-veredicto-badge');
 
+    // Validar rango ponderal estricto ESGA025 (Macho: 3.00-3.50 kg [media 3.25] | Hembra: 2.20-2.60 kg [media 2.40])
+    const animalSelId = document.getElementById('inspeccion-animal-select')?.value;
+    const animalSel = animalSelId ? this.estado.animales.find(a => a.id === animalSelId) : null;
+    const pesoVivo = animalSel ? Number(animalSel.peso_actual_kg) : NaN;
+    const fueraRangoPeso = animalSel && !isNaN(pesoVivo) && (
+      (animalSel.sexo === 'Macho' && (pesoVivo < 3.00 || pesoVivo > 3.50)) ||
+      (animalSel.sexo === 'Hembra' && (pesoVivo < 2.20 || pesoVivo > 2.60))
+    );
+
     totalPtsEl.textContent = total.toFixed(1);
 
     if (descalificado) {
       totalPtsEl.className = 'text-3xl font-extrabold text-red-500 font-mono';
       badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-red-950 border border-red-600 text-red-300';
-      badgeVeredicto.textContent = 'NO APTO (DESCALIFICADO POR DEFECTO REGLAMENTARIO)';
+      badgeVeredicto.textContent = 'NO APTO (DESCALIFICADO POR DEFECTO REGLAMENTARIO ESGA025)';
+    } else if (fueraRangoPeso) {
+      totalPtsEl.className = 'text-3xl font-extrabold text-amber-400 font-mono';
+      badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-950 border border-amber-600 text-amber-300';
+      badgeVeredicto.textContent = `ALERTA DE PESO FUERA DE RANGO ESGA025 (${pesoVivo.toFixed(2)} kg · ${animalSel.sexo === 'Macho' ? '3.00-3.50 kg' : '2.20-2.60 kg'})`;
     } else if (total >= 90.0) {
       totalPtsEl.className = 'text-3xl font-extrabold text-amber-400 font-mono';
       badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-950 border border-amber-600 text-amber-300';
@@ -2308,128 +2062,8 @@ const app = {
   // =========================================================================
 
   obtenerControlesPuestaSemilla() {
-    return [
-      {
-        id: 'puesta-sem-01',
-        animal_id: 'alac-002', // Reina del Vinalopó (Familia A)
-        fecha_inicio: '2026-01-10',
-        fecha_fin: '2026-01-25',
-        total_huevos_15d: 12,
-        peso_medio_huevo_g: 62.5,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Excelente',
-        conforme_estandar: true,
-        observaciones: 'Puesta invernal óptima. Huevo uniforme y cutícula blanco crema apta para incubación.'
-      },
-      {
-        id: 'puesta-sem-02',
-        animal_id: 'alac-004', // Dama de Elche (Familia B)
-        fecha_inicio: '2026-01-15',
-        fecha_fin: '2026-01-30',
-        total_huevos_15d: 11,
-        peso_medio_huevo_g: 59.0,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Buena',
-        conforme_estandar: true,
-        observaciones: 'Prueba oficial lote Gobe Familia B. Calibre medio estándar 59.0 g.'
-      },
-      {
-        id: 'puesta-sem-03',
-        animal_id: 'alac-006', // Palmera Blanca (Familia C)
-        fecha_inicio: '2026-02-01',
-        fecha_fin: '2026-02-16',
-        total_huevos_15d: 10,
-        peso_medio_huevo_g: 53.5, // ALERTA: < 55 g
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Buena',
-        conforme_estandar: false,
-        observaciones: 'Primer ciclo joven: peso 53.5 g inferior al umbral de 55 g. Descarte para incubación.'
-      },
-      {
-        id: 'puesta-sem-04',
-        animal_id: 'alac-002', // Reina del Vinalopó
-        fecha_inicio: '2026-02-12',
-        fecha_fin: '2026-02-27',
-        total_huevos_15d: 13,
-        peso_medio_huevo_g: 63.8,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Excelente',
-        conforme_estandar: true,
-        observaciones: 'Pico de puesta invernal (86.7% Hen-Day). Excelente vigor genético.'
-      },
-      {
-        id: 'puesta-sem-05',
-        animal_id: 'alac-004', // Dama de Elche
-        fecha_inicio: '2026-02-15',
-        fecha_fin: '2026-03-02',
-        total_huevos_15d: 12,
-        peso_medio_huevo_g: 61.2,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Excelente',
-        conforme_estandar: true,
-        observaciones: 'Lote Gobe reproductor. Peso óptimo en rango medio.'
-      },
-      {
-        id: 'puesta-sem-06',
-        animal_id: 'alac-006', // Palmera Blanca
-        fecha_inicio: '2026-03-01',
-        fecha_fin: '2026-03-16',
-        total_huevos_15d: 12,
-        peso_medio_huevo_g: 56.5,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Buena',
-        conforme_estandar: true,
-        observaciones: 'Peso normalizado a 56.5 g tras madurez, entrando en estándar oficial ESGA025.'
-      },
-      {
-        id: 'puesta-sem-07',
-        animal_id: 'alac-002', // Reina del Vinalopó
-        fecha_inicio: '2026-03-10',
-        fecha_fin: '2026-03-25',
-        total_huevos_15d: 14,
-        peso_medio_huevo_g: 64.5,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Excelente',
-        conforme_estandar: true,
-        observaciones: 'Pico de producción primaveral: 93.3% Hen-Day con 64.5 g de peso medio.'
-      },
-      {
-        id: 'puesta-sem-08',
-        animal_id: 'alac-004', // Dama de Elche
-        fecha_inicio: '2026-03-15',
-        fecha_fin: '2026-03-30',
-        total_huevos_15d: 13,
-        peso_medio_huevo_g: 62.0,
-        color_cascara: 'Blanco puro',
-        calidad_cascara: 'Buena',
-        conforme_estandar: true,
-        observaciones: 'Cutícula blanco puro sin motas. Apto para incubación.'
-      },
-      {
-        id: 'puesta-sem-09',
-        animal_id: 'alac-006', // Palmera Blanca
-        fecha_inicio: '2026-04-01',
-        fecha_fin: '2026-04-16',
-        total_huevos_15d: 11,
-        peso_medio_huevo_g: 58.0,
-        color_cascara: 'Blanco crema',
-        calidad_cascara: 'Excelente',
-        conforme_estandar: true,
-        observaciones: 'Línea de puesta regular con 73.3% de intensidad Hen-Day.'
-      },
-      {
-        id: 'puesta-sem-10',
-        animal_id: 'alac-004', // Dama de Elche
-        fecha_inicio: '2026-04-10',
-        fecha_fin: '2026-04-25',
-        total_huevos_15d: 9,
-        peso_medio_huevo_g: 57.0,
-        color_cascara: 'Moteado / Anomalía',
-        calidad_cascara: 'Defectuosa',
-        conforme_estandar: false,
-        observaciones: 'Presencia de porosidades rugosas y moteado anormal. Descarte estricto para incubación.'
-      }
-    ];
+    // Inicialización en Estado Cero: 0 controles de puesta ficticios
+    return [];
   },
 
   cambiarSubtabPuesta(subtab) {
@@ -4424,7 +4058,7 @@ const app = {
       const seccionLibro = a.seccion_libro || 'RN';
       const sexo = a.sexo || '';
       const fechaNac = a.fecha_nacimiento || '';
-      const variedad = a.variedad || 'Moteada / Exchequer';
+      const variedad = this.normalizarVariedadFemenino(a.variedad);
 
       // 3. Progenitores oficiales (anillas)
       const p = this.estado.animales.find(x => x.id === a.id_padre || x.codigo_identificacion === a.id_padre || x.numero_anilla === a.id_padre);
@@ -4560,10 +4194,10 @@ const app = {
       }
     });
 
-    // 7. Desglose por Variedades
+    // 7. Desglose por Variedades (Nomenclatura Unificada en Femenino ESGA025)
     const variedades = {};
     activos.forEach(a => {
-      const v = a.variedad || 'Moteada / Exchequer';
+      const v = this.normalizarVariedadFemenino(a.variedad);
       variedades[v] = (variedades[v] || 0) + 1;
     });
 
@@ -5276,16 +4910,13 @@ const app = {
       this.poblarSelectoresInSitu();
     }
 
-    // Select Filtro Variedad en Censo (FASE 2)
+    // Select Filtro Variedad en Censo (5 Variedades Unificadas 100% en Femenino ESGA025)
     const selectFiltroVariedad = document.getElementById('filtro-variedad');
     if (selectFiltroVariedad) {
-      const variedades = new Set(['Moteada / Exchequer']);
-      this.estado.animales.forEach(a => {
-        if (a.variedad) variedades.add(a.variedad.trim());
-      });
+      const variedadesOficiales = this.obtenerVariedadesOficialesFemenino();
       const valPrevio = selectFiltroVariedad.value || 'TODAS';
       selectFiltroVariedad.innerHTML = '<option value="TODAS">Variedad: Todas</option>';
-      Array.from(variedades).sort().forEach(v => {
+      variedadesOficiales.forEach(v => {
         const opt = document.createElement('option');
         opt.value = v;
         opt.textContent = v;
@@ -5350,7 +4981,7 @@ const app = {
   },
 
   async limpiarIndexedDB() {
-    if (confirm('¿Estás seguro de que deseas limpiar la base de datos local IndexedDB? Se restablecerá con los datos semilla oficiales.')) {
+    if (confirm('¿Estás seguro de que deseas vaciar la base de datos local IndexedDB? Se restablecerá en Estado Cero (0 ejemplares y 0 aviarios).')) {
       await this.cargarSemillaInicial(true);
       this.cerrarModalConfig();
     }
@@ -5394,8 +5025,15 @@ const app = {
 
   // Comprobar si existe una explotación activa en localStorage / sesión o desplegar modal bienvenida
   inicializarAviarioActivo() {
-    const aviarioActivoId = localStorage.getItem('alacantina_aviario_activo_id');
+    let aviarioActivoId = localStorage.getItem('alacantina_aviario_activo_id');
     const modoVisitante = sessionStorage.getItem('alacantina_modo_visitante') === 'true';
+
+    // Purga preventiva de IDs ficticios heredados en localStorage
+    if (aviarioActivoId === 'exp-01' || aviarioActivoId === 'exp-02') {
+      localStorage.removeItem('alacantina_aviario_activo_id');
+      localStorage.removeItem('alacantina_aviario_activo_datos');
+      aviarioActivoId = null;
+    }
 
     // 1. Buscar si hay una explotación guardada por ID
     if (aviarioActivoId && this.estado.explotaciones && this.estado.explotaciones.length > 0) {
@@ -5411,12 +5049,14 @@ const app = {
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          if (parsed && parsed.id) {
+          if (parsed && parsed.id && parsed.id !== 'exp-01' && parsed.id !== 'exp-02') {
             this.estado.aviarioActivo = parsed;
             if (!this.estado.explotaciones.some(e => e.id === parsed.id)) {
               this.estado.explotaciones.push(parsed);
               this.db.put('explotaciones', parsed);
             }
+          } else {
+            localStorage.removeItem('alacantina_aviario_activo_datos');
           }
         } catch (e) {
           console.warn('[Aviario] Error al parsear aviario guardado:', e);
@@ -5427,7 +5067,7 @@ const app = {
     // 3. Si no hay aviario configurado y no se ha activado el modo visitante en esta sesión:
     // Desplegar automáticamente el Modal de Bienvenida
     if (!this.estado.aviarioActivo && !modoVisitante) {
-      console.log('[AlacantinApp] Sin aviario activo configurado. Desplegando modal de bienvenida...');
+      console.log('[AlacantinApp v6] Sin aviario activo configurado. Desplegando modal de bienvenida en Estado Cero...');
       setTimeout(() => {
         this.abrirModalAviario(true);
       }, 150);
@@ -5465,7 +5105,7 @@ const app = {
     // Configurar textos de bienvenida o edición
     if (esBienvenida && !this.estado.aviarioActivo) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
-      if (subtituloEl) subtituloEl.textContent = 'Bienvenido a AlacantinApp v5. Configura tu explotación zootécnica o pulsa en "Modo Visitante" para explorar la app.';
+      if (subtituloEl) subtituloEl.textContent = 'Bienvenido a AlacantinApp v6. Configura tu explotación zootécnica real o selecciona un rol en Estado Cero.';
     } else if (this.estado.aviarioActivo) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
       if (subtituloEl) subtituloEl.textContent = 'Actualiza los datos de tu explotación ganadera, código REGA oficial o geolocalización GPS.';
@@ -5596,6 +5236,30 @@ const app = {
     this.cerrarModalAviario();
     this.actualizarBadgeAviario();
     this.actualizarVistaRegistroAviario();
+  },
+
+  // Iniciar con rol de prueba / evaluación vinculado a un censo vacío (Estado Cero: 0 ejemplares, 0 aviarios ficticios)
+  iniciarConRolEstadoCero(rol = 'criador') {
+    sessionStorage.setItem('alacantina_modo_visitante', 'true');
+    this.estado.aviarioActivo = null;
+    localStorage.removeItem('alacantina_aviario_activo_id');
+    localStorage.removeItem('alacantina_aviario_activo_datos');
+    this.cambiarRolRBAC(rol);
+    const selRol = document.getElementById('selector-rol-rbac');
+    if (selRol) selRol.value = rol;
+    this.cerrarModalAviario();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    if (typeof this.mostrarNotificacionToast === 'function') {
+      const nombresRol = {
+        criador: 'Criador Asociado',
+        inspector: 'Inspector Zootécnico CNZ',
+        direccion: 'Dirección Técnica LG'
+      };
+      this.mostrarNotificacionToast(`🛡️ Rol activo: ${nombresRol[rol] || rol} · Censo en Estado Cero (0 ejemplares).`, 'info');
+    }
   },
 
   // Toggle casilla "Aspirante / No socio aún"
@@ -6415,13 +6079,19 @@ const app = {
   },
 
   actualizarUIGpsInSitu() {
-    const gps = this.estado.inspeccionInSitu.gpsInSitu || { latitud: 38.2671, longitud: -0.6983, precision_m: 5 };
+    const gps = this.estado.inspeccionInSitu.gpsInSitu;
     const latEl = document.getElementById('insitu-gps-lat');
     const lngEl = document.getElementById('insitu-gps-lng');
     const precEl = document.getElementById('insitu-gps-prec');
-    if (latEl) latEl.textContent = Number(gps.latitud).toFixed(6);
-    if (lngEl) lngEl.textContent = Number(gps.longitud).toFixed(6);
-    if (precEl) precEl.textContent = gps.precision_m || 5;
+    if (gps && gps.latitud != null && gps.longitud != null) {
+      if (latEl) latEl.textContent = Number(gps.latitud).toFixed(6);
+      if (lngEl) lngEl.textContent = Number(gps.longitud).toFixed(6);
+      if (precEl) precEl.textContent = gps.precision_m || 5;
+    } else {
+      if (latEl) latEl.textContent = '--';
+      if (lngEl) lngEl.textContent = '--';
+      if (precEl) precEl.textContent = '--';
+    }
   },
 
   // Selectores de Aviario REGA y Ejemplares en Modo Inspección In Situ
@@ -6507,7 +6177,7 @@ const app = {
 
     // Obtener explotación vinculada
     const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviarioActivo;
-    const regaAnimal = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'ES030140000001';
+    const regaAnimal = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'Sin REGA';
 
     // Actualizar tarjeta resumen del ejemplar
     const imgEl = document.getElementById('insitu-animal-foto');
@@ -6999,7 +6669,7 @@ const app = {
     const fechaSolo = fechaHoraVal.split('T')[0];
 
     const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviarioActivo;
-    const codigoRega = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'ES030140000001';
+    const codigoRega = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'Sin REGA';
     const titularAviario = exp?.nombre_titular || animal.titular_nombre || 'Criador Oficial ESGA025';
     const nombreAviario = exp?.nombre_criadero || 'Aviario Oficial Alacantina';
 
@@ -7014,16 +6684,16 @@ const app = {
     const c7 = leer('insitu-rng-peso');
     const total = c1 + c2 + c3 + c4 + c5 + c6 + c7;
 
-    // Defectos descalificables detectados
+    // Defectos descalificables detectados (5 defectos graves oficiales del Estándar 2025)
     const defs = this.estado.inspeccionInSitu.defectos;
     const descalificado = Boolean(defs.orejilla || defs.pecho || defs.cola || defs.tarsos || defs.flameado);
 
     const TextosDefectos = [];
-    if (defs.orejilla) TextosDefectos.push('Orejilla roja o amarilla');
-    if (defs.pecho) TextosDefectos.push('Pecho prominente/redondeado');
-    if (defs.cola) TextosDefectos.push('Cola llevada a menos de 70º o defectuosa');
-    if (defs.tarsos) TextosDefectos.push('Tarsos amarillos o emplumados');
-    if (defs.flameado) TextosDefectos.push('Flameado en esclavina (Moteada/Exchequer)');
+    if (defs.orejilla) TextosDefectos.push('Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).');
+    if (defs.pecho) TextosDefectos.push('Pecho prominente o abombado (debe ser recto y plano).');
+    if (defs.cola) TextosDefectos.push('Cola baja (<70º sobre la horizontal) o larga.');
+    if (defs.flameado) TextosDefectos.push('Flameado de esclavina en variedades Moteada y Exchequer.');
+    if (defs.tarsos) TextosDefectos.push('Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).');
 
     const dictamen = this.estado.inspeccionInSitu.dictamenSeleccionado || 'APTO_RD';
     const seccionAnterior = animal.seccion_libro || 'RN';
@@ -7041,7 +6711,7 @@ const app = {
       calificacionTexto = 'No Apto / Baja';
     }
 
-    const gps = this.estado.inspeccionInSitu.gpsInSitu || { latitud: 38.2671, longitud: -0.6983, precision_m: 5 };
+    const gps = this.estado.inspeccionInSitu.gpsInSitu || { latitud: null, longitud: null, precision_m: null };
     const obsInput = (document.getElementById('insitu-observaciones')?.value || '').trim();
     const codigoActa = `ACTA-ESGA025-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
 
@@ -7053,7 +6723,7 @@ const app = {
       numero_anilla: animal.numero_anilla,
       sexo: animal.sexo,
       variedad: animal.variedad,
-      explotacion_id: animal.explotacion_id || exp?.id || 'exp-01',
+      explotacion_id: animal.explotacion_id || exp?.id || null,
       codigo_rega: codigoRega,
       nombre_aviario: nombreAviario,
       titular_aviario: titularAviario,
@@ -7223,10 +6893,10 @@ const app = {
       const anilla = insp.numero_anilla || animal?.numero_anilla || '----';
       const codigoId = insp.codigo_identificacion || animal?.codigo_identificacion || 'ESGA025';
       const codigoActa = insp.codigo_acta || `ACTA-${insp.id.toUpperCase()}`;
-      const rega = insp.codigo_rega || animal?.codigo_rega || 'ES030140000001';
-      const gpsTxt = insp.coordenadas_gps
+      const rega = insp.codigo_rega || animal?.codigo_rega || 'Sin REGA';
+      const gpsTxt = (insp.coordenadas_gps && insp.coordenadas_gps.latitud != null && insp.coordenadas_gps.longitud != null)
         ? `${Number(insp.coordenadas_gps.latitud).toFixed(4)}, ${Number(insp.coordenadas_gps.longitud).toFixed(4)}`
-        : '38.2671, -0.6983';
+        : 'Sin GPS';
       const esNoApto = insp.descalificado || insp.calificacion?.includes('No Apto');
       const colorBorde = esNoApto ? 'border-rose-700/70' : 'border-emerald-700/70';
 
@@ -7273,12 +6943,15 @@ const app = {
 
     const codigoActa = acta.codigo_acta || `ACTA-ESGA025-${acta.id.toUpperCase()}`;
     const fechaHora = acta.fecha_hora_inspeccion ? acta.fecha_hora_inspeccion.replace('T', ' ') : acta.fecha_inspeccion;
-    const rega = acta.codigo_rega || animal?.codigo_rega || 'ES030140000001';
+    const rega = acta.codigo_rega || animal?.codigo_rega || 'Sin REGA';
     const inspectorId = acta.inspector_id || 'INSP-CNZ-025';
-    const inspectorNombre = acta.calificador_oficial || 'Dr. Zootecnista CNZ ESGA025';
-    const lat = acta.coordenadas_gps?.latitud ?? 38.2671;
-    const lng = acta.coordenadas_gps?.longitud ?? -0.6983;
-    const prec = acta.coordenadas_gps?.precision_m ?? 5;
+    const inspectorNombre = acta.calificador_oficial || 'Inspector Oficial CNZ ESGA025';
+    const lat = acta.coordenadas_gps?.latitud;
+    const lng = acta.coordenadas_gps?.longitud;
+    const prec = acta.coordenadas_gps?.precision_m ?? '--';
+    const gpsCoordsTxt = (lat != null && lng != null)
+      ? `Lat: ${Number(lat).toFixed(6)}, Lng: ${Number(lng).toFixed(6)}`
+      : 'Sin coordenadas GPS registradas';
     const defectosArr = Array.isArray(acta.defectos_detectados) && acta.defectos_detectados.length > 0
       ? acta.defectos_detectados
       : (acta.descalificado ? ['Defecto morfológico excluyente ESGA025'] : []);
@@ -7315,7 +6988,7 @@ const app = {
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-sky-400 uppercase block">Georreferencia GPS In Situ</span>
-          <strong class="text-xs font-mono text-emerald-400 block mt-0.5">Lat: ${Number(lat).toFixed(6)}, Lng: ${Number(lng).toFixed(6)}</strong>
+          <strong class="text-xs font-mono text-emerald-400 block mt-0.5">${gpsCoordsTxt}</strong>
           <span class="text-[11px] text-slate-400">Precisión satelital: ±${prec} metros</span>
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
@@ -7332,8 +7005,11 @@ const app = {
           <div class="flex flex-wrap items-center gap-2 mt-0.5">
             <span class="text-sm font-black text-white font-mono">Anilla #${this.escaparHtml(acta.numero_anilla || animal?.numero_anilla || '----')}</span>
             <span class="text-xs font-mono text-amber-300">(${this.escaparHtml(acta.codigo_identificacion || animal?.codigo_identificacion || 'ESGA025')})</span>
-            <span class="text-xs text-slate-300">· ${this.escaparHtml(acta.sexo || animal?.sexo || 'Macho')} · ${this.escaparHtml(acta.variedad || animal?.variedad || 'Moteada / Exchequer')}</span>
+            <span class="text-xs text-slate-300">· ${this.escaparHtml(acta.sexo || animal?.sexo || 'Macho')} · ${this.escaparHtml(this.normalizarVariedadFemenino(acta.variedad || animal?.variedad))}</span>
           </div>
+          <p class="text-[10px] text-emerald-300 font-semibold mt-1">
+            ${this.escaparHtml(this.obtenerDetalleAnatomicoVariedad(acta.variedad || animal?.variedad).resumen_ficha)}
+          </p>
         </div>
         <div class="text-left sm:text-right">
           <span class="text-[10px] font-bold text-slate-400 uppercase block">Promoción Libro Genealógico</span>
@@ -7462,12 +7138,12 @@ const app = {
       },
       {
         num: 4,
-        nombre: '4. Pico y Barbillas',
+        nombre: '4. Pico y Barbillas (Detalle por Variedad)',
         baremo: 'Bloque 1 (Cabeza, Cresta y Cara · Máx 15p)',
-        estandarGallo: 'Pico fuerte, bien curvado, color córneo claro a pizarra según variedad. Barbillas medianamente largas, ovaladas, finas y sin pliegues.',
-        estandarGallina: 'Pico proporcionado y barbillas redondeadas, finas y de rojo intenso.',
-        defectosTaras: 'DESCALIFICA: Pico cruzado, prognatismo o manchas blancas en barbillas.',
-        consejoCampo: 'Comprobar el cierre simétrico de ambas mandíbulas.'
+        estandarGallo: 'Pico fuerte, bien curvado: color córneo con manchas negras para las variedades Moteada y Exchequer, y color hueso para la variedad Blanca. Barbillas medianamente largas, ovaladas, finas y sin pliegues.',
+        estandarGallina: 'Pico proporcionado (color córneo con manchas negras en Moteada/Exchequer; color hueso en Blanca) y barbillas redondeadas, finas y de rojo intenso.',
+        defectosTaras: 'DESCALIFICA: Pico amarillo, pico cruzado, prognatismo o manchas blancas en barbillas.',
+        consejoCampo: 'Verificar que el pico sea color córneo con manchas negras en Negra Moteada / Pinta o Exchequer, y color hueso en Blanca.'
       },
       {
         num: 5,
@@ -7475,8 +7151,8 @@ const app = {
         baremo: 'Bloque 1 (Cabeza, Cresta y Cara · Máx 15p)',
         estandarGallo: 'De tamaño mediano, almendradas, lisas, ceñidas y de color BLANCO PURO esmaltado.',
         estandarGallina: 'Ovaladas/almendradas, lisas y de color blanco puro brillante.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA: Orejilla roja o amarilla en más de 1/3 de su superficie.',
-        consejoCampo: 'Rasgo crítico ESGA025: verificar ausencia de vascularización roja o pigmento carotenoide amarillo.'
+        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #1 Estándar 2025): Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).',
+        consejoCampo: 'Rasgo crítico ESGA025: verificar blanco puro sin pigmento amarillo ni exceso de rojo.'
       },
       {
         num: 6,
@@ -7484,8 +7160,8 @@ const app = {
         baremo: 'Bloque 2 (Cuello y Esclavina · Máx 10p)',
         estandarGallo: 'Cuello medianamente largo, erguido y bien arqueado. Esclavina muy abundante cubriendo bien los hombros.',
         estandarGallina: 'Cuello gracioso con esclavina bien poblada sin transiciones bruscas.',
-        defectosTaras: 'DESCALIFICA: Flameado rojizo/dorado en esclavina en la variedad Moteada/Exchequer o cuello torcido.',
-        consejoCampo: 'Abrir las plumas de la esclavina en ejemplares Moteados para descartar flameado oculto.'
+        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #4 Estándar 2025): Flameado de esclavina en variedades Moteada y Exchequer.',
+        consejoCampo: 'Abrir las plumas de la esclavina en variedades Negra Moteada y Pinta o Exchequer para descartar flameado oculto.'
       },
       {
         num: 7,
@@ -7500,10 +7176,10 @@ const app = {
         num: 8,
         nombre: '8. Pecho y Quilla (Perfil Plano)',
         baremo: 'Bloque 3 (Pecho y Tronco · Máx 20p)',
-        estandarGallo: 'Pecho de perfil RECTO Y PLANO característico de la raza Alacantina (nunca prominente ni redondeado). Quilla larga y recta.',
-        estandarGallina: 'Pecho plano, profundo y bien sostenido.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA: Pecho prominente, abombado o redondeado; quilla torcida en S.',
-        consejoCampo: 'Observar al ejemplar de perfil estricto y palpar el esternón: la caída anterior del pecho debe ser recta/plana.'
+        estandarGallo: 'Pecho de perfil RECTO Y PLANO característico de la raza Alacantina (nunca prominente ni abombado). Quilla larga y recta.',
+        estandarGallina: 'Pecho recto y plano, profundo y bien sostenido.',
+        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #2 Estándar 2025): Pecho prominente o abombado (debe ser recto y plano).',
+        consejoCampo: 'Observar al ejemplar de perfil estricto y palpar el esternón: la caída anterior del pecho debe ser recta y plana.'
       },
       {
         num: 9,
@@ -7518,28 +7194,28 @@ const app = {
         num: 10,
         nombre: '10. Cola y Porte (Ángulo ≥ 70º)',
         baremo: 'Bloque 4 (Cola y Porte · Máx 20p)',
-        estandarGallo: 'Cola grande, bien poblada, llevada MUY ALTA en ángulo de al menos 70º sobre la horizontal (sin llegar a cola ardilla >90º). Hoces bien curvadas.',
-        estandarGallina: 'Cola bien desarrollada, ligeramente abierta en abanico y llevada a 70º sobre la horizontal.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA: Cola llevada a menos de 70º (porte bajo), cola ardilla o cola torcida lateralmente.',
-        consejoCampo: 'Evaluar al ave en reposo libre en suelo plano antes de capturarla para medir su ángulo natural de 70º.'
+        estandarGallo: 'Cola bien poblada, llevada alta en ángulo de al menos 70º sobre la horizontal y de longitud media proporcionada.',
+        estandarGallina: 'Cola bien desarrollada, ligeramente abierta en abanico y llevada a ≥70º sobre la horizontal.',
+        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #3 Estándar 2025): Cola baja (<70º sobre la horizontal) o larga.',
+        consejoCampo: 'Evaluar al ave en reposo libre en suelo plano antes de capturarla para verificar que la cola no sea baja (<70º) ni larga.'
       },
       {
         num: 11,
-        nombre: '11. Muslos y Tarsos',
+        nombre: '11. Muslos y Tarsos (Detalle por Variedad)',
         baremo: 'Bloque 5 (Extremidades y Tarsos · Máx 15p)',
-        estandarGallo: 'Muslos largos, fuertes y bien visibles. Tarsos medianamente largos, gruesos, completamente desnudos de plumas y de color BLANCO ROSÁCEO.',
-        estandarGallina: 'Muslos bien formados y tarsos limpios blanco-rosáceos (admite leve tono apizarrado solo en variedades melanizadas jóvenes).',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA: Tarsos amarillos, verdes o tarsos emplumados / con cañones.',
-        consejoCampo: 'Inspeccionar las escamas laterales de los tarsos buscando ausencia total de pigmento amarillo y plumas.'
+        estandarGallo: 'Muslos largos, fuertes y bien visibles. Tarsos desnudos: blanco-rosáceos con roña en variedades Moteada/Exchequer, o blanco-rosáceos con pico hueso en variedad Blanca.',
+        estandarGallina: 'Muslos bien formados y tarsos blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca.',
+        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #5 Estándar 2025): Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).',
+        consejoCampo: 'Inspeccionar tarsos y pico conjuntamente según variedad: blanco-rosáceos con roña (Moteada/Exchequer) o blanco-rosáceos con pico hueso (Blanca).'
       },
       {
         num: 12,
-        nombre: '12. Dedos y Plumaje General',
-        baremo: 'Bloque 5 y 6 (Extremidades y Variedad · 15p + 10p)',
-        estandarGallo: 'Cuatro (4) dedos rectos, largos y bien abiertos. Calibre anilla oficial: 20 mm. Plumaje ceñido y brillante acorde a las 7 variedades oficiales.',
-        estandarGallina: 'Cuatro (4) dedos rectos y limpios. Calibre anilla oficial: 18 mm. Moteado o patrón cromático nítido.',
-        defectosTaras: 'DESCALIFICA: Polidactilia (5 dedos), dedos torcidos/palmeados o colores no reconocidos en el Estándar ESGA025.',
-        consejoCampo: 'Contar los 4 dedos apoyados en superficie plana y verificar calibre reglamentario de anilla (20mm Macho / 18mm Hembra).'
+        nombre: '12. Dedos, Pesos Oficiales y 5 Variedades en Femenino',
+        baremo: 'Bloque 5, 6 y 7 (Extremidades, Variedad y Peso · 15p + 10p + 10p)',
+        estandarGallo: 'Cuatro (4) dedos rectos. Calibre anilla: 20 mm. Rango oficial Gallo: 3,000 kg – 3,500 kg (Media: 3.25 kg). Variedades en femenino: Negra Moteada (Oficial), Pinta o Exchequer (Oficial), Blanca (Oficial), Milflores (En proceso de reconocimiento) y Armiñada en negro (En proceso de reconocimiento).',
+        estandarGallina: 'Cuatro (4) dedos rectos y limpios. Calibre anilla: 18 mm. Rango oficial Gallina: 2,200 kg – 2,600 kg (Media: 2.40 kg).',
+        defectosTaras: 'DESCALIFICA: Peso fuera de rango (Gallo 3.00-3.50 kg / Gallina 2.20-2.60 kg), polidactilia o variedades ajenas al proyecto.',
+        consejoCampo: 'Verificar peso con báscula digital (media ref. 3.25 kg Macho / 2.40 kg Hembra) y encuadrar exclusivamente en las 5 variedades femeninas.'
       }
     ];
   },
@@ -7659,6 +7335,1415 @@ const app = {
 
   filtrarTarjetasGuiaCampo(texto) {
     this.renderizarGuiaCampo12Regiones(texto);
+  },
+
+  // =========================================================================
+  // 12. FASE 6 (V6): MOTOR DE AUDITORÍA Y CONTROL DE CALIDAD ZOOTÉCNICA EN TIEMPO REAL
+  //     MÓDULO DE RESPALDOS (BACKUPS JSON/ZIP) Y ACTAS DE CIERRE CENSAL ANUAL
+  // =========================================================================
+
+  // -------------------------------------------------------------------------
+  // 12.1 MOTOR DE AUDITORÍA DE INTEGRIDAD DEL LIBRO GENEALÓGICO EN TIEMPO REAL
+  // -------------------------------------------------------------------------
+  esEjemplarAdultoAuditoria(fechaNacimiento) {
+    if (!fechaNacimiento) return true;
+    const nac = new Date(fechaNacimiento);
+    if (isNaN(nac.getTime())) return true;
+    const hoy = new Date();
+    const diffDias = (hoy - nac) / (1000 * 60 * 60 * 24);
+    return diffDias >= 365;
+  },
+
+  buscarAnimalPorRef(ref) {
+    if (!ref) return null;
+    return (this.estado.animales || []).find(
+      x => x.id === ref || x.codigo_identificacion === ref || x.numero_anilla === ref
+    ) || null;
+  },
+
+  // Detección en grafo de bucles genealógicos (ejemplar que figura como su propio ancestro)
+  detectarBuclePedigriAnimal(animalRaiz) {
+    if (!animalRaiz) return null;
+    const idRaiz = animalRaiz.id;
+    const cola = [
+      { actual: this.buscarAnimalPorRef(animalRaiz.id_padre), ruta: [`#${animalRaiz.numero_anilla || animalRaiz.id}`], nivel: 1 },
+      { actual: this.buscarAnimalPorRef(animalRaiz.id_madre), ruta: [`#${animalRaiz.numero_anilla || animalRaiz.id}`], nivel: 1 }
+    ];
+    const visitadosNivel = new Set();
+
+    while (cola.length > 0) {
+      const { actual, ruta, nivel } = cola.shift();
+      if (!actual || nivel > 12) continue;
+
+      const etiquetaActual = `#${actual.numero_anilla || actual.id}`;
+      const nuevaRuta = [...ruta, etiquetaActual];
+
+      if (actual.id === idRaiz) {
+        return nuevaRuta.join(' → ');
+      }
+
+      const clavePaso = `${actual.id}_${nivel}`;
+      if (visitadosNivel.has(clavePaso)) continue;
+      visitadosNivel.add(clavePaso);
+
+      if (actual.id_padre) {
+        const p = this.buscarAnimalPorRef(actual.id_padre);
+        if (p) cola.push({ actual: p, ruta: nuevaRuta, nivel: nivel + 1 });
+      }
+      if (actual.id_madre) {
+        const m = this.buscarAnimalPorRef(actual.id_madre);
+        if (m) cola.push({ actual: m, ruta: nuevaRuta, nivel: nivel + 1 });
+      }
+    }
+    return null;
+  },
+
+  ejecutarAuditoriaIntegridad(mostrarToast = false) {
+    const alertas = [];
+    const animales = this.estado.animales || [];
+    const controles = this.estado.controlesPuesta || [];
+
+    // Mapa para detectar duplicidad de anillas
+    const conteoAnillas = new Map();
+    animales.forEach(a => {
+      const clave = String(a.numero_anilla || '').trim();
+      if (clave) conteoAnillas.set(clave, (conteoAnillas.get(clave) || 0) + 1);
+    });
+
+    // =========================================================================
+    // A. VERIFICACIÓN 1: INCOHERENCIAS GENEALÓGICAS Y CRONOLÓGICAS
+    // =========================================================================
+    animales.forEach(a => {
+      const etiquetaAve = `#${a.numero_anilla || '--'} (${a.nombre || a.codigo_identificacion || a.id})`;
+
+      // 1.1 Detección de bucles de pedigrí (propio ancestro directo o indirecto)
+      if (a.id_padre === a.id || a.id_madre === a.id) {
+        alertas.push({
+          id: `aud-bucle-dir-${a.id}`,
+          categoria: 'GENEALOGIA',
+          severidad: 'CRITICA',
+          animalId: a.id,
+          titulo: `Bucle de Pedigrí Directo en ${etiquetaAve}`,
+          detalle: `El ejemplar ${a.codigo_identificacion} figura registrado como su propio progenitor directo (auto-referencia genealógica inválida).`,
+          accionTipo: 'LIMPIAR_BUCLE_ANIMAL'
+        });
+      } else {
+        const rutaBucle = this.detectarBuclePedigriAnimal(a);
+        if (rutaBucle) {
+          alertas.push({
+            id: `aud-bucle-ciclo-${a.id}`,
+            categoria: 'GENEALOGIA',
+            severidad: 'CRITICA',
+            animalId: a.id,
+            titulo: `Ciclo de Ancestría Detectado en ${etiquetaAve}`,
+            detalle: `El ejemplar aparece como su propio ancestro en la cadena genealógica: ${rutaBucle}.`,
+            accionTipo: 'LIMPIAR_BUCLE_ANIMAL'
+          });
+        }
+      }
+
+      // 1.2 Mismo animal asignado como padre y madre
+      if (a.id_padre && a.id_madre && a.id_padre === a.id_madre) {
+        alertas.push({
+          id: `aud-padres-iguales-${a.id}`,
+          categoria: 'GENEALOGIA',
+          severidad: 'CRITICA',
+          animalId: a.id,
+          titulo: `Progenitores Idénticos en ${etiquetaAve}`,
+          detalle: `El mismo ejemplar (${a.id_padre}) figura simultáneamente como Padre y Madre.`,
+          accionTipo: 'LIMPIAR_BUCLE_ANIMAL'
+        });
+      }
+
+      // 1.3 Progenitores con fecha de nacimiento posterior o igual a la progenie
+      const fechaHijo = a.fecha_nacimiento ? new Date(a.fecha_nacimiento) : null;
+      const padre = this.buscarAnimalPorRef(a.id_padre);
+      const madre = this.buscarAnimalPorRef(a.id_madre);
+
+      if (padre && fechaHijo && padre.fecha_nacimiento) {
+        const fechaPadre = new Date(padre.fecha_nacimiento);
+        if (fechaPadre >= fechaHijo) {
+          alertas.push({
+            id: `aud-cron-padre-${a.id}`,
+            categoria: 'GENEALOGIA',
+            severidad: 'CRITICA',
+            animalId: a.id,
+            titulo: `Progenitor Paterno Posterior a la Progenie en ${etiquetaAve}`,
+            detalle: `El padre #${padre.numero_anilla} (${padre.fecha_nacimiento}) tiene fecha de nacimiento posterior o igual al hijo (${a.fecha_nacimiento}).`,
+            accionTipo: 'CORREGIR_FECHA_PROGENIE'
+          });
+        }
+      }
+
+      if (madre && fechaHijo && madre.fecha_nacimiento) {
+        const fechaMadre = new Date(madre.fecha_nacimiento);
+        if (fechaMadre >= fechaHijo) {
+          alertas.push({
+            id: `aud-cron-madre-${a.id}`,
+            categoria: 'GENEALOGIA',
+            severidad: 'CRITICA',
+            animalId: a.id,
+            titulo: `Progenitor Materno Posterior a la Progenie en ${etiquetaAve}`,
+            detalle: `La madre #${madre.numero_anilla} (${madre.fecha_nacimiento}) tiene fecha de nacimiento posterior o igual a la progenie (${a.fecha_nacimiento}).`,
+            accionTipo: 'CORREGIR_FECHA_PROGENIE'
+          });
+        }
+      }
+
+      // 1.4 Incoherencia de sexo en progenitores
+      if (padre && padre.sexo && padre.sexo !== 'Macho') {
+        alertas.push({
+          id: `aud-sexo-padre-${a.id}`,
+          categoria: 'GENEALOGIA',
+          severidad: 'ALTA',
+          animalId: a.id,
+          titulo: `Incoherencia de Sexo Paterno en ${etiquetaAve}`,
+          detalle: `El progenitor asignado como Padre (#${padre.numero_anilla}) figura con sexo '${padre.sexo}'.`,
+          accionTipo: 'VER_FICHA'
+        });
+      }
+      if (madre && madre.sexo && madre.sexo !== 'Hembra') {
+        alertas.push({
+          id: `aud-sexo-madre-${a.id}`,
+          categoria: 'GENEALOGIA',
+          severidad: 'ALTA',
+          animalId: a.id,
+          titulo: `Incoherencia de Sexo Materno en ${etiquetaAve}`,
+          detalle: `El progenitor asignado como Madre (#${madre.numero_anilla}) figura con sexo '${madre.sexo}'.`,
+          accionTipo: 'VER_FICHA'
+        });
+      }
+
+      // =======================================================================
+      // B. VERIFICACIÓN 2: ALERTAS DE ANILLADO Y PESO (ESTÁNDAR ESGA025)
+      // =======================================================================
+      const esAdulto = this.esEjemplarAdultoAuditoria(a.fecha_nacimiento) || ['RF', 'RD', 'RM'].includes(a.seccion_libro);
+      const peso = Number(a.peso_actual_kg);
+
+      // 2.1 Control de Peso en Ejemplares Adultos (Gallo: 3.0-3.5 kg | Gallina: 2.2-2.6 kg)
+      if (esAdulto) {
+        if (!peso || isNaN(peso)) {
+          alertas.push({
+            id: `aud-sin-peso-${a.id}`,
+            categoria: 'PESO_ANILLA',
+            severidad: 'MEDIA',
+            animalId: a.id,
+            titulo: `Ejemplar Adulto sin Control de Peso (${etiquetaAve})`,
+            detalle: `Falta el registro de peso corporal en vivo exigido por el estándar ESGA025.`,
+            accionTipo: 'NORMALIZAR_PESO_ANILLA'
+          });
+        } else if (a.sexo === 'Macho' && (peso < 3.0 || peso > 3.5)) {
+          const estadoPeso = peso < 3.0 ? `subpeso (${peso.toFixed(3)} kg < 3.000 kg)` : `sobrepeso (${peso.toFixed(3)} kg > 3.500 kg)`;
+          alertas.push({
+            id: `aud-peso-gallo-${a.id}`,
+            categoria: 'PESO_ANILLA',
+            severidad: 'ALTA',
+            animalId: a.id,
+            titulo: `Gallo Adulto Fuera de Rango de Peso ESGA025 (${etiquetaAve})`,
+            detalle: `Presenta ${estadoPeso}. Rango oficial de Gallo adulto ESGA025: 3.000 kg - 3.500 kg.`,
+            accionTipo: 'NORMALIZAR_PESO_ANILLA'
+          });
+        } else if (a.sexo === 'Hembra' && (peso < 2.2 || peso > 2.6)) {
+          const estadoPeso = peso < 2.2 ? `subpeso (${peso.toFixed(3)} kg < 2.200 kg)` : `sobrepeso (${peso.toFixed(3)} kg > 2.600 kg)`;
+          alertas.push({
+            id: `aud-peso-gallina-${a.id}`,
+            categoria: 'PESO_ANILLA',
+            severidad: 'ALTA',
+            animalId: a.id,
+            titulo: `Gallina Adulta Fuera de Rango de Peso ESGA025 (${etiquetaAve})`,
+            detalle: `Presenta ${estadoPeso}. Rango oficial de Gallina adulta ESGA025: 2.200 kg - 2.600 kg.`,
+            accionTipo: 'NORMALIZAR_PESO_ANILLA'
+          });
+        }
+      }
+
+      // 2.2 Control de Calibre de Anilla Oficial (Gallo: 20 mm | Gallina: 18 mm) y Formato de Código
+      const calibreEsperado = a.sexo === 'Macho' ? 20 : 18;
+      const calibreActual = Number(a.calibre_anilla_mm || calibreEsperado);
+      if (calibreActual !== calibreEsperado) {
+        alertas.push({
+          id: `aud-calibre-${a.id}`,
+          categoria: 'PESO_ANILLA',
+          severidad: 'ALTA',
+          animalId: a.id,
+          titulo: `Calibre de Anilla No Reglamentario en ${etiquetaAve}`,
+          detalle: `Anilla de ${calibreActual} mm en ejemplar ${a.sexo}. El estándar oficial ESGA025 exige ${calibreEsperado} mm.`,
+          accionTipo: 'NORMALIZAR_PESO_ANILLA'
+        });
+      }
+
+      const regexCodigoOficial = /^ESGA025-\d{2}-[MH]-\d{4}$/;
+      const codId = String(a.codigo_identificacion || '').trim();
+      const letraSexoEsperada = a.sexo === 'Macho' ? 'M' : 'H';
+      if (!regexCodigoOficial.test(codId) || !codId.includes(`-${letraSexoEsperada}-`)) {
+        alertas.push({
+          id: `aud-anilla-fmt-${a.id}`,
+          categoria: 'PESO_ANILLA',
+          severidad: 'MEDIA',
+          animalId: a.id,
+          titulo: `Anilla / Código No Normalizado en ${etiquetaAve}`,
+          detalle: `El código '${codId || 'Vacío'}' no cumple la nomenclatura oficial ESGA025-AA-${letraSexoEsperada}-NNNN.`,
+          accionTipo: 'NORMALIZAR_PESO_ANILLA'
+        });
+      }
+
+      const numAnilla = String(a.numero_anilla || '').trim();
+      if (numAnilla && (conteoAnillas.get(numAnilla) || 0) > 1) {
+        alertas.push({
+          id: `aud-anilla-dup-${a.id}`,
+          categoria: 'PESO_ANILLA',
+          severidad: 'CRITICA',
+          animalId: a.id,
+          titulo: `Duplicidad de Número de Anilla (#${numAnilla})`,
+          detalle: `Existen múltiples ejemplares registrados con la misma anilla física #${numAnilla}.`,
+          accionTipo: 'VER_FICHA'
+        });
+      }
+    });
+
+    // =========================================================================
+    // C. VERIFICACIÓN 3: INCOHERENCIAS DE PUESTA (HEN-DAY >100% Y PESO 55g-70g)
+    // =========================================================================
+    controles.forEach(c => {
+      const gallina = this.buscarAnimalPorRef(c.animal_id);
+      const etiqGallina = gallina
+        ? `#${gallina.numero_anilla} (${gallina.nombre || gallina.codigo_identificacion})`
+        : `ID ${c.animal_id}`;
+
+      // Calcular días del periodo (por defecto 15 días oficiales)
+      let diasPeriodo = 15;
+      if (c.fecha_inicio && c.fecha_fin) {
+        const d1 = new Date(c.fecha_inicio);
+        const d2 = new Date(c.fecha_fin);
+        const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        if (diff > 0 && diff <= 60) diasPeriodo = diff;
+      }
+
+      const huevos = Number(c.total_huevos_15d || 0);
+      const tasaHenDay = (huevos / 15) * 100;
+      const tasaRealPeriodo = (huevos / diasPeriodo) * 100;
+
+      // 3.1 Tasa de puesta > 100%
+      if (huevos > 15 || tasaHenDay > 100 || tasaRealPeriodo > 100) {
+        alertas.push({
+          id: `aud-puesta-tasa-${c.id}`,
+          categoria: 'PUESTA',
+          severidad: 'CRITICA',
+          animalId: gallina ? gallina.id : null,
+          controlId: c.id,
+          titulo: `Tasa de Puesta Imposible (>100% Hen-Day) en ${etiqGallina}`,
+          detalle: `Control del ${c.fecha_inicio || '--'}: ${huevos} huevos registrados en 15 días (${tasaHenDay.toFixed(1)}% Hen-Day > 100%).`,
+          accionTipo: 'NORMALIZAR_CONTROL_PUESTA'
+        });
+      }
+
+      // 3.2 Registro de puesta asignado a un Macho
+      if (gallina && gallina.sexo === 'Macho') {
+        alertas.push({
+          id: `aud-puesta-sexo-${c.id}`,
+          categoria: 'PUESTA',
+          severidad: 'CRITICA',
+          animalId: gallina.id,
+          controlId: c.id,
+          titulo: `Control de Puesta Asignado a un Gallo (${etiqGallina})`,
+          detalle: `El ejemplar #${gallina.numero_anilla} es Macho y posee un registro de puesta asignado.`,
+          accionTipo: 'ELIMINAR_CONTROL_PUESTA'
+        });
+      }
+
+      // 3.3 Peso de huevo fuera del rango oficial de 55g - 70g
+      const pesoHuevo = Number(c.peso_medio_huevo_g);
+      if (!isNaN(pesoHuevo) && (pesoHuevo < 55.0 || pesoHuevo > 70.0)) {
+        const tipoDesv = pesoHuevo < 55.0
+          ? `inferior al mínimo oficial (${pesoHuevo.toFixed(1)} g < 55.0 g)`
+          : `superior al máximo oficial (${pesoHuevo.toFixed(1)} g > 70.0 g)`;
+        alertas.push({
+          id: `aud-puesta-peso-${c.id}`,
+          categoria: 'PUESTA',
+          severidad: 'MEDIA',
+          animalId: gallina ? gallina.id : null,
+          controlId: c.id,
+          titulo: `Peso de Huevo Fuera de Rango Oficial (55g-70g) en ${etiqGallina}`,
+          detalle: `Control del ${c.fecha_inicio || '--'}: Peso medio de ${pesoHuevo.toFixed(1)} g (${tipoDesv}). No apto para incubación ESGA025.`,
+          accionTipo: 'NORMALIZAR_CONTROL_PUESTA'
+        });
+      }
+    });
+
+    this.estado.auditoria.alertas = alertas;
+    this.estado.auditoria.ultimaEjecucion = new Date().toLocaleTimeString('es-ES');
+    this.renderizarPanelAuditoriaIntegridad();
+
+    if (mostrarToast && typeof this.mostrarNotificacionToast === 'function') {
+      this.mostrarNotificacionToast(
+        `🔍 Auditoría completada: ${alertas.length} alerta(s) detectada(s) en el Libro Genealógico.`,
+        alertas.length === 0 ? 'success' : 'info'
+      );
+    }
+
+    return alertas;
+  },
+
+  renderizarPanelAuditoriaIntegridad() {
+    const alertas = this.estado.auditoria.alertas || [];
+    const catActiva = this.estado.auditoria.categoriaActiva || 'TODAS';
+
+    const countGen = alertas.filter(a => a.categoria === 'GENEALOGIA').length;
+    const countPeso = alertas.filter(a => a.categoria === 'PESO_ANILLA').length;
+    const countPuesta = alertas.filter(a => a.categoria === 'PUESTA').length;
+    const total = alertas.length;
+
+    // Badges superiores y KPIs
+    const idsConteoTotal = ['header-auditoria-count', 'censo-btn-auditoria-badge', 'auditoria-count-todas'];
+    idsConteoTotal.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(total);
+    });
+
+    const badgeAdmin = document.getElementById('admin-auditoria-badge');
+    if (badgeAdmin) {
+      badgeAdmin.textContent = `${total} ${total === 1 ? 'alerta' : 'alertas'}`;
+      badgeAdmin.className = total === 0
+        ? 'px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-slate-950 font-mono'
+        : 'px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 font-mono';
+    }
+
+    const badgeEstado = document.getElementById('auditoria-estado-global-badge');
+    if (badgeEstado) {
+      const críticas = alertas.filter(a => a.severidad === 'CRITICA').length;
+      if (total === 0) {
+        badgeEstado.textContent = '✓ 100% Íntegro · Sin anomalías';
+        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono';
+      } else if (críticas > 0) {
+        badgeEstado.textContent = `⚠️ ${total} Alertas (${críticas} Críticas)`;
+        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-300 border border-rose-700 font-mono';
+      } else {
+        badgeEstado.textContent = `🔔 ${total} Aviso(s) de Estándar`;
+        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700 font-mono';
+      }
+    }
+
+    const elGen = document.getElementById('auditoria-kpi-genealogia');
+    const elPeso = document.getElementById('auditoria-kpi-peso-anilla');
+    const elPuesta = document.getElementById('auditoria-kpi-puesta');
+    if (elGen) elGen.textContent = String(countGen);
+    if (elPeso) elPeso.textContent = String(countPeso);
+    if (elPuesta) elPuesta.textContent = String(countPuesta);
+
+    // Actualizar estado visual de los botones de categoría
+    ['TODAS', 'GENEALOGIA', 'PESO_ANILLA', 'PUESTA'].forEach(cat => {
+      const btn = document.getElementById(`btn-aud-cat-${cat}`);
+      if (btn) {
+        if (cat === catActiva) {
+          btn.className = 'px-2.5 py-1 rounded-lg font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg font-semibold bg-slate-950 text-slate-400 hover:text-white border border-slate-800 transition';
+        }
+      }
+    });
+
+    // Lista de alertas filtradas
+    const contenedor = document.getElementById('auditoria-lista-alertas');
+    if (!contenedor) return;
+
+    const filtradas = catActiva === 'TODAS'
+      ? alertas
+      : alertas.filter(a => a.categoria === catActiva);
+
+    if (filtradas.length === 0) {
+      contenedor.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-950/80 border border-emerald-800/50 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-shield-check text-emerald-400 text-base"></i>
+          <span>No se han detectado incoherencias ni alertas en esta categoría. El Libro Genealógico cumple los parámetros ESGA025.</span>
+        </div>
+      `;
+      return;
+    }
+
+    contenedor.innerHTML = filtradas.map(alerta => {
+      const badgeSev = alerta.severidad === 'CRITICA'
+        ? 'bg-rose-950 text-rose-300 border-rose-700'
+        : (alerta.severidad === 'ALTA' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-sky-950 text-sky-300 border-sky-700');
+
+      const iconoCat = alerta.categoria === 'GENEALOGIA'
+        ? 'fa-sitemap text-purple-400'
+        : (alerta.categoria === 'PESO_ANILLA' ? 'fa-scale-balanced text-amber-400' : 'fa-egg text-sky-400');
+
+      return `
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs transition">
+          <div class="flex items-start gap-2.5">
+            <div class="h-7 w-7 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+              <i class="fa-solid ${iconoCat}"></i>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="font-bold text-white">${this.escaparHtml(alerta.titulo)}</span>
+                <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border ${badgeSev}">${alerta.severidad}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">${this.escaparHtml(alerta.detalle)}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+            ${alerta.animalId ? `
+              <button type="button" onclick="app.verFichaAnimal('${alerta.animalId}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 font-semibold text-[11px] flex items-center gap-1 transition">
+                <i class="fa-solid fa-eye"></i> Ficha
+              </button>
+            ` : ''}
+            <button type="button" onclick="app.corregirAlertaAuditoria('${alerta.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition" title="Corregir automáticamente esta incoherencia en IndexedDB">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Saneamiento Auto
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  filtrarCategoriaAuditoria(categoria) {
+    this.estado.auditoria.categoriaActiva = categoria;
+    this.renderizarPanelAuditoriaIntegridad();
+  },
+
+  togglePanelAuditoriaCenso() {
+    const panel = document.getElementById('panel-auditoria-integridad-censo');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+      this.ejecutarAuditoriaIntegridad(false);
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  },
+
+  irAAuditoriaIntegridad() {
+    this.cambiarTab('censo');
+    const panel = document.getElementById('panel-auditoria-integridad-censo');
+    if (panel) {
+      panel.classList.remove('hidden');
+      this.ejecutarAuditoriaIntegridad(true);
+      setTimeout(() => {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    }
+  },
+
+  // Auditoría exclusivamente sobre datos reales (sin inyección de registros ficticios de demostración)
+  async toggleSimulacionIncoherenciasAuditoria() {
+    this.estado.auditoria.simulacionActiva = false;
+    this.ejecutarAuditoriaIntegridad(true);
+  },
+
+  async corregirAlertaAuditoria(alertaId) {
+    const alerta = (this.estado.auditoria.alertas || []).find(a => a.id === alertaId);
+    if (!alerta) return;
+
+    if (alerta.animalId) {
+      const animal = this.estado.animales.find(a => a.id === alerta.animalId);
+      if (animal) {
+        if (alerta.accionTipo === 'LIMPIAR_BUCLE_ANIMAL') {
+          if (animal.id_padre === animal.id) animal.id_padre = null;
+          if (animal.id_madre === animal.id || animal.id_madre === animal.id_padre) animal.id_madre = null;
+        } else if (alerta.accionTipo === 'CORREGIR_FECHA_PROGENIE') {
+          animal.fecha_nacimiento = '2024-05-01';
+        } else if (alerta.accionTipo === 'NORMALIZAR_PESO_ANILLA') {
+          animal.calibre_anilla_mm = animal.sexo === 'Macho' ? 20.0 : 18.0;
+          if (animal.sexo === 'Macho' && (animal.peso_actual_kg < 3.0 || animal.peso_actual_kg > 3.5 || !animal.peso_actual_kg)) {
+            animal.peso_actual_kg = 3.250;
+          } else if (animal.sexo === 'Hembra' && (animal.peso_actual_kg < 2.2 || animal.peso_actual_kg > 2.6 || !animal.peso_actual_kg)) {
+            animal.peso_actual_kg = 2.400;
+          }
+          const letra = animal.sexo === 'Macho' ? 'M' : 'H';
+          const anio2 = (animal.fecha_nacimiento || '2024').slice(2, 4);
+          const num4 = String(animal.numero_anilla || '0001').padStart(4, '0');
+          animal.codigo_identificacion = `ESGA025-${anio2}-${letra}-${num4}`;
+        }
+        await this.db.put('animales', animal);
+      }
+    }
+
+    if (alerta.controlId) {
+      const ctrl = this.estado.controlesPuesta.find(c => c.id === alerta.controlId);
+      if (ctrl) {
+        if (alerta.accionTipo === 'ELIMINAR_CONTROL_PUESTA') {
+          await this.db.delete('controlesPuesta', ctrl.id);
+          this.estado.controlesPuesta = await this.db.getAll('controlesPuesta');
+        } else if (alerta.accionTipo === 'NORMALIZAR_CONTROL_PUESTA') {
+          if (ctrl.total_huevos_15d > 15) ctrl.total_huevos_15d = 13;
+          if (ctrl.peso_medio_huevo_g < 55) ctrl.peso_medio_huevo_g = 58.0;
+          if (ctrl.peso_medio_huevo_g > 70) ctrl.peso_medio_huevo_g = 64.0;
+          ctrl.conforme_estandar = true;
+          await this.db.put('controlesPuesta', ctrl);
+        }
+      }
+    }
+
+    this.recalcularConsanguinidadCenso();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    this.ejecutarAuditoriaIntegridad(false);
+    if (typeof this.mostrarNotificacionToast === 'function') {
+      this.mostrarNotificacionToast('✅ Incoherencia corregida y normalizada en IndexedDB.', 'success');
+    }
+  },
+
+  exportarInformeAuditoriaJSON() {
+    const alertas = this.ejecutarAuditoriaIntegridad(false);
+    const fechaStr = new Date().toISOString().split('T')[0];
+    const informe = {
+      sistema: 'AlacantinApp v6 - Motor de Auditoría Zootécnica ESGA025',
+      fecha_auditoria: new Date().toISOString(),
+      total_ejemplares_auditados: (this.estado.animales || []).length,
+      total_controles_puesta_auditados: (this.estado.controlesPuesta || []).length,
+      resumen_alertas: {
+        total: alertas.length,
+        incoherencias_genealogicas: alertas.filter(a => a.categoria === 'GENEALOGIA').length,
+        alertas_peso_y_anillado: alertas.filter(a => a.categoria === 'PESO_ANILLA').length,
+        incoherencias_puesta: alertas.filter(a => a.categoria === 'PUESTA').length
+      },
+      hallazgos: alertas
+    };
+    this.descargarArchivoCliente(
+      JSON.stringify(informe, null, 2),
+      `Auditoria_Integridad_ESGA025_${fechaStr}.json`,
+      'application/json;charset=utf-8;'
+    );
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.2 MÓDULO DE RESPALDOS INTEGRALES Y RESTAURACIÓN DE EMERGENCIA (BACKUP & RESTORE)
+  // -------------------------------------------------------------------------
+  abrirModalRespaldos() {
+    this.actualizarEstadisticasModalRespaldos();
+    const resBox = document.getElementById('backup-restore-resultado-box');
+    if (resBox) resBox.classList.add('hidden');
+    document.getElementById('modal-respaldos-backup')?.classList.remove('hidden');
+  },
+
+  cerrarModalRespaldos() {
+    document.getElementById('modal-respaldos-backup')?.classList.add('hidden');
+  },
+
+  actualizarEstadisticasModalRespaldos() {
+    const animales = this.estado.animales || [];
+    const explotaciones = this.estado.explotaciones || [];
+    const inspecciones = this.estado.inspecciones || [];
+    const puesta = this.estado.controlesPuesta || [];
+
+    let totalFotos = 0;
+    animales.forEach(a => {
+      if (a.fotos?.lateral) totalFotos++;
+      if (a.fotos?.cabeza) totalFotos++;
+      if (a.fotos?.tarsos) totalFotos++;
+      const gal = a.fotos?.galeria_opcional || a.multimedia_urls?.galeria_opcional || [];
+      if (Array.isArray(gal)) totalFotos += gal.length;
+    });
+
+    const setTxt = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(val);
+    };
+    setTxt('backup-stat-animales', animales.length);
+    setTxt('backup-stat-explotaciones', explotaciones.length);
+    setTxt('backup-stat-inspecciones', inspecciones.length);
+    setTxt('backup-stat-puesta', puesta.length);
+    setTxt('backup-stat-fotos', totalFotos);
+  },
+
+  async construirPayloadBackupIntegral() {
+    const animales = await this.db.getAll('animales');
+    const explotaciones = await this.db.getAll('explotaciones');
+    const inspecciones = await this.db.getAll('inspecciones');
+    const controlesPuesta = await this.db.getAll('controlesPuesta');
+    const lotes = await this.db.getAll('lotes');
+    const syncQueue = await this.db.getAll('syncQueue');
+
+    return {
+      meta: {
+        aplicacion: 'AlacantinApp v6 - Libro Genealógico Oficial ESGA025',
+        version_esquema: '6.0.0',
+        raza_codigo: 'ESGA025',
+        fecha_exportacion: new Date().toISOString(),
+        aviario_activo_id: localStorage.getItem('alacantina_aviario_activo_id') || null,
+        rol_rbac: localStorage.getItem('alacantina_rol_rbac') || 'inspector',
+        estadisticas: {
+          total_animales: animales.length,
+          total_explotaciones: explotaciones.length,
+          total_inspecciones: inspecciones.length,
+          total_controles_puesta: controlesPuesta.length,
+          total_lotes: lotes.length
+        }
+      },
+      datos: {
+        animales,
+        explotaciones,
+        inspecciones,
+        controlesPuesta,
+        lotes,
+        syncQueue
+      }
+    };
+  },
+
+  async exportarBackupIntegralJSON() {
+    const payload = await this.construirPayloadBackupIntegral();
+    const fechaStr = new Date().toISOString().split('T')[0];
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const nombreArchivo = `AlacantinApp_v6_Backup_Integral_${fechaStr}.json`;
+
+    this.descargarArchivoCliente(jsonStr, nombreArchivo, 'application/json;charset=utf-8;');
+    if (typeof this.mostrarNotificacionToast === 'function') {
+      this.mostrarNotificacionToast(`💾 Backup JSON exportado (${payload.datos.animales.length} ejemplares).`, 'success');
+    }
+  },
+
+  // Generador nativo de archivo .ZIP estándar (PKZIP Store Method 0 con CRC32) 100% en cliente sin librerías externas
+  calcularCRC32Bytes(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) {
+      crc ^= bytes[i];
+      for (let j = 0; j < 8; j++) {
+        crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+      }
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  },
+
+  construirArchivoZipNativo(archivos) {
+    const encoder = new TextEncoder();
+    const entradas = archivos.map(f => {
+      const nombreBytes = encoder.encode(f.nombre);
+      const contenidoBytes = typeof f.contenido === 'string' ? encoder.encode(f.contenido) : f.contenido;
+      const crc = this.calcularCRC32Bytes(contenidoBytes);
+      return { nombreBytes, contenidoBytes, crc };
+    });
+
+    let tamanoTotal = 22; // End of Central Directory
+    entradas.forEach(e => {
+      tamanoTotal += (30 + e.nombreBytes.length + e.contenidoBytes.length) + (46 + e.nombreBytes.length);
+    });
+
+    const buffer = new ArrayBuffer(tamanoTotal);
+    const view = new DataView(buffer);
+    const uint8 = new Uint8Array(buffer);
+    let offset = 0;
+
+    // 1. Local File Headers + Data
+    entradas.forEach(e => {
+      e.localHeaderOffset = offset;
+      view.setUint32(offset, 0x04034b50, true); // Local file header signature
+      view.setUint16(offset + 4, 20, true);     // Version needed
+      view.setUint16(offset + 6, 0x0800, true); // UTF-8 flag
+      view.setUint16(offset + 8, 0, true);      // Store method (0)
+      view.setUint16(offset + 10, 0, true);     // Mod time
+      view.setUint16(offset + 12, 0x5521, true);// Mod date
+      view.setUint32(offset + 14, e.crc, true); // CRC32
+      view.setUint32(offset + 18, e.contenidoBytes.length, true);
+      view.setUint32(offset + 22, e.contenidoBytes.length, true);
+      view.setUint16(offset + 26, e.nombreBytes.length, true);
+      view.setUint16(offset + 28, 0, true);
+      offset += 30;
+      uint8.set(e.nombreBytes, offset);
+      offset += e.nombreBytes.length;
+      uint8.set(e.contenidoBytes, offset);
+      offset += e.contenidoBytes.length;
+    });
+
+    // 2. Central Directory
+    const cdStart = offset;
+    entradas.forEach(e => {
+      view.setUint32(offset, 0x02014b50, true); // Central directory signature
+      view.setUint16(offset + 4, 20, true);
+      view.setUint16(offset + 6, 20, true);
+      view.setUint16(offset + 8, 0x0800, true); // UTF-8
+      view.setUint16(offset + 10, 0, true);     // Store
+      view.setUint16(offset + 12, 0, true);
+      view.setUint16(offset + 14, 0x5521, true);
+      view.setUint32(offset + 16, e.crc, true);
+      view.setUint32(offset + 20, e.contenidoBytes.length, true);
+      view.setUint32(offset + 24, e.contenidoBytes.length, true);
+      view.setUint16(offset + 28, e.nombreBytes.length, true);
+      view.setUint16(offset + 30, 0, true);
+      view.setUint16(offset + 32, 0, true);
+      view.setUint16(offset + 34, 0, true);
+      view.setUint16(offset + 36, 0, true);
+      view.setUint32(offset + 38, 0, true);
+      view.setUint32(offset + 42, e.localHeaderOffset, true);
+      offset += 46;
+      uint8.set(e.nombreBytes, offset);
+      offset += e.nombreBytes.length;
+    });
+
+    const cdSize = offset - cdStart;
+    // 3. End of Central Directory Record
+    view.setUint32(offset, 0x06054b50, true);
+    view.setUint16(offset + 4, 0, true);
+    view.setUint16(offset + 6, 0, true);
+    view.setUint16(offset + 8, entradas.length, true);
+    view.setUint16(offset + 10, entradas.length, true);
+    view.setUint32(offset + 12, cdSize, true);
+    view.setUint32(offset + 16, cdStart, true);
+    view.setUint16(offset + 20, 0, true);
+
+    return uint8;
+  },
+
+  async exportarBackupIntegralZIP() {
+    const payload = await this.construirPayloadBackupIntegral();
+    const fechaStr = new Date().toISOString().split('T')[0];
+    const jsonPrincipal = JSON.stringify(payload, null, 2);
+
+    const manifiestoTxt = [
+      '========================================================================',
+      'ALACANTINAPP V6 - PAQUETE DE RESPALDO INTEGRAL (ESGA025)',
+      '========================================================================',
+      `Fecha de Generación: ${payload.meta.fecha_exportacion}`,
+      `Ejemplares en Censo: ${payload.meta.estadisticas.total_animales}`,
+      `Explotaciones REGA:  ${payload.meta.estadisticas.total_explotaciones}`,
+      `Actas de Inspección: ${payload.meta.estadisticas.total_inspecciones}`,
+      `Controles de Puesta: ${payload.meta.estadisticas.total_controles_puesta}`,
+      '',
+      'INSTRUCCIONES DE RESTAURACIÓN DE EMERGENCIA:',
+      '1. Abre AlacantinApp v6 en tu teléfono móvil, tablet u ordenador.',
+      '2. Entra en "Mi Cuenta / Backup" o "Panel Admin -> Respaldos y Migración".',
+      '3. Sube directamente este archivo .ZIP o el archivo backup_integral_esga025.json incluido.',
+      '========================================================================'
+    ].join('\r\n');
+
+    const zipBytes = this.construirArchivoZipNativo([
+      { nombre: 'backup_integral_esga025.json', contenido: jsonPrincipal },
+      { nombre: 'LEEME_RESTAURACION_ESGA025.txt', contenido: manifiestoTxt }
+    ]);
+
+    const nombreZip = `AlacantinApp_v6_Backup_Integral_${fechaStr}.zip`;
+    this.descargarArchivoCliente(zipBytes, nombreZip, 'application/zip');
+    if (typeof this.mostrarNotificacionToast === 'function') {
+      this.mostrarNotificacionToast(`🗜️ Paquete ZIP de respaldo exportado (${nombreZip}).`, 'success');
+    }
+  },
+
+  extraerJsonDeZipBuffer(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    const uint8 = new Uint8Array(arrayBuffer);
+    const decoder = new TextDecoder('utf-8');
+    let offset = 0;
+
+    while (offset + 30 <= uint8.length) {
+      const sig = view.getUint32(offset, true);
+      if (sig !== 0x04034b50) break;
+
+      const metodo = view.getUint16(offset + 8, true);
+      const compSize = view.getUint32(offset + 18, true);
+      const nombreLen = view.getUint16(offset + 26, true);
+      const extraLen = view.getUint16(offset + 28, true);
+
+      const nombreArchivo = decoder.decode(uint8.subarray(offset + 30, offset + 30 + nombreLen));
+      const dataStart = offset + 30 + nombreLen + extraLen;
+      const dataEnd = dataStart + compSize;
+
+      if (nombreArchivo.endsWith('.json') && metodo === 0 && dataEnd <= uint8.length) {
+        const jsonTexto = decoder.decode(uint8.subarray(dataStart, dataEnd));
+        return JSON.parse(jsonTexto);
+      }
+      offset = dataEnd;
+    }
+    throw new Error('No se encontró un archivo JSON válido sin comprimir dentro del paquete ZIP.');
+  },
+
+  async importarBackupEmergenciaArchivo(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    try {
+      let objetoBackup = null;
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const buffer = await file.arrayBuffer();
+        objetoBackup = this.extraerJsonDeZipBuffer(buffer);
+      } else {
+        const texto = await file.text();
+        objetoBackup = JSON.parse(texto);
+      }
+
+      await this.procesarRestauracionBackup(objetoBackup, file.name);
+    } catch (err) {
+      console.error('[Backup Restore] Error al restaurar:', err);
+      alert(`Error al restaurar el archivo de respaldo: ${err.message}`);
+    } finally {
+      if (event?.target) event.target.value = '';
+    }
+  },
+
+  async procesarRestauracionBackup(objetoBackup, nombreArchivo = 'Backup') {
+    const datos = objetoBackup?.datos || objetoBackup;
+    if (!datos || !Array.isArray(datos.animales)) {
+      throw new Error('El archivo no contiene una estructura válida de censo ESGA025 (falta colección "animales").');
+    }
+
+    const radioModo = document.querySelector('input[name="backup-restore-mode"]:checked');
+    const modoReemplazar = !radioModo || radioModo.value === 'reemplazar';
+
+    if (modoReemplazar) {
+      await this.db.clear('animales');
+      await this.db.clear('explotaciones');
+      await this.db.clear('inspecciones');
+      await this.db.clear('controlesPuesta');
+      await this.db.clear('lotes');
+    }
+
+    if (Array.isArray(datos.explotaciones) && datos.explotaciones.length > 0) {
+      await this.db.putBatch('explotaciones', datos.explotaciones);
+    }
+    if (Array.isArray(datos.animales) && datos.animales.length > 0) {
+      await this.db.putBatch('animales', datos.animales);
+    }
+    if (Array.isArray(datos.inspecciones) && datos.inspecciones.length > 0) {
+      await this.db.putBatch('inspecciones', datos.inspecciones);
+    }
+    if (Array.isArray(datos.controlesPuesta) && datos.controlesPuesta.length > 0) {
+      await this.db.putBatch('controlesPuesta', datos.controlesPuesta);
+    }
+    if (Array.isArray(datos.lotes) && datos.lotes.length > 0) {
+      await this.db.putBatch('lotes', datos.lotes);
+    }
+
+    await this.cargarDatos();
+    this.inicializarAviarioActivo();
+    this.poblarSelectores();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    this.renderizarLotes();
+    this.poblarSelectoresAnaliticaPuesta();
+    this.renderizarAnaliticaPuesta();
+    this.actualizarEstadisticasModalRespaldos();
+    this.ejecutarAuditoriaIntegridad(false);
+
+    const resBox = document.getElementById('backup-restore-resultado-box');
+    if (resBox) {
+      resBox.classList.remove('hidden');
+      resBox.innerHTML = `
+        <div class="font-bold text-emerald-300 flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Restauración de Emergencia Completada con Éxito (${this.escaparHtml(nombreArchivo)})</span>
+        </div>
+        <p class="mt-1 text-[11px] text-slate-200">
+          Se han restaurado en IndexedDB: <strong>${this.estado.animales.length} ejemplares</strong>,
+          <strong>${this.estado.explotaciones.length} explotaciones REGA</strong>,
+          <strong>${this.estado.inspecciones.length} actas de inspección</strong> y
+          <strong>${this.estado.controlesPuesta.length} controles de puesta</strong>.
+        </p>
+      `;
+    }
+
+    if (typeof this.mostrarNotificacionToast === 'function') {
+      this.mostrarNotificacionToast(
+        `✅ Backup restaurado: ${this.estado.animales.length} ejemplares cargados en IndexedDB.`,
+        'success'
+      );
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.3 MÓDULO DE GENERACIÓN DE ACTAS OFICIALES DE CIERRE CENSAL ANUAL (MAPA / CNZ)
+  // -------------------------------------------------------------------------
+  abrirModalActaCierreAnual() {
+    // Poblar selector de explotaciones REGA en el modal
+    const selectExp = document.getElementById('cierre-anual-explotacion');
+    if (selectExp) {
+      const valPrevio = selectExp.value || 'TODAS';
+      selectExp.innerHTML = '<option value="TODAS">Global Libro Genealógico (Todas las Explotaciones REGA)</option>';
+      (this.estado.explotaciones || []).forEach(exp => {
+        const opt = document.createElement('option');
+        opt.value = exp.id;
+        opt.textContent = `${exp.codigo_rega || exp.rega} · ${exp.nombre_criadero || exp.nombre_titular} (${exp.municipio || 'Alicante'})`;
+        selectExp.appendChild(opt);
+      });
+      if (valPrevio) selectExp.value = valPrevio;
+    }
+
+    // Si hay aviario activo, autocompletar criador firmante
+    const inpCriador = document.getElementById('cierre-anual-criador');
+    if (inpCriador && this.estado.aviarioActivo) {
+      const av = this.estado.aviarioActivo;
+      inpCriador.value = `${av.nombre_titular || 'Titular Explotación'} (${av.codigo_rega || av.rega || 'Sin REGA'})`;
+    }
+
+    document.getElementById('modal-acta-cierre-anual')?.classList.remove('hidden');
+
+    setTimeout(() => {
+      this.inicializarCanvasFirmasCierreAnual();
+      if (!this.estado.cierreAnual.firmaCriadorBase64) {
+        this.generarSelloFirmaAutoCierre('criador', false);
+      }
+      if (!this.estado.cierreAnual.firmaSecretarioBase64) {
+        this.generarSelloFirmaAutoCierre('secretario', false);
+      }
+      this.renderizarVistaPreviaActaCierreAnual();
+    }, 60);
+  },
+
+  cerrarModalActaCierreAnual() {
+    document.getElementById('modal-acta-cierre-anual')?.classList.add('hidden');
+  },
+
+  inicializarCanvasFirmasCierreAnual() {
+    const configurarCanvas = (canvasId, tipo) => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || canvas.dataset.initialized === 'true') return;
+      canvas.dataset.initialized = 'true';
+
+      const ctx = canvas.getContext('2d');
+      ctx.strokeStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      let dibujando = false;
+
+      const obtenerPos = (evt) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        return {
+          x: (clientX - rect.left) * scaleX,
+          y: (clientY - rect.top) * scaleY
+        };
+      };
+
+      const iniciar = (evt) => {
+        evt.preventDefault();
+        dibujando = true;
+        const pos = obtenerPos(evt);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      };
+
+      const mover = (evt) => {
+        if (!dibujando) return;
+        evt.preventDefault();
+        const pos = obtenerPos(evt);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      };
+
+      const finalizar = () => {
+        if (!dibujando) return;
+        dibujando = false;
+        const dataUrl = canvas.toDataURL('image/png');
+        if (tipo === 'criador') {
+          this.estado.cierreAnual.firmaCriadorBase64 = dataUrl;
+        } else {
+          this.estado.cierreAnual.firmaSecretarioBase64 = dataUrl;
+        }
+        this.renderizarVistaPreviaActaCierreAnual();
+      };
+
+      canvas.addEventListener('mousedown', iniciar);
+      canvas.addEventListener('mousemove', mover);
+      window.addEventListener('mouseup', finalizar);
+      canvas.addEventListener('touchstart', iniciar, { passive: false });
+      canvas.addEventListener('touchmove', mover, { passive: false });
+      window.addEventListener('touchend', finalizar);
+    };
+
+    configurarCanvas('canvas-firma-cierre-criador', 'criador');
+    configurarCanvas('canvas-firma-cierre-secretario', 'secretario');
+  },
+
+  limpiarCanvasFirmaCierre(tipo) {
+    const canvasId = tipo === 'criador' ? 'canvas-firma-cierre-criador' : 'canvas-firma-cierre-secretario';
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (tipo === 'criador') {
+      this.estado.cierreAnual.firmaCriadorBase64 = null;
+    } else {
+      this.estado.cierreAnual.firmaSecretarioBase64 = null;
+    }
+    this.renderizarVistaPreviaActaCierreAnual();
+  },
+
+  generarSelloFirmaAutoCierre(tipo, reRender = true) {
+    const canvasId = tipo === 'criador' ? 'canvas-firma-cierre-criador' : 'canvas-firma-cierre-secretario';
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Sello oficial y rúbrica estilizada
+    ctx.save();
+    ctx.strokeStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
+    ctx.fillStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
+    ctx.lineWidth = 2;
+
+    // Trazo caligráfico simulado
+    ctx.beginPath();
+    if (tipo === 'criador') {
+      ctx.moveTo(45, 65);
+      ctx.bezierCurveTo(75, 20, 115, 80, 155, 35);
+      ctx.bezierCurveTo(185, 15, 220, 70, 275, 45);
+      ctx.lineTo(315, 52);
+    } else {
+      ctx.moveTo(50, 60);
+      ctx.bezierCurveTo(95, 15, 140, 85, 190, 30);
+      ctx.bezierCurveTo(225, 15, 260, 75, 320, 40);
+      ctx.moveTo(75, 72);
+      ctx.lineTo(295, 68);
+    }
+    ctx.stroke();
+
+    ctx.font = 'bold 10px monospace';
+    const selloTxt = tipo === 'criador'
+      ? 'FIRMADO DIGITALMENTE · TITULAR REGA ESGA025'
+      : 'SELLO OFICIAL CNZ · DIRECCIÓN TÉCNICA ESGA025';
+    ctx.fillText(selloTxt, 45, 88);
+    ctx.restore();
+
+    const dataUrl = canvas.toDataURL('image/png');
+    if (tipo === 'criador') {
+      this.estado.cierreAnual.firmaCriadorBase64 = dataUrl;
+    } else {
+      this.estado.cierreAnual.firmaSecretarioBase64 = dataUrl;
+    }
+    if (reRender) this.renderizarVistaPreviaActaCierreAnual();
+  },
+
+  calcularIndicadoresCierreAnual() {
+    const anio = Number(document.getElementById('cierre-anual-anio')?.value || new Date().getFullYear());
+    const expFiltro = document.getElementById('cierre-anual-explotacion')?.value || 'TODAS';
+
+    const todosAnimales = this.estado.animales || [];
+    const animalesAmbito = expFiltro === 'TODAS'
+      ? todosAnimales
+      : todosAnimales.filter(a => a.explotacion_id === expFiltro);
+
+    const activos = animalesAmbito.filter(a => a.estado !== 'Baja');
+    const bajas = animalesAmbito.filter(a => a.estado === 'Baja');
+
+    // 1. Balance de censo activo por secciones (RF, RA, RN, RD, RM)
+    const secciones = { RF: 0, RA: 0, RN: 0, RD: 0, RM: 0 };
+    activos.forEach(a => {
+      if (secciones[a.seccion_libro] !== undefined) {
+        secciones[a.seccion_libro]++;
+      }
+    });
+
+    // 2. Desglose por sexo y tramo de edad (Adultos >= 12 meses vs Jóvenes < 12 meses)
+    let machosAdultos = 0;
+    let machosJovenes = 0;
+    let hembrasAdultas = 0;
+    let hembrasJovenes = 0;
+
+    activos.forEach(a => {
+      const adulto = this.esEjemplarAdultoAuditoria(a.fecha_nacimiento);
+      if (a.sexo === 'Macho') {
+        if (adulto) machosAdultos++;
+        else machosJovenes++;
+      } else {
+        if (adulto) hembrasAdultas++;
+        else hembrasJovenes++;
+      }
+    });
+
+    // 3. Tamaño Efectivo (Ne) y Coeficiente de Consanguinidad (Fx) promedio
+    const machosReprod = activos.filter(a => a.sexo === 'Macho' && ['RF', 'RD', 'RM'].includes(a.seccion_libro)).length || activos.filter(a => a.sexo === 'Macho').length;
+    const hembrasReprod = activos.filter(a => a.sexo === 'Hembra' && ['RF', 'RD', 'RM'].includes(a.seccion_libro)).length || activos.filter(a => a.sexo === 'Hembra').length;
+
+    const ne = (machosReprod > 0 && hembrasReprod > 0)
+      ? (4 * machosReprod * hembrasReprod) / (machosReprod + hembrasReprod)
+      : 0;
+    const deltaF = ne > 0 ? (1 / (2 * ne)) : 0;
+
+    const sumaFx = activos.reduce((acc, a) => acc + (Number(a.coeficiente_consanguinidad) || 0), 0);
+    const fxPromedio = activos.length > 0 ? (sumaFx / activos.length) : 0;
+
+    // 4. Resumen del Control de Puesta Anual (% Hen-Day medio y % de huevos en rango 55-70 g)
+    const idsAnimalesAmbito = new Set(animalesAmbito.map(a => a.id));
+    const controlesAmbito = (this.estado.controlesPuesta || []).filter(c => idsAnimalesAmbito.has(c.animal_id));
+
+    let sumaHenDay = 0;
+    let sumaPesoHuevo = 0;
+    let totalHuevosRecolectados = 0;
+    let controlesEnRango55_70 = 0;
+    let huevosEnRango55_70 = 0;
+
+    controlesAmbito.forEach(c => {
+      const h = Number(c.total_huevos_15d || 0);
+      const p = Number(c.peso_medio_huevo_g || 0);
+      const hd = (h / 15) * 100;
+      sumaHenDay += hd;
+      sumaPesoHuevo += p;
+      totalHuevosRecolectados += h;
+
+      if (p >= 55.0 && p <= 70.0) {
+        controlesEnRango55_70++;
+        huevosEnRango55_70 += h;
+      }
+    });
+
+    const totalControles = controlesAmbito.length;
+    const henDayMedio = totalControles > 0 ? (sumaHenDay / totalControles) : 0;
+    const pesoMedioHuevo = totalControles > 0 ? (sumaPesoHuevo / totalControles) : 0;
+    const pctHuevosEnRango55_70 = totalHuevosRecolectados > 0
+      ? (huevosEnRango55_70 / totalHuevosRecolectados) * 100
+      : (totalControles > 0 ? (controlesEnRango55_70 / totalControles) * 100 : 0);
+
+    const expObj = expFiltro === 'TODAS'
+      ? null
+      : (this.estado.explotaciones || []).find(e => e.id === expFiltro);
+
+    return {
+      anio,
+      codigoActa: `ACTA-CIERRE-ESGA025-${anio}-${String(activos.length).padStart(3, '0')}`,
+      fechaEmision: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
+      ambitoTexto: expObj
+        ? `${expObj.nombre_criadero || expObj.nombre_titular} (REGA: ${expObj.codigo_rega || expObj.rega} · ${expObj.municipio})`
+        : `Censo Global Consolidado (${(this.estado.explotaciones || []).length} Explotaciones REGA Activas)`,
+      totalActivos: activos.length,
+      totalBajas: bajas.length,
+      secciones,
+      machosAdultos,
+      machosJovenes,
+      hembrasAdultas,
+      hembrasJovenes,
+      totalMachos: machosAdultos + machosJovenes,
+      totalHembras: hembrasAdultas + hembrasJovenes,
+      machosReprod,
+      hembrasReprod,
+      ne,
+      deltaF,
+      fxPromedio,
+      totalControles,
+      totalHuevosRecolectados,
+      henDayMedio,
+      pesoMedioHuevo,
+      pctHuevosEnRango55_70
+    };
+  },
+
+  renderizarVistaPreviaActaCierreAnual() {
+    const cont = document.getElementById('acta-cierre-anual-a4-container');
+    if (!cont) return;
+
+    const ind = this.calcularIndicadoresCierreAnual();
+    const criadorNombre = document.getElementById('cierre-anual-criador')?.value.trim() || (this.estado.aviarioActivo ? `${this.estado.aviarioActivo.nombre_titular} (${this.estado.aviarioActivo.codigo_rega || this.estado.aviarioActivo.rega || 'Sin REGA'})` : 'Titular Explotación REGA (Pendiente de especificar)');
+    const secretarioNombre = document.getElementById('cierre-anual-secretario')?.value.trim() || 'Secretaría Técnica · Libro Genealógico Oficial ESGA025';
+    const firmaCriador = this.estado.cierreAnual.firmaCriadorBase64;
+    const firmaSecretario = this.estado.cierreAnual.firmaSecretarioBase64;
+
+    cont.innerHTML = `
+      <!-- Cabecera Institucional A4 -->
+      <div class="border-b-2 border-slate-900 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <img src="./icons/logo.png" onerror="this.src='./icons/icon-192.png'" class="h-14 w-14 rounded-lg border border-slate-400 object-cover bg-slate-900 p-0.5">
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-widest text-slate-600">
+              Ministerio de Agricultura, Pesca y Alimentación (MAPA) · Comisión Nacional de Zootecnia (CNZ)
+            </div>
+            <h1 class="text-base sm:text-lg font-black text-slate-900 uppercase leading-tight">
+              ACTA OFICIAL DE CIERRE CENSAL ANUAL · EJERCICIO ${ind.anio}
+            </h1>
+            <div class="text-xs font-bold text-amber-700">
+              Libro Genealógico Oficial de la Raza Gallina Alacantina (Código ARCA: ESGA025)
+            </div>
+          </div>
+        </div>
+        <div class="text-left sm:text-right font-mono text-[11px] bg-slate-100 px-3 py-2 rounded border border-slate-300 shrink-0">
+          <div><strong>Nº ACTA:</strong> ${this.escaparHtml(ind.codigoActa)}</div>
+          <div><strong>FECHA:</strong> ${this.escaparHtml(ind.fechaEmision)}</div>
+          <div><strong>NORMATIVA:</strong> RD 45/2019 · Reg. UE 2016/1012</div>
+        </div>
+      </div>
+
+      <!-- Datos de Identificación de la Explotación / Ámbito -->
+      <div class="p-3 rounded-lg bg-slate-50 border border-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        <div>
+          <span class="text-[10px] font-bold uppercase text-slate-500 block">Ámbito Censal / Explotación Ganadera REGA:</span>
+          <strong class="text-slate-900">${this.escaparHtml(ind.ambitoTexto)}</strong>
+        </div>
+        <div>
+          <span class="text-[10px] font-bold uppercase text-slate-500 block">Entidad Gestora Reconocida:</span>
+          <strong class="text-slate-900">Club Gallina Alacantina · Dirección Técnica del Programa de Cría ESGA025</strong>
+        </div>
+      </div>
+
+      <!-- BLOQUE 1: BALANCE DE CENSO ACTIVO POR SECCIONES Y POR SEXO / TRAMO DE EDAD -->
+      <div class="space-y-2">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-amber-600">
+          1. Balance de Censo Activo por Secciones del Libro Genealógico y Estructura Demográfica
+        </h2>
+
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+          <div class="p-2 rounded border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block">Sección RF</span>
+            <span class="text-sm font-black text-purple-800 font-mono">${ind.secciones.RF}</span>
+            <span class="text-[9px] text-slate-500 block">Fundacional</span>
+          </div>
+          <div class="p-2 rounded border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block">Sección RA</span>
+            <span class="text-sm font-black text-orange-700 font-mono">${ind.secciones.RA}</span>
+            <span class="text-[9px] text-slate-500 block">Auxiliar</span>
+          </div>
+          <div class="p-2 rounded border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block">Sección RN</span>
+            <span class="text-sm font-black text-sky-800 font-mono">${ind.secciones.RN}</span>
+            <span class="text-[9px] text-slate-500 block">Nacimientos</span>
+          </div>
+          <div class="p-2 rounded border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block">Sección RD</span>
+            <span class="text-sm font-black text-emerald-800 font-mono">${ind.secciones.RD}</span>
+            <span class="text-[9px] text-slate-500 block">Definitivo</span>
+          </div>
+          <div class="p-2 rounded border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block">Sección RM</span>
+            <span class="text-sm font-black text-amber-700 font-mono">${ind.secciones.RM}</span>
+            <span class="text-[9px] text-slate-500 block">Méritos</span>
+          </div>
+          <div class="p-2 rounded border-2 border-slate-800 bg-slate-100">
+            <span class="text-[10px] font-black text-slate-700 block">TOTAL ACTIVO</span>
+            <span class="text-sm font-black text-slate-950 font-mono">${ind.totalActivos}</span>
+            <span class="text-[9px] text-slate-600 block">Bajas: ${ind.totalBajas}</span>
+          </div>
+        </div>
+
+        <!-- Tabla por Sexo y Tramo de Edad -->
+        <table class="w-full text-left border-collapse border border-slate-300 text-[11px]">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b border-slate-300">
+              <th class="py-1.5 px-2.5 border-r border-slate-300">Categoría por Sexo y Calibre</th>
+              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Adultos (&ge; 12 meses)</th>
+              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Jóvenes / Recría (&lt; 12 meses)</th>
+              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Reproductores Aptos (RF/RD/RM)</th>
+              <th class="py-1.5 px-2.5 text-right font-bold">Total Activos</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-300 font-mono">
+            <tr>
+              <td class="py-1.5 px-2.5 font-sans font-bold text-slate-800 border-r border-slate-300">♂ Machos / Gallos (Anilla 20 mm)</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosAdultos}</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosJovenes}</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosReprod}</td>
+              <td class="py-1.5 px-2.5 text-right font-bold">${ind.totalMachos}</td>
+            </tr>
+            <tr>
+              <td class="py-1.5 px-2.5 font-sans font-bold text-slate-800 border-r border-slate-300">♀ Hembras / Gallinas (Anilla 18 mm)</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasAdultas}</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasJovenes}</td>
+              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasReprod}</td>
+              <td class="py-1.5 px-2.5 text-right font-bold">${ind.totalHembras}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- BLOQUE 2: PARÁMETROS GENÉTICOS (TAMAÑO EFECTIVO Ne Y CONSANGUINIDAD Fx) -->
+      <div class="space-y-2">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-purple-700">
+          2. Indicadores de Biodiversidad Genética: Tamaño Efectivo (Ne) y Consanguinidad (Fx)
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
+            <span class="text-[10px] font-bold uppercase text-slate-500 block">Tamaño Efectivo Poblacional (Ne Wright)</span>
+            <div class="text-base font-black text-slate-900 font-mono mt-0.5">Ne = ${ind.ne.toFixed(2)}</div>
+            <span class="text-[10px] text-slate-600">Fórmula: 4·Nm·Nf / (Nm + Nf) con Nm=${ind.machosReprod}, Nf=${ind.hembrasReprod}</span>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
+            <span class="text-[10px] font-bold uppercase text-slate-500 block">Consanguinidad Media de Explotación (Fx)</span>
+            <div class="text-base font-black text-purple-900 font-mono mt-0.5">${(ind.fxPromedio * 100).toFixed(2)}% (Fx = ${ind.fxPromedio.toFixed(5)})</div>
+            <span class="text-[10px] text-slate-600">Incremento generacional estimado ΔF = ${(ind.deltaF * 100).toFixed(2)}%</span>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
+            <span class="text-[10px] font-bold uppercase text-slate-500 block">Esquema de Conservación Aplicado</span>
+            <div class="text-xs font-black text-emerald-800 mt-1">Rotación Circular de 5 Familias (Regla de Gobe)</div>
+            <span class="text-[10px] text-slate-600">Control genealógico ascendente a 5 generaciones</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOQUE 3: RESUMEN DEL CONTROL DE PUESTA ANUAL -->
+      <div class="space-y-2">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-emerald-700">
+          3. Resumen Consolidado del Control Oficial de Puesta Anual (Estándar ESGA025: 55 g - 70 g)
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block uppercase">Controles / Huevos</span>
+            <span class="text-sm font-black text-slate-900 font-mono">${ind.totalControles} pruebas (${ind.totalHuevosRecolectados} uds)</span>
+          </div>
+          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block uppercase">% Hen-Day Medio Anual</span>
+            <span class="text-sm font-black text-emerald-800 font-mono">${ind.henDayMedio.toFixed(1)}%</span>
+          </div>
+          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
+            <span class="text-[10px] font-bold text-slate-500 block uppercase">Peso Medio de Huevo</span>
+            <span class="text-sm font-black text-slate-900 font-mono">${ind.pesoMedioHuevo.toFixed(1)} g</span>
+          </div>
+          <div class="p-2.5 rounded-lg border-2 border-emerald-700 bg-emerald-50">
+            <span class="text-[10px] font-black text-emerald-900 block uppercase">% Huevos en Rango 55-70 g</span>
+            <span class="text-sm font-black text-emerald-900 font-mono">${ind.pctHuevosEnRango55_70.toFixed(1)}% Aptos</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DECLARACIÓN Y DOBLE FIRMA DIGITAL OFICIAL -->
+      <div class="pt-3 border-t-2 border-slate-800 space-y-3">
+        <p class="text-[10px] text-slate-700 leading-relaxed text-justify">
+          <strong>DECLARACIÓN RESPONSABLE PARA LA MEMORIA ANUAL ANTE EL MAPA / CNZ:</strong>
+          Los abajo firmantes certifican la veracidad de los registros genealógicos, censales, zoométricos y productivos contenidos en la presente Acta Anual del Libro Genealógico de la raza autóctona <strong>Gallina Alacantina (ESGA025)</strong>, emitida de conformidad con el Real Decreto 45/2019 y el Reglamento (UE) 2016/1012 para su presentación ante la Autoridad Competente.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <div class="border border-slate-400 rounded-lg p-3 text-center bg-slate-50 space-y-1">
+            <div class="text-[10px] font-black uppercase text-slate-700">Firma del Criador / Titular de Explotación REGA</div>
+            <div class="h-20 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden">
+              ${firmaCriador ? `<img src="${firmaCriador}" class="max-h-16 object-contain" alt="Firma Criador">` : `<span class="text-[10px] text-slate-400 italic">Pendiente de rúbrica</span>`}
+            </div>
+            <div class="text-[11px] font-bold text-slate-900">${this.escaparHtml(criadorNombre)}</div>
+          </div>
+
+          <div class="border border-slate-400 rounded-lg p-3 text-center bg-slate-50 space-y-1">
+            <div class="text-[10px] font-black uppercase text-slate-700">VºBº y Firma del Secretario Técnico del Club ESGA025</div>
+            <div class="h-20 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden">
+              ${firmaSecretario ? `<img src="${firmaSecretario}" class="max-h-16 object-contain" alt="Firma Secretario Técnico">` : `<span class="text-[10px] text-slate-400 italic">Pendiente de rúbrica</span>`}
+            </div>
+            <div class="text-[11px] font-bold text-slate-900">${this.escaparHtml(secretarioNombre)}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  exportarActaCierreAnualPDF() {
+    const contenedor = document.getElementById('acta-cierre-anual-a4-container');
+    if (!contenedor) return;
+
+    const ind = this.calcularIndicadoresCierreAnual();
+    const nombreArchivo = `Acta_Cierre_Censal_Anual_ESGA025_${ind.anio}.pdf`;
+
+    if (typeof html2pdf !== 'undefined') {
+      if (typeof this.mostrarNotificacionToast === 'function') {
+        this.mostrarNotificacionToast(`⏳ Generando PDF A4 del Acta de Cierre Censal (${nombreArchivo})...`, 'info');
+      }
+      html2pdf()
+        .set({
+          margin: 8,
+          filename: nombreArchivo,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        })
+        .from(contenedor)
+        .save()
+        .then(() => {
+          if (typeof this.mostrarNotificacionToast === 'function') {
+            this.mostrarNotificacionToast(`✅ Acta Anual descargada: ${nombreArchivo}`, 'success');
+          }
+        })
+        .catch(() => {
+          window.print();
+        });
+    } else {
+      window.print();
+    }
   }
 };
 

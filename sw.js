@@ -1,10 +1,10 @@
 // ============================================================================
-// ALACANTINAPP V5 - SERVICE WORKER (OFFLINE-FIRST)
+// ALACANTINAPP V6 - SERVICE WORKER (OFFLINE-FIRST)
 // Club Gallina Alacantina (ESGA025)
 // ============================================================================
 
-const CACHE_NAME = 'alacantinapp-v5-static-v1';
-const DYNAMIC_CACHE = 'alacantinapp-v5-dynamic-v1';
+const CACHE_NAME = 'alacantinapp-v6-static-v1';
+const DYNAMIC_CACHE = 'alacantinapp-v6-dynamic-v1';
 
 // Recursos estáticos nucleares que se precachean
 const STATIC_ASSETS = [

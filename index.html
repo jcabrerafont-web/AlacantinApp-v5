@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AlacantinApp v5 - Libro Genealógico ESGA025</title>
+  <title>AlacantinApp v6 - Libro Genealógico ESGA025</title>
   
   <!-- Manifest PWA y Favicon -->
   <link rel="manifest" href="./manifest.json">
@@ -59,7 +59,7 @@
         <img src="./icons/logo.png" onerror="this.src='./icons/icon-192.png'" alt="Club Gallina Alacantina" class="h-11 w-11 rounded-lg border border-amber-500/40 p-0.5 object-cover bg-slate-950 shadow-md">
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-base sm:text-lg font-bold text-white tracking-tight">AlacantinApp <span class="text-amber-400 font-extrabold">v5</span></h1>
+            <h1 class="text-base sm:text-lg font-bold text-white tracking-tight">AlacantinApp <span class="text-amber-400 font-extrabold">v6</span></h1>
             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
               ESGA025
             </span>
@@ -82,8 +82,8 @@
               <span id="badge-aviario-nombre" class="font-bold text-xs text-white truncate">Aviario Activo</span>
               <span id="badge-aviario-estado" class="text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden md:inline">Activo</span>
             </div>
-            <div id="badge-aviario-subtexto" class="text-[10px] text-amber-300 font-mono truncate">
-              REGA: ES030140000001
+            <div id="badge-aviario-subtexto" class="text-[10px] text-slate-400 font-mono truncate">
+              Sin REGA · Configurar Aviario
             </div>
           </div>
           <i class="fa-solid fa-pen text-[10px] text-slate-400 ml-auto hidden sm:inline group-hover:text-amber-400 transition-colors"></i>
@@ -112,10 +112,23 @@
           <span id="sync-pending-count" class="hidden ml-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-bold text-[10px]">0</span>
         </button>
 
-        <!-- Botón Configuración de Supabase -->
-        <button onclick="app.abrirModalConfig()" title="Configuración de Supabase y Base de Datos" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs flex items-center gap-1 transition">
+        <!-- Botón Auditoría Zootécnica en Tiempo Real (Fase 6) -->
+        <button onclick="app.irAAuditoriaIntegridad()" title="🔍 Auditoría de Integridad del Libro Genealógico" class="relative px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-emerald-500/40 text-xs flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-magnifying-glass-chart text-emerald-400"></i>
+          <span class="hidden lg:inline">Auditoría</span>
+          <span id="header-auditoria-count" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-extrabold text-[10px]">0</span>
+        </button>
+
+        <!-- Botón Respaldos y Migración Backup/Restore (Fase 6) -->
+        <button onclick="app.abrirModalRespaldos()" title="💾 Respaldos y Migración de Datos Local/Nube (Mi Cuenta)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-sky-500/40 text-xs flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-floppy-disk text-sky-400"></i>
+          <span class="hidden lg:inline">Backup</span>
+        </button>
+
+        <!-- Botón Configuración de Supabase / Panel Admin -->
+        <button onclick="app.abrirModalConfig()" title="Panel de Administración y Configuración de Base de Datos" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs flex items-center gap-1 transition">
           <i class="fa-solid fa-sliders text-amber-400"></i>
-          <span class="hidden md:inline">Config</span>
+          <span class="hidden md:inline">Admin / Config</span>
         </button>
       </div>
     </div>
@@ -202,9 +215,9 @@
             </div>
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="font-bold text-white text-sm truncate" id="reg-box-aviario-nombre">Aviario Activo</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono" id="reg-box-aviario-rega">REGA: ES030140000001</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-950 text-sky-400 border border-sky-800" id="reg-box-aviario-socio">Socio: NS-000</span>
+                <span class="font-bold text-white text-sm truncate" id="reg-box-aviario-nombre">Sin Aviario Configurado</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono" id="reg-box-aviario-rega">REGA: Sin configurar</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-950 text-sky-400 border border-sky-800" id="reg-box-aviario-socio">Socio: --</span>
               </div>
               <p class="text-slate-400 text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span id="reg-box-aviario-titular"><i class="fa-solid fa-user text-slate-500 mr-1"></i>Titular</span>
@@ -301,7 +314,7 @@
             <!-- Nombre o Alias -->
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-1.5">Nombre / Alias del Ejemplar</label>
-              <input type="text" id="alta-nombre" placeholder="Ej: Lucero de Crevillent" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+              <input type="text" id="alta-nombre" placeholder="Opcional (ej. código o identificación interna)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
             </div>
 
             <!-- Fecha de Nacimiento -->
@@ -312,17 +325,15 @@
               <input type="date" id="alta-fecha-nac" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none" onchange="app.autogenerarCodigoOficial()">
             </div>
 
-            <!-- Variedad Oficial de Plumaje -->
+            <!-- Variedad Oficial de Plumaje (Nomenclatura Unificada en Femenino - FESACOCUR 2025) -->
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-1.5">Variedad de Plumaje</label>
               <select id="alta-variedad" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                <option value="Moteada / Exchequer">Moteada / Exchequer (Patrón Tradicional)</option>
-                <option value="Aperdigada / Silvestre">Aperdigada / Silvestre</option>
-                <option value="Blanca">Blanca</option>
-                <option value="Negra">Negra</option>
-                <option value="Ceniza / Azul">Ceniza / Azul</option>
-                <option value="Cuclillo / Barrada">Cuclillo / Barrada</option>
-                <option value="Trigueña">Trigueña</option>
+                <option value="Negra Moteada (Oficial)">1. Negra Moteada (Oficial)</option>
+                <option value="Pinta o Exchequer (Oficial)">2. Pinta o Exchequer (Oficial)</option>
+                <option value="Blanca (Oficial)">3. Blanca (Oficial)</option>
+                <option value="Milflores (En proceso de reconocimiento)">4. Milflores (En proceso de reconocimiento)</option>
+                <option value="Armiñada en negro (En proceso de reconocimiento)">5. Armiñada en negro (En proceso de reconocimiento)</option>
               </select>
             </div>
 
@@ -382,14 +393,14 @@
               </select>
             </div>
 
-            <!-- Peso Vivo (kg) con Alerta de Rango Racial -->
+            <!-- Peso Vivo (kg) con Alerta de Rango Racial (Media Oficial: Gallo 3.25 kg | Gallina 2.40 kg) -->
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-1.5">
                 Peso Vivo Actual (kg) <span class="text-red-400">*</span>
               </label>
-              <input type="number" id="alta-peso" step="0.05" min="0.5" max="5.0" placeholder="Ej: 3.250" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none" oninput="app.validarPesoRacial()">
+              <input type="number" id="alta-peso" step="0.01" min="0.5" max="5.0" value="3.25" placeholder="Ej: 3.25 kg (Gallo) / 2.40 kg (Gallina)" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none" oninput="app.validarPesoRacial()">
               <div id="alta-peso-feedback" class="text-[11px] text-slate-400 mt-1">
-                Rango estándar reproductores: Gallo 3.000 - 3.500 kg | Gallina 2.200 - 2.600 kg
+                Rango oficial ESGA025: Gallo 3.00 - 3.50 kg (Media: 3.25 kg) | Gallina 2.20 - 2.60 kg (Media: 2.40 kg)
               </div>
             </div>
 
@@ -715,10 +726,14 @@
               <option value="Familia E">Familia E</option>
             </select>
 
-            <!-- Filtro Variedad -->
+            <!-- Filtro Variedad (Nomenclatura Oficial en Femenino FESACOCUR 2025) -->
             <select id="filtro-variedad" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none" onchange="app.filtrarCensoEjemplares()">
               <option value="TODAS">Variedad: Todas</option>
-              <option value="Moteada / Exchequer">Moteada / Exchequer</option>
+              <option value="Negra Moteada (Oficial)">1. Negra Moteada (Oficial)</option>
+              <option value="Pinta o Exchequer (Oficial)">2. Pinta o Exchequer (Oficial)</option>
+              <option value="Blanca (Oficial)">3. Blanca (Oficial)</option>
+              <option value="Milflores (En proceso de reconocimiento)">4. Milflores (En proceso de reconocimiento)</option>
+              <option value="Armiñada en negro (En proceso de reconocimiento)">5. Armiñada en negro (En proceso de reconocimiento)</option>
             </select>
 
             <!-- Filtro REGA -->
@@ -733,7 +748,17 @@
               <option value="JOVEN">Jóvenes (&lt; 1 año)</option>
             </select>
 
-            <!-- Menú Desplegable: Exportaciones Oficiales Zootécnicas (MAPA / ARCA / DAD-IS / Pedigrí) -->
+            <!-- Botón Directo: 🔍 Auditoría de Integridad del Libro Genealógico (FASE 6) -->
+            <button type="button"
+                    onclick="app.togglePanelAuditoriaCenso()"
+                    id="btn-toggle-auditoria-censo"
+                    class="px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                    title="Abrir Motor de Auditoría y Control de Calidad Zootécnica en Tiempo Real">
+              <span>🔍 Auditoría de Integridad del Libro Genealógico</span>
+              <span id="censo-btn-auditoria-badge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">0</span>
+            </button>
+
+            <!-- Menú Desplegable: Exportaciones Oficiales Zootécnicas (MAPA / ARCA / DAD-IS / Pedigrí / Acta Cierre Anual) -->
             <div class="relative inline-block text-left" id="dropdown-exportaciones-oficiales">
               <button type="button" 
                       onclick="app.toggleDropdownExportaciones()" 
@@ -741,7 +766,7 @@
                       class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-600/30 to-amber-500/20 hover:from-amber-600/40 hover:to-amber-500/30 border border-amber-500/50 text-amber-300 hover:text-white text-xs font-bold flex items-center gap-2 shadow-sm transition"
                       aria-haspopup="true"
                       aria-expanded="false"
-                      title="Exportaciones Oficiales Zootécnicas (RD 45/2019, Reg. UE 2016/1012, FAO DAD-IS)">
+                      title="Exportaciones Oficiales Zootécnicas (RD 45/2019, Reg. UE 2016/1012, FAO DAD-IS, Acta Cierre Anual)">
                 <i class="fa-solid fa-file-export text-amber-400"></i>
                 <span>📤 Exportaciones Oficiales Zootécnicas</span>
                 <i class="fa-solid fa-chevron-down text-[10px] transition-transform duration-200" id="icon-chevron-exportaciones"></i>
@@ -772,6 +797,21 @@
 
                 <!-- Opciones de Exportación Oficiales -->
                 <div class="space-y-1.5">
+                  <!-- FASE 6: 📄 Generar Acta Digital de Cierre Censal Anual (MAPA / CNZ) -->
+                  <button type="button" 
+                          onclick="app.abrirModalActaCierreAnual(); app.cerrarDropdownExportaciones();" 
+                          class="w-full text-left p-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-emerald-500/15 to-slate-800/80 hover:from-amber-500/30 hover:to-emerald-500/25 border border-amber-400/60 transition group flex flex-col gap-0.5 shadow-md">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-extrabold text-amber-300 group-hover:text-white flex items-center gap-1.5">
+                        <span>📄 Generar Acta Digital de Cierre Censal Anual</span>
+                      </span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">PDF A4 · MAPA/CNZ</span>
+                    </div>
+                    <p class="text-[11px] text-slate-300 leading-snug">
+                      Memoria anual consolidada (Secciones RF-RM, Ne, Fx medio, % Hen-Day y huevos 55-70g) lista para firma digital del Criador y Secretario Técnico.
+                    </p>
+                  </button>
+
                   <!-- 1. ARCA / e-Zootecnia (CSV) -->
                   <button type="button" 
                           onclick="app.exportarFormatoARCA()" 
@@ -857,6 +897,124 @@
             <div id="contenedor-chips-etiquetas" class="flex flex-wrap items-center gap-1.5">
               <!-- Se generarán dinámicamente -->
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- FASE 6: MOTOR DE AUDITORÍA Y CONTROL DE CALIDAD ZOOTÉCNICA EN TIEMPO REAL -->
+      <!-- Herramienta: "🔍 Auditoría de Integridad del Libro Genealógico"        -->
+      <!-- ===================================================================== -->
+      <div id="panel-auditoria-integridad-censo" class="bg-slate-900 border-2 border-emerald-500/40 rounded-xl p-4 sm:p-5 shadow-2xl space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-lg shrink-0">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-sm sm:text-base font-extrabold text-white">
+                  🔍 Auditoría de Integridad del Libro Genealógico (Tiempo Real)
+                </h3>
+                <span id="auditoria-estado-global-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono">
+                  En supervisión activa
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Control automático de coherencia genealógica (bucles/fechas), peso adulto y anillado ESGA025 (Gallo 3.0-3.5 kg / Gallina 2.2-2.6 kg) y control de puesta (&le;100% Hen-Day, huevo 55-70 g).
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    onclick="app.ejecutarAuditoriaIntegridad(true)"
+                    class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 transition shadow">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Verificar Ahora</span>
+            </button>
+            <button type="button"
+                    onclick="app.abrirModalRespaldos()"
+                    class="px-3 py-1.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-500/40 text-sky-300 text-xs font-bold flex items-center gap-1.5 transition">
+              <span>💾 Respaldos / Backup</span>
+            </button>
+            <button type="button"
+                    onclick="app.abrirModalActaCierreAnual()"
+                    class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition">
+              <span>📄 Acta Cierre Anual</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Resumen de los 3 Motores de Verificación Automática -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <!-- Motor 1: Incoherencias Genealógicas -->
+          <div onclick="app.filtrarCategoriaAuditoria('GENEALOGIA')" class="cursor-pointer p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 hover:border-purple-500/50 transition flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-purple-300">
+                <i class="fa-solid fa-sitemap text-purple-400"></i>
+                <span>1. Incoherencias Genealógicas</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-snug">
+                Detección de bucles de pedigrí (propio ancestro) y progenitores con fecha de nacimiento posterior a la progenie.
+              </p>
+            </div>
+            <span id="auditoria-kpi-genealogia" class="px-2.5 py-1 rounded-lg bg-purple-950 text-purple-300 border border-purple-800 font-mono text-sm font-black shrink-0">0</span>
+          </div>
+
+          <!-- Motor 2: Alertas de Anillado y Peso ESGA025 -->
+          <div onclick="app.filtrarCategoriaAuditoria('PESO_ANILLA')" class="cursor-pointer p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 hover:border-amber-500/50 transition flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                <i class="fa-solid fa-scale-balanced text-amber-400"></i>
+                <span>2. Alertas de Anillado y Peso</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-snug">
+                Adultos fuera del estándar ESGA025 (Gallo 3.0-3.5 kg / Gallina 2.2-2.6 kg) o anillas y calibres (20/18mm) no normalizados.
+              </p>
+            </div>
+            <span id="auditoria-kpi-peso-anilla" class="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-300 border border-amber-800 font-mono text-sm font-black shrink-0">0</span>
+          </div>
+
+          <!-- Motor 3: Incoherencias de Puesta -->
+          <div onclick="app.filtrarCategoriaAuditoria('PUESTA')" class="cursor-pointer p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 hover:border-sky-500/50 transition flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                <i class="fa-solid fa-egg text-sky-400"></i>
+                <span>3. Incoherencias de Puesta</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-snug">
+                Detección de gallinas con tasa de puesta &gt;100% Hen-Day (&gt;15 huevos/15d) o peso de huevo fuera de 55g - 70g.
+              </p>
+            </div>
+            <span id="auditoria-kpi-puesta" class="px-2.5 py-1 rounded-lg bg-sky-950 text-sky-300 border border-sky-800 font-mono text-sm font-black shrink-0">0</span>
+          </div>
+        </div>
+
+        <!-- Barra de Filtro de Alertas y Lista de Hallazgos en Tiempo Real -->
+        <div class="space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" onclick="app.filtrarCategoriaAuditoria('TODAS')" id="btn-aud-cat-TODAS" class="px-2.5 py-1 rounded-lg font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition">
+                Todas las Alertas (<span id="auditoria-count-todas">0</span>)
+              </button>
+              <button type="button" onclick="app.filtrarCategoriaAuditoria('GENEALOGIA')" id="btn-aud-cat-GENEALOGIA" class="px-2.5 py-1 rounded-lg font-semibold bg-slate-950 text-slate-400 hover:text-white border border-slate-800 transition">
+                Genealógicas
+              </button>
+              <button type="button" onclick="app.filtrarCategoriaAuditoria('PESO_ANILLA')" id="btn-aud-cat-PESO_ANILLA" class="px-2.5 py-1 rounded-lg font-semibold bg-slate-950 text-slate-400 hover:text-white border border-slate-800 transition">
+                Peso y Anillado
+              </button>
+              <button type="button" onclick="app.filtrarCategoriaAuditoria('PUESTA')" id="btn-aud-cat-PUESTA" class="px-2.5 py-1 rounded-lg font-semibold bg-slate-950 text-slate-400 hover:text-white border border-slate-800 transition">
+                Control de Puesta
+              </button>
+            </div>
+            <button type="button" onclick="app.exportarInformeAuditoriaJSON()" class="text-[11px] text-slate-400 hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
+              <i class="fa-solid fa-file-shield"></i> Descargar Informe de Auditoría (JSON)
+            </button>
+          </div>
+
+          <div id="auditoria-lista-alertas" class="max-h-64 overflow-y-auto space-y-2 pr-1">
+            <!-- Se renderiza dinámicamente en app.js -->
           </div>
         </div>
       </div>
@@ -947,7 +1105,7 @@
                 <span id="insp-badge-anilla" class="text-sm font-bold text-white font-mono">--</span>
                 <span id="insp-badge-seccion" class="px-2 py-0.5 rounded text-[10px] font-bold">--</span>
               </div>
-              <p id="insp-badge-sub" class="text-xs text-slate-400">Gallo / Moteada / Peso: 3.25 kg</p>
+              <p id="insp-badge-sub" class="text-xs text-slate-400">Gallo · Negra Moteada (Oficial) · Peso: 3.25 kg</p>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -958,46 +1116,43 @@
           </div>
         </div>
 
-        <!-- Checklist de Defectos Descalificables (CNZ 2025) -->
+        <!-- Checklist de Defectos Descalificables (Estándar FESACOCUR / CNZ 2025) -->
         <div class="mt-6 p-4 rounded-xl bg-red-950/20 border border-red-900/50 space-y-3">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
               <i class="fa-solid fa-ban"></i>
-              Checklist Oficial de Defectos Descalificables (Eliminación Inmediata)
+              Checklist Oficial de los 5 Defectos Descalificables de la Gallina Alacantina (Estándar 2025)
             </h3>
             <span id="alerta-descalificado" class="hidden px-2.5 py-0.5 rounded bg-red-600 text-white font-bold text-xs">
               EJEMPLAR DESCALIFICADO
             </span>
           </div>
           <p class="text-[11px] text-slate-400">
-            Si se marca cualquiera de estos defectos reglamentarios, el ejemplar queda calificado automáticamente como <strong>NO APTO</strong>.
+            Si se marca cualquiera de estos 5 defectos graves excluyentes del Estándar 2025, el ejemplar queda calificado automáticamente como <strong>NO APTO</strong>.
           </p>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2">
             <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
               <input type="checkbox" id="chk-def-orejilla" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Orejilla roja o amarillenta (debe ser blanca)</span>
+              <span>1. Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).</span>
             </label>
             <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
               <input type="checkbox" id="chk-def-pecho" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Pecho prominente/abombado (debe ser plano)</span>
+              <span>2. Pecho prominente o abombado (debe ser recto y plano).</span>
             </label>
             <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
               <input type="checkbox" id="chk-def-cola" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Cola baja &lt; 70º sobre horizontal</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
-              <input type="checkbox" id="chk-def-tarsos" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Tarsos amarillos o emplumados</span>
+              <span>3. Cola baja (&lt;70º sobre la horizontal) o larga.</span>
             </label>
             <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
               <input type="checkbox" id="chk-def-flameado" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Flameado en esclavina (Moteada/Exchequer)</span>
+              <span>4. Flameado de esclavina en variedades Moteada y Exchequer.</span>
             </label>
-            <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition">
-              <input type="checkbox" id="chk-def-otro" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
-              <span>Otro defecto grave (Cresta torcida, prognatismo)</span>
+            <label class="flex items-center gap-2 p-2 rounded bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-red-500/50 transition sm:col-span-2">
+              <input type="checkbox" id="chk-def-tarsos" onchange="app.recalcularBaremo()" class="rounded bg-slate-900 border-slate-700 text-red-600 focus:ring-0">
+              <span>5. Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).</span>
             </label>
+            <input type="checkbox" id="chk-def-otro" onchange="app.recalcularBaremo()" class="hidden">
           </div>
         </div>
 
@@ -1525,15 +1680,15 @@
                     <img id="rfid-detectado-foto" src="./icons/logo.png" class="h-14 w-14 rounded-xl object-cover border-2 border-emerald-500/80 shadow-md bg-slate-950" alt="Gallina Detectada">
                     <div>
                       <div class="flex items-center gap-2">
-                        <span id="rfid-detectado-anilla" class="text-base font-bold text-white font-mono">#0002</span>
-                        <span id="rfid-detectado-codigo" class="text-xs font-mono text-amber-400">ESGA025-22-H-0002</span>
+                        <span id="rfid-detectado-anilla" class="text-base font-bold text-white font-mono">#----</span>
+                        <span id="rfid-detectado-codigo" class="text-xs font-mono text-amber-400">ESGA025</span>
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 animate-pulse flex items-center gap-1">
                           <i class="fa-solid fa-check"></i> En Nido
                         </span>
                       </div>
-                      <p id="rfid-detectado-nombre" class="text-xs text-slate-300 font-semibold">Reina del Vinalopó · Familia A</p>
+                      <p id="rfid-detectado-nombre" class="text-xs text-slate-300 font-semibold">Ejemplar Detectado</p>
                       <p class="text-[11px] text-indigo-400 font-mono mt-0.5">
-                        <i class="fa-solid fa-microchip mr-1"></i>Transpondedor: <span id="rfid-detectado-chip" class="font-bold">968000010000002</span>
+                        <i class="fa-solid fa-microchip mr-1"></i>Transpondedor: <span id="rfid-detectado-chip" class="font-bold">--</span>
                       </p>
                     </div>
                   </div>
@@ -2203,8 +2358,8 @@
               <div class="text-xs">
                 <span class="text-[11px] font-bold text-slate-400 block uppercase">Coordenadas GPS Exactas del Acta:</span>
                 <span class="font-mono font-bold text-emerald-400">
-                  Lat: <span id="insitu-gps-lat">38.267100</span> · Lng: <span id="insitu-gps-lng">-0.698300</span>
-                  <span class="text-slate-400 text-[11px]">(±<span id="insitu-gps-prec">5</span>m)</span>
+                  Lat: <span id="insitu-gps-lat">--</span> · Lng: <span id="insitu-gps-lng">--</span>
+                  <span class="text-slate-400 text-[11px]">(±<span id="insitu-gps-prec">--</span>m)</span>
                 </span>
               </div>
               <button type="button" onclick="app.capturarGPSInspeccionInSitu()" class="px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow transition active:scale-95 whitespace-nowrap">
@@ -2288,9 +2443,9 @@
             </div>
           </div>
 
-          <!-- 5 Tarjetas Táctiles de Un Solo Toque para Exteriores -->
+          <!-- 5 Tarjetas Táctiles de Un Solo Toque para Exteriores (Estándar FESACOCUR / CNZ 2025) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <!-- Tara 1: Orejilla roja o amarilla -->
+            <!-- Tara 1: Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro) -->
             <button type="button" id="card-def-orejilla" onclick="app.toggleDefectoInSitu('orejilla')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
               <div class="flex items-center justify-between w-full">
                 <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
@@ -2299,12 +2454,12 @@
                 <span id="status-def-orejilla" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
               </div>
               <div>
-                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Orejilla roja o amarilla</h4>
-                <p class="text-[11px] text-slate-300 mt-1 leading-tight">El estándar exige orejilla blanco puro (descalifica &gt; 1/3 rojo o esmalte amarillo).</p>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">1. Orejilla amarilla, roja o con exceso de rojo</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Debe ser blanco puro (descalifica orejilla amarilla, roja o con exceso de rojo).</p>
               </div>
             </button>
 
-            <!-- Tara 2: Pecho prominente/redondeado -->
+            <!-- Tara 2: Pecho prominente o abombado (debe ser recto y plano) -->
             <button type="button" id="card-def-pecho" onclick="app.toggleDefectoInSitu('pecho')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
               <div class="flex items-center justify-between w-full">
                 <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
@@ -2313,12 +2468,12 @@
                 <span id="status-def-pecho" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
               </div>
               <div>
-                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Pecho prominente / redondeado</h4>
-                <p class="text-[11px] text-slate-300 mt-1 leading-tight">El estándar ESGA025 exige pecho de perfil recto y plano, nunca abombado.</p>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">2. Pecho prominente o abombado</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">El estándar ESGA025 exige que el pecho debe ser recto y plano.</p>
               </div>
             </button>
 
-            <!-- Tara 3: Cola llevada a menos de 70º o defectuosa -->
+            <!-- Tara 3: Cola baja (<70º sobre la horizontal) o larga -->
             <button type="button" id="card-def-cola" onclick="app.toggleDefectoInSitu('cola')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
               <div class="flex items-center justify-between w-full">
                 <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
@@ -2327,26 +2482,12 @@
                 <span id="status-def-cola" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
               </div>
               <div>
-                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Cola a menos de 70º o defectuosa</h4>
-                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Porte bajo (&lt;70º sobre horizontal), cola ardilla o desviación lateral.</p>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">3. Cola baja (&lt;70º sobre la horizontal) o larga</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Descalifica cola llevada a menos de 70º sobre la horizontal o excesivamente larga.</p>
               </div>
             </button>
 
-            <!-- Tara 4: Tarsos amarillos o emplumados -->
-            <button type="button" id="card-def-tarsos" onclick="app.toggleDefectoInSitu('tarsos')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
-              <div class="flex items-center justify-between w-full">
-                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
-                  <i class="fa-solid fa-shoe-prints"></i>
-                </span>
-                <span id="status-def-tarsos" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
-              </div>
-              <div>
-                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Tarsos amarillos o emplumados</h4>
-                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Deben ser blanco-rosáceos, limpios, desnudos de plumas y con 4 dedos rectos.</p>
-              </div>
-            </button>
-
-            <!-- Tara 5: Flameado en esclavina (Moteada/Exchequer) -->
+            <!-- Tara 4: Flameado de esclavina en variedades Moteada y Exchequer -->
             <button type="button" id="card-def-flameado" onclick="app.toggleDefectoInSitu('flameado')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
               <div class="flex items-center justify-between w-full">
                 <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
@@ -2355,8 +2496,22 @@
                 <span id="status-def-flameado" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
               </div>
               <div>
-                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">Flameado en esclavina (Moteada/Exchequer)</h4>
-                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Presencia de plumas rojizas/doradas extrañas en esclavina o dorso.</p>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">4. Flameado de esclavina en variedades Moteada y Exchequer</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Presencia de flameado rojizo o dorado en la esclavina en Negra Moteada y Pinta o Exchequer.</p>
+              </div>
+            </button>
+
+            <!-- Tara 5: Tarsos amarillos -->
+            <button type="button" id="card-def-tarsos" onclick="app.toggleDefectoInSitu('tarsos')" class="defect-touch-card text-left p-3.5 rounded-xl bg-slate-900 border-2 border-slate-700 hover:border-rose-500 flex flex-col justify-between gap-2">
+              <div class="flex items-center justify-between w-full">
+                <span class="h-8 w-8 rounded-lg bg-rose-950 border border-rose-700 text-rose-400 flex items-center justify-center font-black text-sm">
+                  <i class="fa-solid fa-shoe-prints"></i>
+                </span>
+                <span id="status-def-tarsos" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 uppercase">SIN TARA</span>
+              </div>
+              <div>
+                <h4 class="text-xs sm:text-sm font-black text-white leading-snug">5. Tarsos amarillos</h4>
+                <p class="text-[11px] text-slate-300 mt-1 leading-tight">Deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca.</p>
               </div>
             </button>
           </div>
@@ -2627,7 +2782,7 @@
             <h3 id="mf-anilla-codigo" class="text-base sm:text-lg font-bold text-white font-mono">ESGA025-24-M-0142</h3>
             <span id="mf-badge-seccion" class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">RD</span>
           </div>
-          <p id="mf-nombre-sexo" class="text-xs text-slate-400">Gallo Reproductor · Moteada / Exchequer</p>
+          <p id="mf-nombre-sexo" class="text-xs text-slate-400">Gallo Reproductor · Negra Moteada (Oficial)</p>
           <p id="mf-criador-rega" class="text-[11px] text-amber-300 font-mono mt-0.5"><i class="fa-solid fa-warehouse mr-1 text-slate-500"></i><span id="mf-criador-nombre">Criador</span> · <span id="mf-rega-codigo">REGA: --</span></p>
         </div>
       </div>
@@ -2703,6 +2858,16 @@
             <span>Vincular / Cambiar Chip</span>
           </button>
         </div>
+        <!-- Detalles Anatómicos Oficiales por Variedad (Pico y Tarsos · Estándar FESACOCUR 2025) -->
+        <div id="mf-anatomia-variedad-box" class="p-3 rounded-lg bg-slate-950 border border-amber-500/40 col-span-2 sm:col-span-3 space-y-1">
+          <span class="text-amber-400 font-bold block text-[10px] uppercase tracking-wider">
+            <i class="fa-solid fa-feather-pointed mr-1"></i> Especificación Anatómica por Variedad (Estándar ESGA025 · FESACOCUR 2025)
+          </span>
+          <p id="mf-anatomia-pico-tarsos" class="text-slate-200 text-xs leading-snug">
+            <strong>Pico:</strong> Color córneo con manchas negras en variedades Moteada y Exchequer; color hueso en variedad Blanca. ·
+            <strong>Tarsos:</strong> Blanco-rosáceos con roña en Moteada/Exchequer; blanco-rosáceos con pico hueso en Blanca.
+          </p>
+        </div>
       </div>
 
       <!-- Ascendencia Directa -->
@@ -2747,10 +2912,10 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: CONFIGURACIÓN SUPABASE & MODO OFFLINE / DEMO                       -->
+  <!-- MODAL: PANEL DE ADMINISTRACIÓN, CONFIGURACIÓN SUPABASE & RESPALDOS        -->
   <!-- ========================================================================= -->
   <div id="modal-config" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 relative shadow-2xl space-y-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-6 relative shadow-2xl space-y-4">
       <button onclick="app.cerrarModalConfig()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 text-lg">
         <i class="fa-solid fa-xmark"></i>
       </button>
@@ -2760,12 +2925,64 @@
           <i class="fa-solid fa-database"></i>
         </div>
         <div>
-          <h3 class="text-base font-bold text-white">Configuración del Backend Supabase</h3>
-          <p class="text-xs text-slate-400">Libro Genealógico Oficial ESGA025</p>
+          <h3 class="text-base font-bold text-white">Panel de Administración & Backend Supabase</h3>
+          <p class="text-xs text-slate-400">Libro Genealógico Oficial ESGA025 · Control de Calidad y Respaldos</p>
         </div>
       </div>
 
-      <div class="space-y-3 pt-2">
+      <!-- BLOQUE FASE 6 EN PANEL ADMIN: 🔍 AUDITORÍA DE INTEGRIDAD DEL LIBRO GENEALÓGICO -->
+      <div class="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-extrabold text-emerald-300 flex items-center gap-1.5">
+            <span>🔍 Auditoría de Integridad del Libro Genealógico</span>
+          </span>
+          <span id="admin-auditoria-badge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 font-mono">0 alertas</span>
+        </div>
+        <p class="text-[11px] text-slate-300 leading-snug">
+          Verificación automática de bucles genealógicos, fechas de progenitores, pesos/anillas ESGA025 y coherencia de puesta.
+        </p>
+        <div class="flex flex-wrap gap-2 pt-1">
+          <button type="button" onclick="app.cerrarModalConfig(); app.irAAuditoriaIntegridad();" class="flex-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-extrabold transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-magnifying-glass-chart"></i> Abrir Panel de Auditoría en Tiempo Real
+          </button>
+          <button type="button" onclick="app.cerrarModalConfig(); app.abrirModalActaCierreAnual();" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold transition flex items-center gap-1.5">
+            <span>📄 Acta Cierre Anual</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- BLOQUE FASE 6 EN PANEL ADMIN: 💾 RESPALDOS Y MIGRACIÓN DE DATOS LOCAL/NUBE -->
+      <div class="p-3.5 rounded-xl bg-sky-950/30 border border-sky-500/40 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-extrabold text-sky-300 flex items-center gap-1.5">
+            <span>💾 Respaldos y Migración de Datos Local/Nube</span>
+          </span>
+          <span class="text-[10px] font-mono text-sky-400 bg-slate-950 px-2 py-0.5 rounded border border-sky-800">IndexedDB + WebP/Base64</span>
+        </div>
+        <p class="text-[11px] text-slate-300 leading-snug">
+          Exportación integral en un clic (censo, histórico de puesta, actas e imágenes Base64) y restauración de emergencia ante cambio o pérdida de dispositivo.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button type="button" onclick="app.exportarBackupIntegralJSON()" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow">
+            <i class="fa-solid fa-file-code"></i> Exportar Backup JSON
+          </button>
+          <button type="button" onclick="app.exportarBackupIntegralZIP()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow">
+            <i class="fa-solid fa-file-zipper"></i> Exportar Backup ZIP
+          </button>
+        </div>
+        <div class="pt-1 flex items-center justify-between gap-2">
+          <label class="flex-1 cursor-pointer px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-upload"></i>
+            <span>Restaurar / Importar Backup (.JSON / .ZIP)</span>
+            <input type="file" accept=".json,.zip" class="hidden" onchange="app.importarBackupEmergenciaArchivo(event)">
+          </label>
+          <button type="button" onclick="app.cerrarModalConfig(); app.abrirModalRespaldos();" class="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold transition">
+            Opciones Avanzadas
+          </button>
+        </div>
+      </div>
+
+      <div class="space-y-3 pt-1">
         <div>
           <label class="block text-xs text-slate-300 mb-1">URL de Proyecto Supabase</label>
           <input type="text" id="cfg-supabase-url" placeholder="https://tu-proyecto.supabase.co" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none">
@@ -2785,13 +3002,10 @@
         </div>
 
         <div class="pt-4 border-t border-slate-800 space-y-2">
-          <span class="text-xs font-semibold text-slate-400 block">Herramientas de Mantenimiento Local:</span>
+          <span class="text-xs font-semibold text-slate-400 block">Herramientas de Mantenimiento Local (Estado Cero):</span>
           <div class="flex gap-2">
-            <button onclick="app.cargarSemillaInicial(true)" class="flex-1 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition">
-              <i class="fa-solid fa-seedling text-emerald-400 mr-1"></i> Recargar Censo Semilla ESGA025
-            </button>
-            <button onclick="app.limpiarIndexedDB()" class="px-3 py-1.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-900 text-xs text-red-300 transition">
-              Borrar Caché Local
+            <button onclick="app.limpiarIndexedDB()" class="w-full px-3 py-1.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-900 text-xs text-red-300 font-semibold transition">
+              <i class="fa-solid fa-trash-can mr-1"></i> Vaciar Base de Datos Local (0 Ejemplares / 0 Aviarios)
             </button>
           </div>
         </div>
@@ -2877,7 +3091,7 @@
           <label class="block text-xs font-semibold text-slate-300 mb-1">
             Nombre del Criador / Razón Social <span class="text-red-400">*</span>
           </label>
-          <input type="text" id="aviario-titular" required placeholder="Ej: Antoni Bernabeu Sanchis" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          <input type="text" id="aviario-titular" required placeholder="Nombre y apellidos del titular o Razón Social" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
           <p class="text-[10px] text-slate-400 mt-0.5">Titular de la explotación zootécnica o persona física responsable.</p>
         </div>
 
@@ -2886,7 +3100,7 @@
           <label class="block text-xs font-semibold text-slate-300 mb-1">
             Nombre del Aviario / Criadero <span class="text-slate-400">(Opcional)</span>
           </label>
-          <input type="text" id="aviario-nombre" placeholder="Ej: Aviario El Rebollo / Criadero Vinalopó" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          <input type="text" id="aviario-nombre" placeholder="Denominación oficial de la explotación o aviario" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
         </div>
 
         <!-- Nº de Socio del Club con Casilla "Aspirante / No socio aún" -->
@@ -2930,7 +3144,7 @@
             <label class="block text-xs font-semibold text-slate-300 mb-1">
               Municipio <span class="text-red-400">*</span>
             </label>
-            <input type="text" id="aviario-municipio" required placeholder="Ej: Crevillent" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <input type="text" id="aviario-municipio" required placeholder="Municipio de ubicación de la explotación" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">
@@ -2962,14 +3176,63 @@
           </div>
         </div>
 
+        <!-- FASE 6 EN MI CUENTA / AVIARIO: 💾 RESPALDOS Y MIGRACIÓN DE DATOS LOCAL/NUBE -->
+        <div class="p-3.5 rounded-xl bg-sky-950/30 border border-sky-500/40 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-extrabold text-sky-300 flex items-center gap-1.5">
+              <span>💾 Respaldos y Migración de Datos Local/Nube</span>
+            </span>
+            <span class="text-[10px] font-mono text-sky-400 bg-slate-950 px-2 py-0.5 rounded border border-sky-800">Mi Cuenta · Backup &amp; Restore</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-snug">
+            Guarda una copia completa de tu aviario (censo, histórico de puesta, actas de inspección y fotografías WebP/Base64) o restaura tus datos en un nuevo teléfono móvil sin cobertura.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button type="button" onclick="app.exportarBackupIntegralJSON()" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow">
+              <i class="fa-solid fa-download"></i> Exportar Backup JSON
+            </button>
+            <button type="button" onclick="app.exportarBackupIntegralZIP()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow">
+              <i class="fa-solid fa-file-zipper"></i> Exportar Backup ZIP
+            </button>
+          </div>
+          <div class="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <label class="flex-1 cursor-pointer px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Importación / Restauración de Emergencia (.JSON / .ZIP)</span>
+              <input type="file" accept=".json,.zip" class="hidden" onchange="app.importarBackupEmergenciaArchivo(event)">
+            </label>
+            <button type="button" onclick="app.cerrarModalAviario(); app.abrirModalRespaldos();" class="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold transition">
+              Gestor Completo
+            </button>
+          </div>
+        </div>
+
+        <!-- Acceso Rápido por Rol en Estado Cero (0 Ejemplares / 0 Aviarios Ficticios) -->
+        <div class="p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2">
+          <span class="text-[11px] font-bold text-slate-400 block">
+            <i class="fa-solid fa-user-shield text-emerald-400 mr-1"></i>Acceso por Rol con Censo Vacío de Inicio (Estado Cero Oficial):
+          </span>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <button type="button" onclick="app.iniciarConRolEstadoCero('criador')" class="px-2.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-bold transition text-center">
+              Rol: Criador (0 Aves)
+            </button>
+            <button type="button" onclick="app.iniciarConRolEstadoCero('inspector')" class="px-2.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-bold transition text-center">
+              Rol: Inspector CNZ (0 Aves)
+            </button>
+            <button type="button" onclick="app.iniciarConRolEstadoCero('direccion')" class="px-2.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-sky-500/40 text-sky-300 font-bold transition text-center">
+              Rol: Dirección Técnica (0 Aves)
+            </button>
+          </div>
+        </div>
+
         <!-- Botones de Navegación -->
         <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <button type="button" onclick="app.saltarModoVisitante()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition text-center order-2 sm:order-1">
-            Saltar por ahora / Modo Visitante
+            Saltar por ahora / Modo Visitante (Censo Vacío)
           </button>
           <button type="submit" id="btn-guardar-aviario" class="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 order-1 sm:order-2">
             <i class="fa-solid fa-check"></i>
-            <span>Guardar Aviario y Continuar</span>
+            <span>Guardar Aviario Real y Continuar</span>
           </button>
         </div>
 
@@ -2992,7 +3255,7 @@
         </div>
         <div>
           <h3 class="text-sm font-bold text-white">Vincular Transpondedor RFID</h3>
-          <p id="modal-vincular-rfid-sub" class="text-xs text-slate-400">Ejemplar #0002 · Reina del Vinalopó</p>
+          <p id="modal-vincular-rfid-sub" class="text-xs text-slate-400">Selecciona un ejemplar del censo oficial</p>
         </div>
       </div>
 
@@ -3105,13 +3368,228 @@
     </div>
   </div>
 
+  <!-- ========================================================================= -->
+  <!-- MODAL FASE 6: 💾 RESPALDOS Y MIGRACIÓN DE DATOS LOCAL/NUBE (BACKUP/RESTORE)-->
+  <!-- ========================================================================= -->
+  <div id="modal-respaldos-backup" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-slate-900 border-2 border-sky-500/60 rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-5 sm:p-6 relative space-y-5">
+      <button onclick="app.cerrarModalRespaldos()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1.5 text-xl bg-slate-800 rounded-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3.5 pb-3 border-b border-slate-800 pr-10">
+        <div class="h-12 w-12 rounded-xl bg-sky-500 text-slate-950 font-black flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-sky-500/20">
+          <i class="fa-solid fa-floppy-disk"></i>
+        </div>
+        <div>
+          <h3 class="text-base sm:text-lg font-black text-white">
+            💾 Respaldos y Migración de Datos Local/Nube
+          </h3>
+          <p class="text-xs text-slate-300">
+            Módulo de Respaldos Integrales y Restauración de Emergencia en IndexedDB · AlacantinApp v6 (ESGA025)
+          </p>
+        </div>
+      </div>
+
+      <!-- Resumen del Estado Actual de IndexedDB -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block uppercase font-bold">Ejemplares</span>
+          <span id="backup-stat-animales" class="text-lg font-black text-white font-mono">0</span>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block uppercase font-bold">Aviarios REGA</span>
+          <span id="backup-stat-explotaciones" class="text-lg font-black text-amber-400 font-mono">0</span>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block uppercase font-bold">Inspecciones</span>
+          <span id="backup-stat-inspecciones" class="text-lg font-black text-emerald-400 font-mono">0</span>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block uppercase font-bold">Reg. Puesta</span>
+          <span id="backup-stat-puesta" class="text-lg font-black text-sky-400 font-mono">0</span>
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 col-span-2 sm:col-span-1">
+          <span class="text-[10px] text-slate-400 block uppercase font-bold">Fotos Base64</span>
+          <span id="backup-stat-fotos" class="text-lg font-black text-purple-400 font-mono">0</span>
+        </div>
+      </div>
+
+      <!-- 1. Exportación en un Clic -->
+      <div class="p-4 rounded-xl bg-slate-950 border border-sky-500/40 space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs sm:text-sm font-extrabold text-sky-300 flex items-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-down text-sky-400"></i>
+            <span>1. Exportación Integral en un Clic (Backup JSON / ZIP)</span>
+          </h4>
+          <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">100% Offline</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Genera un archivo completo que empaqueta el censo del aviario, explotaciones REGA, lotes Gobe, histórico de puesta, actas de inspección firmadas y fotografías en WebP/Base64.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button type="button" onclick="app.exportarBackupIntegralJSON()" class="p-3 rounded-xl bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg transition">
+            <i class="fa-solid fa-file-code text-base"></i>
+            <span>Exportar Backup Integral (.JSON)</span>
+          </button>
+          <button type="button" onclick="app.exportarBackupIntegralZIP()" class="p-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg transition">
+            <i class="fa-solid fa-file-zipper text-base"></i>
+            <span>Exportar Paquete Comprimido (.ZIP)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Importación / Restauración de Emergencia -->
+      <div class="p-4 rounded-xl bg-slate-950 border border-amber-500/40 space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs sm:text-sm font-extrabold text-amber-300 flex items-center gap-2">
+            <i class="fa-solid fa-truck-medical text-amber-400"></i>
+            <span>2. Importación y Restauración de Emergencia en IndexedDB</span>
+          </h4>
+          <span class="text-[10px] font-mono text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800">Recuperación Total</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Sube un archivo de respaldo previo (`.json` o `.zip`) para restaurar inmediatamente todo el censo en IndexedDB en caso de cambio de teléfono móvil o pérdida de dispositivo sin cobertura.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-3 text-xs bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+          <span class="text-slate-300 font-semibold">Modo de Restauración:</span>
+          <label class="flex items-center gap-1.5 cursor-pointer text-slate-200">
+            <input type="radio" name="backup-restore-mode" value="reemplazar" checked class="accent-amber-500">
+            <span>Reemplazo Integral (Limpia y restaura copia exacta)</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer text-slate-200">
+            <input type="radio" name="backup-restore-mode" value="fusionar" class="accent-amber-500">
+            <span>Fusión Inteligente (Conserva actuales y añade/actualiza)</span>
+          </label>
+        </div>
+
+        <label class="cursor-pointer border-2 border-dashed border-amber-500/50 hover:border-amber-400 bg-slate-900/70 hover:bg-slate-900 rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-center transition">
+          <i class="fa-solid fa-cloud-arrow-up text-2xl text-amber-400"></i>
+          <span class="text-xs font-extrabold text-white">Seleccionar archivo de Backup (.JSON o .ZIP) para Restaurar</span>
+          <span class="text-[11px] text-slate-400">Restaura animales, genealogía, controles de puesta, actas y fotografías Base64</span>
+          <input type="file" id="input-file-restore-backup" accept=".json,.zip" class="hidden" onchange="app.importarBackupEmergenciaArchivo(event)">
+        </label>
+
+        <div id="backup-restore-resultado-box" class="hidden p-3 rounded-lg bg-emerald-950/60 border border-emerald-700 text-xs text-emerald-200">
+          <!-- Mensaje dinámico tras restaurar -->
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end pt-2 border-t border-slate-800">
+        <button type="button" onclick="app.cerrarModalRespaldos()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL FASE 6: 📄 ACTA DIGITAL OFICIAL DE CIERRE CENSAL ANUAL (MAPA / CNZ) -->
+  <!-- ========================================================================= -->
+  <div id="modal-acta-cierre-anual" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-2 sm:p-5">
+    <div class="bg-slate-900 border-2 border-amber-500/70 rounded-2xl max-w-5xl w-full max-h-[94vh] overflow-y-auto shadow-2xl p-4 sm:p-6 relative space-y-5">
+      <button onclick="app.cerrarModalActaCierreAnual()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1.5 text-xl bg-slate-800 rounded-lg no-print">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <!-- Cabecera de Configuración del Acta Anual (No se imprime) -->
+      <div class="space-y-4 pb-4 border-b border-slate-800 no-print pr-10">
+        <div class="flex items-center gap-3">
+          <div class="h-11 w-11 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xl shrink-0">
+            <i class="fa-solid fa-file-signature"></i>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white uppercase">
+              📄 Generador de Acta Digital de Cierre Censal Anual (MAPA / CNZ)
+            </h3>
+            <p class="text-xs text-slate-300">
+              Memoria Anual Oficial del Libro Genealógico ESGA025 · RD 45/2019 y Reglamento (UE) 2016/1012
+            </p>
+          </div>
+        </div>
+
+        <!-- Parámetros personalizables y Firmantes -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Año del Ejercicio / Memoria</label>
+            <input type="number" id="cierre-anual-anio" value="2026" min="2020" max="2035" onchange="app.renderizarVistaPreviaActaCierreAnual()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono font-bold focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Ámbito de Explotación REGA</label>
+            <select id="cierre-anual-explotacion" onchange="app.renderizarVistaPreviaActaCierreAnual()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none">
+              <option value="TODAS">Global Libro Genealógico (Todas las REGA)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Criador / Titular Firmante</label>
+            <input type="text" id="cierre-anual-criador" value="" placeholder="Nombre del Criador / Titular REGA" oninput="app.renderizarVistaPreviaActaCierreAnual()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Secretario Técnico del Club ESGA025</label>
+            <input type="text" id="cierre-anual-secretario" value="" placeholder="Nombre del Secretario Técnico CNZ" oninput="app.renderizarVistaPreviaActaCierreAnual()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Paneles de Firma Manuscrita Digital (Criador y Secretario Técnico) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+          <!-- Firma Criador -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-amber-300"><i class="fa-solid fa-pen-nib mr-1"></i>Firma Digital del Criador / Titular REGA:</span>
+              <div class="flex gap-1.5">
+                <button type="button" onclick="app.generarSelloFirmaAutoCierre('criador')" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/40">Auto-Rubricar</button>
+                <button type="button" onclick="app.limpiarCanvasFirmaCierre('criador')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px]">Limpiar</button>
+              </div>
+            </div>
+            <canvas id="canvas-firma-cierre-criador" width="380" height="100" class="w-full h-24 bg-white rounded-lg border-2 border-amber-500/50 cursor-crosshair touch-none"></canvas>
+          </div>
+
+          <!-- Firma Secretario Técnico -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-emerald-300"><i class="fa-solid fa-stamp mr-1"></i>Firma Digital del Secretario Técnico del Club:</span>
+              <div class="flex gap-1.5">
+                <button type="button" onclick="app.generarSelloFirmaAutoCierre('secretario')" class="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">Auto-Rubricar</button>
+                <button type="button" onclick="app.limpiarCanvasFirmaCierre('secretario')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px]">Limpiar</button>
+              </div>
+            </div>
+            <canvas id="canvas-firma-cierre-secretario" width="380" height="100" class="w-full h-24 bg-white rounded-lg border-2 border-emerald-500/50 cursor-crosshair touch-none"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENEDOR MAQUETADO EN A4 PARA IMPRESIÓN / EXPORTACIÓN PDF OFICIAL -->
+      <div id="acta-cierre-anual-a4-container" class="bg-white text-slate-900 rounded-xl p-6 sm:p-8 shadow-inner space-y-5 text-xs border border-slate-300 mx-auto max-w-[210mm]">
+        <!-- Se puebla dinámicamente desde app.renderizarVistaPreviaActaCierreAnual() -->
+      </div>
+
+      <!-- Pie de Acciones del Modal -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 no-print">
+        <span class="text-[11px] text-slate-400">
+          <i class="fa-solid fa-landmark text-amber-400 mr-1"></i>
+          Documento Oficial en formato A4 conforme a la Memoria Anual del Programa de Cría (RD 45/2019 · MAPA / CNZ).
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="app.cerrarModalActaCierreAnual()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+            Cerrar
+          </button>
+          <button type="button" onclick="app.exportarActaCierreAnualPDF()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black flex items-center gap-2 shadow-lg transition">
+            <i class="fa-solid fa-file-pdf text-sm"></i>
+            <span>📄 Descargar Acta Oficial de Cierre Censal Anual (PDF A4)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Pie de Página Oficial -->
   <footer class="bg-slate-950 border-t border-slate-900 py-4 text-center text-xs text-slate-500 no-print">
     <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
       <div class="flex items-center gap-2">
         <span>© 2026 Club Gallina Alacantina (Código Oficial ESGA025)</span>
         <span>·</span>
-        <span>Versión PWA 5.0.0</span>
+        <span>Versión PWA 6.0.0</span>
       </div>
       <div>
         <span>Cumplimiento: Protocolo CNZ (5 junio 2025) · RD 45/2019 · Reg. (UE) 2016/1012</span>

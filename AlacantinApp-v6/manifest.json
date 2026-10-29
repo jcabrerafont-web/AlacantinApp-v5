@@ -1,0 +1,55 @@
+{
+  "name": "AlacantinApp v5 - Libro Genealógico ESGA025",
+  "short_name": "AlacantinApp",
+  "description": "Aplicación Oficial del Libro Genealógico de la Gallina Alacantina (ESGA025). Cumplimiento CNZ 2025, RD 45/2019 y Reg. UE 2016/1012.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1120",
+  "theme_color": "#0f172a",
+  "lang": "es-ES",
+  "categories": ["utilities", "productivity", "agriculture"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Alta con GPS",
+      "short_name": "Alta",
+      "description": "Registrar nuevo ejemplar in situ",
+      "url": "./index.html#registro",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Censo Oficial",
+      "short_name": "Censo",
+      "description": "Consultar Libro Genealógico",
+      "url": "./index.html#censo",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Inspección CNZ",
+      "short_name": "Inspección",
+      "description": "Baremo de 100 puntos y Control de Puesta",
+      "url": "./index.html#inspeccion",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
