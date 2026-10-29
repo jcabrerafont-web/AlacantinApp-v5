@@ -188,6 +188,28 @@ const PDFEngine = {
     const insp = datos.inspeccion || null;
     const puesta = datos.controlPuesta || null;
     const fotos = datos.fotos || {};
+    const inspectorPerfil = datos.inspector || null;
+
+    // Datos dinámicos del Calificador / Inspector Zootécnico (desde el acta o desde el perfil autenticado)
+    const inspectorNombreDinamico = (
+      insp?.calificador_oficial ||
+      inspectorPerfil?.nombre ||
+      ''
+    ).trim();
+    const inspectorIdDinamico = (
+      insp?.inspector_id ||
+      insp?.inspector_dni ||
+      inspectorPerfil?.dni ||
+      inspectorPerfil?.numero_socio ||
+      inspectorPerfil?.id ||
+      ''
+    ).trim();
+    const firmaInspectorBase64 = (
+      insp?.firma_inspector_base64 ||
+      insp?.firma_storage_url ||
+      inspectorPerfil?.firma_base64 ||
+      null
+    );
 
     const anillaLimpia = (animal.numero_anilla || '0000').toString().trim();
     const fechaEmision = new Date().toLocaleDateString('es-ES', {
@@ -976,7 +998,12 @@ const PDFEngine = {
                   <div class="data-box" style="margin-top:4px;">
                     <span class="lbl">Auditoría de Calificación Oficial</span>
                     <span class="val">
-                      ${insp ? `Calificador: ${insp.calificador_oficial} · Fecha: ${insp.fecha_inspeccion}` : 'Pendiente de asignación de Calificador Zootécnico'}
+                      ${insp
+                        ? `Calificador: ${inspectorNombreDinamico || 'Inspector Acreditado'}${inspectorIdDinamico ? ` (${inspectorIdDinamico})` : ''} · Fecha: ${insp.fecha_inspeccion}`
+                        : (inspectorNombreDinamico
+                            ? `Inspector Asignado: ${inspectorNombreDinamico}${inspectorIdDinamico ? ` (${inspectorIdDinamico})` : ''}`
+                            : 'Pendiente de asignación de Calificador Zootécnico')
+                      }
                     </span>
                     <p style="margin:2px 0 0 0; font-size:6.2pt; color:#64748b; font-style:italic;">
                       ${insp?.observaciones ? `"${insp.observaciones}"` : 'Sin defectos descalificables observados en la morfología reglamentaria.'}
@@ -1094,10 +1121,16 @@ const PDFEngine = {
                   <span style="font-size:5.5pt; color:#94a3b8; font-family:monospace;">ESGA025-SEC-VERIF</span>
                 </div>
 
-                <!-- Firma Secretaría Técnica -->
+                <!-- Firma Inspector / Calificador Zootécnico Dinámica -->
                 <div class="sign-box">
-                  <strong>Dirección Técnica / Secretaría</strong>
-                  <span style="font-size:6.2pt; color:#64748b;">Club Gallina Alacantina (ESGA025)<br>Calificador Zootécnico Oficial CNZ</span>
+                  ${firmaInspectorBase64
+                    ? `<img src="${firmaInspectorBase64}" alt="Firma Digital Inspector" style="max-height:36px; max-width:140px; margin:0 auto 2px auto; object-fit:contain; display:block;">`
+                    : ''
+                  }
+                  <strong>${inspectorNombreDinamico || 'Inspector Zootécnico Pendiente'}</strong>
+                  <span style="font-size:6.2pt; color:#64748b;">
+                    ${inspectorIdDinamico ? `ID / DNI Acreditación: ${inspectorIdDinamico}<br>` : ''}Inspector / Calificador Zootécnico Oficial (ESGA025)
+                  </span>
                 </div>
               </div>
             </div>
@@ -1208,7 +1241,7 @@ const PDFEngine = {
   /**
    * Genera el Acta Oficial de Inspección y Calificación Morfológica (Baremo 100 puntos)
    */
-  generarActaInspeccion(animal, inspeccion) {
+  generarActaInspeccion(animal, inspeccion, inspectorPerfil = null) {
     const ventanaImpresion = window.open('', '_blank');
     if (!ventanaImpresion) {
       alert('Por favor, permite las ventanas emergentes para generar el Acta Oficial.');
@@ -1220,6 +1253,11 @@ const PDFEngine = {
       month: 'long',
       year: 'numeric'
     });
+
+    const nombreInspector = inspeccion.calificador_oficial || inspectorPerfil?.nombre || 'Inspector Zootécnico';
+    const idInspector = inspeccion.inspector_id || inspeccion.inspector_dni || inspectorPerfil?.dni || inspectorPerfil?.numero_socio || inspectorPerfil?.id || '';
+    const firmaInspector = inspeccion.firma_inspector_base64 || inspectorPerfil?.firma_base64 || null;
+    const titularNombre = inspeccion.titular_aviario || animal.titular_nombre || 'Titular de la Explotación';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -1259,7 +1297,7 @@ const PDFEngine = {
           </div>
 
           <p><strong>Ejemplar Evaluado:</strong> ${animal.codigo_identificacion} | <strong>Anilla:</strong> ${animal.numero_anilla} | <strong>Sexo:</strong> ${animal.sexo} | <strong>Variedad:</strong> ${animal.variedad}</p>
-          <p><strong>Fecha Inspección:</strong> ${fechaHoy} | <strong>Calificador Oficial:</strong> ${inspeccion.calificador_oficial}</p>
+          <p><strong>Fecha Inspección:</strong> ${fechaHoy} | <strong>Calificador / Inspector Oficial:</strong> ${nombreInspector}${idInspector ? ` (ID/DNI: ${idInspector})` : ''}</p>
 
           <table class="table-baremo">
             <thead>
@@ -1327,12 +1365,13 @@ const PDFEngine = {
 
           <div style="margin-top:25px; display:grid; grid-template-columns:1fr 1fr; gap:30px; font-size:8.5pt; text-align:center;">
             <div style="border-top:1px solid #94a3b8; padding-top:6px; margin-top:35px;">
-              Firma del Calificador Zootécnico Oficial<br>
-              <strong>${inspeccion.calificador_oficial}</strong>
+              ${firmaInspector ? `<img src="${firmaInspector}" alt="Firma Digital Inspector" style="max-height:48px; display:block; margin:0 auto 4px auto;">` : ''}
+              Firma del Calificador / Inspector Zootécnico Oficial<br>
+              <strong>${nombreInspector}${idInspector ? ` (${idInspector})` : ''}</strong>
             </div>
             <div style="border-top:1px solid #94a3b8; padding-top:6px; margin-top:35px;">
               Firma y Enterado del Titular de la Explotación<br>
-              <strong>D./Dña. Titular Asociado</strong>
+              <strong>D./Dña. ${titularNombre}</strong>
             </div>
           </div>
         </div>
