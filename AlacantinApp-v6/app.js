@@ -1,5 +1,5 @@
 // ============================================================================
-// ALACANTINAPP V5 - LÓGICA DE NEGOCIO Y ARQUITECTURA OFFLINE-FIRST
+// ALACANTINAPP V6 - LÓGICA DE NEGOCIO, SUPABASE AUTH, RBAC Y OFFLINE-FIRST
 // Club Gallina Alacantina (Código Oficial ESGA025)
 // Cumplimiento: Protocolo CNZ (5 de junio de 2025), RD 45/2019, Reg. UE 2016/1012
 // ============================================================================
@@ -11,16 +11,123 @@ const app = {
   supabaseKey: localStorage.getItem('alacantina_supabase_key') || '',
   supabaseClient: null,
 
+  // Nomenclatura oficial unificada 100% en femenino (Estándar Zootécnico ESGA025 - FESACOCUR 2025)
+  variedadesOficiales: [
+    'Negra Moteada (Oficial)',
+    'Pinta o Exchequer (Oficial)',
+    'Blanca (Oficial)',
+    'Milflores (En proceso de reconocimiento)',
+    'Armiñada en negro (En proceso de reconocimiento)'
+  ],
+
+  // Generador de estructura limpia de estado en memoria (sin datos residuales ni valores mock)
+  obtenerEstadoInicialLimpio() {
+    return {
+      usuarioActivo: null,
+      usuarioActual: null,
+      modoVisitante: true,
+      usuarios: [],
+      solicitudesInspeccion: [],
+      animales: [],
+      explotaciones: [],
+      aviario: null,
+      aviarioActivo: null,
+      gpsAviarioTemporal: null,
+      editandoAviarioId: null,
+      inspecciones: [],
+      controlesPuesta: [],
+      lotes: [],
+      lotesIncubacion: [],
+      bancoGermoplasma: [],
+      syncQueue: [],
+      animalSeleccionadoId: null,
+      fotosCapturadas: {
+        lateral: null,
+        cabeza: null,
+        tarsos: null
+      },
+      fotosOpcionalesCapturadas: [],
+      gpsUbicacion: null,
+      filtros: {
+        busqueda: '',
+        seccion: 'TODAS',
+        sexo: 'TODOS',
+        familia: 'TODAS',
+        variedad: 'TODAS',
+        rega: 'TODOS',
+        edad: 'TODAS',
+        etiquetaGaleria: ''
+      },
+      rfid: {
+        dispositivo: null,
+        caracteristicaTx: null,
+        lectorSerial: null,
+        tipoConexion: null,
+        estado: 'desconectado',
+        nombreDispositivo: null,
+        ultimoChipLeido: null,
+        ultimaLecturaTs: null,
+        animalDetectado: null,
+        sonidoActivo: true,
+        bufferRecepcion: '',
+        historialEntradas: []
+      },
+      inspeccionInSitu: {
+        rolRBAC: 'visitante',
+        modoExteriorSolar: false,
+        animalActualId: null,
+        dictamenSeleccionado: 'APTO_RD',
+        dictamenManual: false,
+        defectos: {
+          orejilla: false,
+          pecho: false,
+          cola: false,
+          tarsos: false,
+          flameado: false
+        },
+        firmaBase64: null,
+        firmaConfirmada: false,
+        trazosFirma: 0,
+        gpsInSitu: {
+          latitud: null,
+          longitud: null,
+          precision_m: null
+        },
+        regionGuiaActiva: 1,
+        actaSeleccionada: null
+      },
+      auditoria: {
+        panelAbierto: false,
+        detalleAbierto: false,
+        categoriaFiltro: 'TODAS',
+        ultimoResultado: null
+      },
+      cierreAnual: {
+        firmaCriadorBase64: null,
+        firmaSecretarioBase64: null,
+        canvasInicializados: false
+      }
+    };
+  },
+
   // Estado reactivo de la aplicación
   estado: {
+    usuarioActivo: null,
+    usuarioActual: null,
+    modoVisitante: true,
+    usuarios: [],
+    solicitudesInspeccion: [],
     animales: [],
     explotaciones: [],
+    aviario: null,
     aviarioActivo: null,
     gpsAviarioTemporal: null,
     editandoAviarioId: null,
     inspecciones: [],
     controlesPuesta: [],
     lotes: [],
+    lotesIncubacion: [],
+    bancoGermoplasma: [],
     syncQueue: [],
     animalSeleccionadoId: null,
     fotosCapturadas: {
@@ -57,7 +164,7 @@ const app = {
     },
     // Estado reactivo del Modo Inspección Zootécnica In Situ y Guía de Campo (Fase 6)
     inspeccionInSitu: {
-      rolRBAC: localStorage.getItem('alacantina_rol_rbac') || 'inspector',
+      rolRBAC: 'visitante',
       modoExteriorSolar: false,
       animalActualId: null,
       dictamenSeleccionado: 'APTO_RD',
@@ -72,22 +179,24 @@ const app = {
       firmaBase64: null,
       firmaConfirmada: false,
       trazosFirma: 0,
-      gpsInSitu: null,
+      gpsInSitu: {
+        latitud: null,
+        longitud: null,
+        precision_m: null
+      },
       regionGuiaActiva: 1,
       actaSeleccionada: null
     },
-    // Estado reactivo de Auditoría Zootécnica, Respaldos y Cierre Censal Anual (Fase 6 v6)
     auditoria: {
-      alertas: [],
-      categoriaActiva: 'TODAS',
-      panelVisible: true,
-      simulacionActiva: false,
-      ultimaEjecucion: null
+      panelAbierto: false,
+      detalleAbierto: false,
+      categoriaFiltro: 'TODAS',
+      ultimoResultado: null
     },
     cierreAnual: {
-      firmasInicializadas: false,
       firmaCriadorBase64: null,
-      firmaSecretarioBase64: null
+      firmaSecretarioBase64: null,
+      canvasInicializados: false
     }
   },
   chartsPuesta: {
@@ -100,7 +209,7 @@ const app = {
   // 1. INICIALIZACIÓN DE LA APLICACIÓN Y BASE DE DATOS LOCAL (INDEXEDDB)
   // =========================================================================
   async init() {
-    console.log('[AlacantinApp v6] Iniciando aplicación en Estado Cero Oficial (ESGA025)...');
+    console.log('[AlacantinApp] Iniciando aplicación v6 (ESGA025 - Supabase Auth & RBAC)...');
     
     // Iniciar IndexedDB local
     await this.db.init();
@@ -111,11 +220,20 @@ const app = {
     // Registrar observadores de red online/offline
     this.configurarObservadoresRed();
 
-    // Cargar datos reales (Estado Cero por defecto: 0 ejemplares y 0 aviarios ficticios)
+    // Asegurar semilla inicial en IndexedDB antes de autenticar y filtrar por usuario
+    await this.asegurarSemillaBaseIndexedDB();
+
+    // Inicializar sesión persistente V6 (Supabase Auth / LocalStorage Offline)
+    await this.inicializarSesionAuthV6();
+
+    // Cargar y filtrar datos desde IndexedDB estrictamente para el usuario activo
     await this.cargarDatos();
 
-    // Comprobar e inicializar aviario activo real o desplegar bienvenida
-    this.inicializarAviarioActivo();
+    // Sobrescribir estrictamente app.estado.aviario y app.estado.aviarioActivo con el REGA y GPS del usuario logueado
+    await this.inicializarAviarioActivo();
+
+    // Re-filtrar colecciones una vez vinculado el aviario del usuario activo
+    await this.cargarDatos();
 
     // Actualizar interfaz inicial
     this.poblarSelectores();
@@ -124,6 +242,9 @@ const app = {
     this.actualizarKPIs();
     this.recalcularBaremo();
     this.renderizarLotes();
+    this.poblarSimuladorAcoplamientos();
+    this.renderizarModuloIncubacion();
+    this.renderizarModuloGermoplasma();
     this.actualizarBadgeAviario();
     this.actualizarVistaRegistroAviario();
     this.renderizarGaleriaOpcionalAlta();
@@ -133,21 +254,38 @@ const app = {
     this.configurarWedgeRfid();
     this.poblarSelectoresRfid();
     this.inicializarModuloInspeccionInSitu();
-    this.ejecutarAuditoriaIntegridad(false);
+    this.sincronizarInputsInspectorAutenticado();
+
+    // Actualizar Pastilla de Usuario, Permisos RBAC, Solicitudes y Panel Admin (V6)
+    this.actualizarPastillaUsuario();
+    this.aplicarPermisosRBAC();
+    this.renderizarSolicitudesInspeccion();
+    this.renderizarTablaUsuariosAdmin();
+
+    // Cerrar menú desplegable "Mi Cuenta" al hacer clic fuera
+    document.addEventListener('click', (e) => {
+      const wrapper = document.getElementById('user-account-menu-container') || document.getElementById('user-account-wrapper');
+      const dropdown = document.getElementById('dropdown-mi-cuenta');
+      if (wrapper && dropdown && !dropdown.classList.contains('hidden')) {
+        if (!wrapper.contains(e.target)) {
+          dropdown.classList.add('hidden');
+        }
+      }
+    });
 
     // Comprobar si hay hash en la URL para cambiar de pestaña directamente
     const hash = window.location.hash.replace('#', '');
     if (hash === 'puesta') {
       this.cambiarTab('inspeccion');
-    } else if (['registro', 'censo', 'inspeccion', 'pedigri', 'lotes', 'inspeccion-insitu'].includes(hash)) {
+    } else if (['registro', 'censo', 'inspeccion', 'pedigri', 'lotes', 'mapa-gis', 'germoplasma', 'inspeccion-insitu', 'admin'].includes(hash)) {
       this.cambiarTab(hash);
     }
   },
 
-  // Módulo de Base de Datos IndexedDB (Limpio para Producción - Estado Cero)
+  // Módulo de Base de Datos IndexedDB
   db: {
-    dbName: 'AlacantinDB_v6_Oficial',
-    version: 1,
+    dbName: 'AlacantinDB_v5',
+    version: 4,
     instance: null,
 
     init() {
@@ -171,8 +309,20 @@ const app = {
           if (!db.objectStoreNames.contains('lotes')) {
             db.createObjectStore('lotes', { keyPath: 'id' });
           }
+          if (!db.objectStoreNames.contains('lotesIncubacion')) {
+            db.createObjectStore('lotesIncubacion', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('bancoGermoplasma')) {
+            db.createObjectStore('bancoGermoplasma', { keyPath: 'id' });
+          }
           if (!db.objectStoreNames.contains('syncQueue')) {
             db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains('usuarios')) {
+            db.createObjectStore('usuarios', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('solicitudesInspeccion')) {
+            db.createObjectStore('solicitudesInspeccion', { keyPath: 'id' });
           }
         };
 
@@ -237,12 +387,46 @@ const app = {
     }
   },
 
-  // Configuración de Supabase
+  // Configuración de Supabase y observador reactivo de sesión Auth
   iniciarSupabaseClient() {
     if (this.supabaseUrl && this.supabaseKey && window.supabase) {
       try {
         this.supabaseClient = window.supabase.createClient(this.supabaseUrl, this.supabaseKey);
         console.log('[Supabase] Cliente inicializado.');
+
+        if (this.supabaseClient.auth && typeof this.supabaseClient.auth.onAuthStateChange === 'function') {
+          this.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_OUT') {
+              this.estado.usuarioActivo = null;
+              this.estado.usuarioActual = null;
+              this.estado.aviarioActivo = null;
+              this.estado.aviario = null;
+              this.estado.animales = [];
+              this.estado.explotaciones = [];
+              this.estado.controlesPuesta = [];
+              this.estado.lotes = [];
+              this.actualizarPastillaUsuario();
+              this.actualizarBadgeAviario();
+              this.actualizarVistaRegistroAviario();
+              this.aplicarPermisosRBAC();
+            } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
+              const perfil = await this.sincronizarUsuarioDesdeAuth(session.user);
+              if (perfil) {
+                this.estado.usuarioActivo = perfil;
+                this.estado.usuarioActual = perfil;
+                this.estado.modoVisitante = false;
+                localStorage.setItem('alacantina_v6_session', JSON.stringify(perfil));
+                await this.inicializarAviarioActivo();
+                await this.cargarDatos();
+                this.actualizarPastillaUsuario();
+                this.actualizarBadgeAviario();
+                this.actualizarVistaRegistroAviario();
+                this.aplicarPermisosRBAC();
+                this.sincronizarInputsInspectorAutenticado();
+              }
+            }
+          });
+        }
       } catch (err) {
         console.warn('[Supabase] No se pudo inicializar cliente:', err);
         this.supabaseClient = null;
@@ -280,76 +464,224 @@ const app = {
   },
 
   // =========================================================================
-  // 2. CARGA Y SINCRONIZACIÓN DE DATOS REALES (ESTADO CERO + SUPABASE AUTH)
+  // 2. CARGA, AISLAMIENTO MULTIUSUARIO Y SINCRONIZACIÓN DE DATOS (LOCAL + NUBE)
   // =========================================================================
-  async cargarDatos() {
-    // Purga preventiva de cualquier registro semilla legado si existiera en el navegador
-    const idsAnimalesFicticios = new Set(['alac-001', 'alac-002', 'alac-003', 'alac-004', 'alac-005', 'alac-006', 'alac-demo-audit']);
+
+  // Normaliza cualquier denominación de variedad a las 5 variedades oficiales en femenino
+  normalizarVariedadFemenino(variedadRaw) {
+    const v = String(variedadRaw || '').trim();
+    if (!v) return 'Negra Moteada (Oficial)';
+    const low = v.toLowerCase();
+    if (this.variedadesOficiales && this.variedadesOficiales.includes(v)) return v;
+    if (low.includes('exchequer') || low.includes('pinta')) {
+      return 'Pinta o Exchequer (Oficial)';
+    }
+    if (low.includes('blanca')) {
+      return 'Blanca (Oficial)';
+    }
+    if (low.includes('milflores')) {
+      return 'Milflores (En proceso de reconocimiento)';
+    }
+    if (low.includes('armiñada') || low.includes('arminada')) {
+      return 'Armiñada en negro (En proceso de reconocimiento)';
+    }
+    return 'Negra Moteada (Oficial)';
+  },
+
+  // Estado Cero Limpio: purga cualquier registro ficticio heredado en IndexedDB y normaliza variedades en femenino
+  async asegurarSemillaBaseIndexedDB() {
+    const idsAnimalesFicticios = new Set(['alac-001', 'alac-002', 'alac-003', 'alac-004', 'alac-005', 'alac-006']);
     const idsExpFicticias = new Set(['exp-01', 'exp-02']);
     const idsInspFicticias = new Set(['insp-01', 'insp-02']);
     const idsLotesFicticios = new Set(['lote-01']);
+    const idsUsuariosFicticios = new Set(['usr-criador-01', 'usr-aspirante-02', 'usr-inspector-01', 'usr-admin-01', 'usr-inspector-03', 'usr-admin-04']);
+    const idsSolFicticias = new Set(['sol-insp-01', 'sol-insp-02', 'sol-insp-2026-001', 'sol-insp-2026-002']);
+    const idsIncFicticios = new Set(['inc-2026-01', 'inc-2026-02', 'inc-sem-01']);
+    const idsGermoFicticios = new Set(['germo-001', 'germo-002', 'germo-003', 'germo-sem-01', 'germo-sem-02', 'germo-sem-03']);
+    const idsPuestaFicticios = new Set([
+      'cp-001', 'cp-002', 'cp-003', 'cp-004', 'cp-005', 'cp-006', 'cp-007', 'cp-008', 'cp-009', 'cp-010',
+      'puesta-sem-01', 'puesta-sem-02', 'puesta-sem-03', 'puesta-sem-04', 'puesta-sem-05',
+      'puesta-sem-06', 'puesta-sem-07', 'puesta-sem-08', 'puesta-sem-09', 'puesta-sem-10'
+    ]);
+
+    const animalesLocales = await this.db.getAll('animales');
+    for (const a of animalesLocales) {
+      if (idsAnimalesFicticios.has(a.id)) {
+        await this.db.delete('animales', a.id);
+      } else if (a.variedad) {
+        const varNorm = this.normalizarVariedadFemenino(a.variedad);
+        if (varNorm !== a.variedad) {
+          a.variedad = varNorm;
+          await this.db.put('animales', a);
+        }
+      }
+    }
+
+    const expLocales = await this.db.getAll('explotaciones');
+    for (const e of expLocales) {
+      if (idsExpFicticias.has(e.id)) await this.db.delete('explotaciones', e.id);
+    }
+
+    const inspLocales = await this.db.getAll('inspecciones');
+    for (const i of inspLocales) {
+      if (idsInspFicticias.has(i.id) || idsAnimalesFicticios.has(i.animal_id)) {
+        await this.db.delete('inspecciones', i.id);
+      }
+    }
+
+    const controlesLocales = await this.db.getAll('controlesPuesta');
+    for (const c of controlesLocales) {
+      if (idsPuestaFicticios.has(c.id) || idsAnimalesFicticios.has(c.animal_id)) {
+        await this.db.delete('controlesPuesta', c.id);
+      }
+    }
+
+    const lotesLocales = await this.db.getAll('lotes');
+    for (const l of lotesLocales) {
+      if (idsLotesFicticios.has(l.id)) await this.db.delete('lotes', l.id);
+    }
+
+    const usuariosLocales = await this.db.getAll('usuarios');
+    for (const u of usuariosLocales) {
+      if (idsUsuariosFicticios.has(u.id)) await this.db.delete('usuarios', u.id);
+    }
+
+    const solicitudesLocales = await this.db.getAll('solicitudesInspeccion');
+    for (const s of solicitudesLocales) {
+      if (idsSolFicticias.has(s.id) || idsUsuariosFicticios.has(s.usuario_id)) {
+        await this.db.delete('solicitudesInspeccion', s.id);
+      }
+    }
+
+    const lotesIncLocales = await this.db.getAll('lotesIncubacion');
+    for (const li of lotesIncLocales) {
+      if (idsIncFicticios.has(li.id)) await this.db.delete('lotesIncubacion', li.id);
+    }
+
+    const germoLocales = await this.db.getAll('bancoGermoplasma');
+    for (const g of germoLocales) {
+      if (idsGermoFicticios.has(g.id)) await this.db.delete('bancoGermoplasma', g.id);
+    }
+
+    // Si la sesión guardada correspondía a un usuario ficticio eliminado, limpiarla
+    try {
+      const rawSession = localStorage.getItem('alacantina_v6_session');
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        if (parsed && idsUsuariosFicticios.has(parsed.id)) {
+          localStorage.removeItem('alacantina_v6_session');
+        }
+      }
+    } catch (_) {}
+  },
+
+  // Determina si un registro de IndexedDB (animal, explotación, control de puesta, lote) pertenece al usuario activo
+  perteneceAUsuarioActivo(registro, usuario = null, aviario = null) {
+    if (!registro) return false;
+    const u = usuario || this.estado.usuarioActivo;
+
+    // Si está en Modo Visitante (solo lectura del censo público), permitir lectura pública
+    if (!u) {
+      return Boolean(this.estado.modoVisitante);
+    }
+
+    // Inspectores Zootécnicos y Administradores tienen visibilidad global de auditoría
+    if (u.rol === 'admin' || u.rol === 'inspector') {
+      return true;
+    }
+
+    const av = aviario || this.estado.aviario || this.estado.aviarioActivo;
+
+    // 1. Coincidencia directa por user.id (usuario_id)
+    if (registro.usuario_id && u.id) {
+      return String(registro.usuario_id) === String(u.id);
+    }
+
+    // 2. Coincidencia por explotación vinculada al usuario
+    const expIdUsuario = av?.id || u.explotacion_id;
+    if (expIdUsuario) {
+      if (registro.explotacion_id && String(registro.explotacion_id) === String(expIdUsuario)) {
+        return true;
+      }
+      if (registro.id && String(registro.id) === String(expIdUsuario)) {
+        return true;
+      }
+    }
+
+    // 3. Coincidencia por código REGA oficial (siempre que no sea provisional genérico de otro usuario)
+    const regaUsuario = (av?.codigo_rega || av?.rega || u.rega || '').trim().toUpperCase();
+    const regaRegistro = (registro.codigo_rega || registro.rega || '').trim().toUpperCase();
+    if (regaUsuario && regaRegistro && regaUsuario !== 'TEMP-REGA-001' && regaUsuario === regaRegistro) {
+      return true;
+    }
+
+    // 4. Si el registro es un control de puesta o lote vinculado a un animal propio
+    if (registro.animal_id && Array.isArray(this.estado.animales)) {
+      const animalPropio = this.estado.animales.find(a => a.id === registro.animal_id);
+      if (animalPropio) return true;
+    }
+
+    return false;
+  },
+
+  async cargarDatos() {
+    await this.asegurarSemillaBaseIndexedDB();
 
     let animalesLocales = await this.db.getAll('animales');
     let explotacionesLocales = await this.db.getAll('explotaciones');
     let inspeccionesLocales = await this.db.getAll('inspecciones');
     let controlesLocales = await this.db.getAll('controlesPuesta');
     let lotesLocales = await this.db.getAll('lotes');
+    let lotesIncLocales = await this.db.getAll('lotesIncubacion');
+    let germoLocales = await this.db.getAll('bancoGermoplasma');
+    let usuariosLocales = await this.db.getAll('usuarios');
+    let solicitudesLocales = await this.db.getAll('solicitudesInspeccion');
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
 
-    // Eliminar de raíz cualquier registro ficticio residual en IndexedDB
-    for (const a of (animalesLocales || [])) {
-      if (idsAnimalesFicticios.has(a.id)) {
-        await this.db.delete('animales', a.id);
-      }
-    }
-    for (const e of (explotacionesLocales || [])) {
-      if (idsExpFicticias.has(e.id)) {
-        await this.db.delete('explotaciones', e.id);
-      }
-    }
-    for (const i of (inspeccionesLocales || [])) {
-      if (idsInspFicticias.has(i.id)) {
-        await this.db.delete('inspecciones', i.id);
-      }
-    }
-    for (const c of (controlesLocales || [])) {
-      if (String(c.id || '').startsWith('puesta-sem-') || c.id === 'puesta-demo-audit') {
-        await this.db.delete('controlesPuesta', c.id);
-      }
-    }
-    for (const l of (lotesLocales || [])) {
-      if (idsLotesFicticios.has(l.id)) {
-        await this.db.delete('lotes', l.id);
-      }
-    }
-
-    animalesLocales = (await this.db.getAll('animales')) || [];
-    explotacionesLocales = (await this.db.getAll('explotaciones')) || [];
-    inspeccionesLocales = (await this.db.getAll('inspecciones')) || [];
-    controlesLocales = (await this.db.getAll('controlesPuesta')) || [];
-    lotesLocales = (await this.db.getAll('lotes')) || [];
-    this.estado.syncQueue = (await this.db.getAll('syncQueue')) || [];
-
-    // Normalizar nomenclatura de variedad 100% en femenino en ejemplares reales registrados
-    if (animalesLocales.length > 0) {
-      animalesLocales.forEach(a => {
-        const varNorm = this.normalizarVariedadFemenino(a.variedad);
-        if (a.variedad !== varNorm) {
-          a.variedad = varNorm;
-          this.db.put('animales', a);
-        }
-      });
-    }
-
-    this.estado.animales = animalesLocales;
-    this.estado.explotaciones = explotacionesLocales;
+    // AISLAMIENTO MULTIUSUARIO EN MEMORIA (filtrar estrictamente por el user.id activo)
+    const u = this.estado.usuarioActivo;
+    this.estado.usuarios = usuariosLocales;
     this.estado.inspecciones = inspeccionesLocales;
-    this.estado.controlesPuesta = controlesLocales;
-    this.estado.lotes = lotesLocales;
 
-    // Calcular consanguinidad en cliente para los ejemplares reales
+    if (!u && !this.estado.modoVisitante) {
+      // Sin sesión ni modo visitante activo: memoria de datos de usuario vacía
+      this.estado.animales = [];
+      this.estado.explotaciones = [];
+      this.estado.controlesPuesta = [];
+      this.estado.lotes = [];
+      this.estado.lotesIncubacion = [];
+      this.estado.bancoGermoplasma = [];
+      this.estado.solicitudesInspeccion = [];
+    } else if (this.estado.modoVisitante || u?.rol === 'admin' || u?.rol === 'inspector') {
+      // Modo Visitante (solo lectura del censo público) o Inspector/Admin (auditoría global)
+      this.estado.explotaciones = explotacionesLocales;
+      this.estado.animales = animalesLocales;
+      this.estado.controlesPuesta = controlesLocales;
+      this.estado.lotes = lotesLocales;
+      this.estado.lotesIncubacion = lotesIncLocales;
+      this.estado.bancoGermoplasma = germoLocales;
+      this.estado.solicitudesInspeccion = solicitudesLocales;
+    } else {
+      // Criador Oficial o Aspirante: filtrar estrictamente por su user.id y su explotación
+      this.estado.explotaciones = explotacionesLocales.filter(e => this.perteneceAUsuarioActivo(e, u));
+      const avPropio = this.estado.aviario || this.estado.aviarioActivo || this.estado.explotaciones[0] || null;
+      this.estado.animales = animalesLocales.filter(a => this.perteneceAUsuarioActivo(a, u, avPropio));
+      const idsAnimalesPropios = new Set(this.estado.animales.map(a => a.id));
+      this.estado.controlesPuesta = controlesLocales.filter(
+        c => this.perteneceAUsuarioActivo(c, u, avPropio) || idsAnimalesPropios.has(c.animal_id)
+      );
+      this.estado.lotes = lotesLocales.filter(l => this.perteneceAUsuarioActivo(l, u, avPropio));
+      this.estado.lotesIncubacion = lotesIncLocales.filter(li => this.perteneceAUsuarioActivo(li, u, avPropio));
+      this.estado.bancoGermoplasma = germoLocales.filter(g => this.perteneceAUsuarioActivo(g, u, avPropio));
+      this.estado.solicitudesInspeccion = solicitudesLocales.filter(
+        s => String(s.usuario_id) === String(u.id) || (u.rega && s.codigo_rega === u.rega)
+      );
+    }
+
+    // Calcular consanguinidad en cliente para los ejemplares cargados
     this.recalcularConsanguinidadCenso();
 
-    // Si hay conexión con Supabase y sesión activa, sincronizar registros reales
+    // Si hay conexión con Supabase, descargar últimas actualizaciones
     if (navigator.onLine && this.supabaseClient) {
       this.sincronizarDesdeSupabase();
     }
@@ -357,70 +689,67 @@ const app = {
     this.actualizarContadorSyncQueue();
   },
 
-  // Inicialización en Estado Cero (0 ejemplares, 0 aviarios ficticios)
+  // Inicialización en Estado Cero (0 ejemplares ficticios, 0 aviarios de prueba)
   async cargarSemillaInicial(forzar = false) {
-    await this.db.clear('animales');
-    await this.db.clear('explotaciones');
-    await this.db.clear('inspecciones');
-    await this.db.clear('controlesPuesta');
-    await this.db.clear('lotes');
-    await this.db.clear('syncQueue');
-
-    localStorage.removeItem('alacantina_aviario_activo_id');
-    localStorage.removeItem('alacantina_aviario_activo_datos');
-
-    this.estado.animales = [];
-    this.estado.explotaciones = [];
-    this.estado.inspecciones = [];
-    this.estado.controlesPuesta = [];
-    this.estado.lotes = [];
-    this.estado.syncQueue = [];
-    this.estado.aviarioActivo = null;
-    this.estado.inspeccionInSitu.gpsInSitu = null;
-    this.estado.inspeccionInSitu.animalActualId = null;
-
     if (forzar) {
+      await this.db.clear('animales');
+      await this.db.clear('explotaciones');
+      await this.db.clear('inspecciones');
+      await this.db.clear('controlesPuesta');
+      await this.db.clear('lotes');
+      await this.db.clear('lotesIncubacion');
+      await this.db.clear('bancoGermoplasma');
+      await this.db.clear('usuarios');
+      await this.db.clear('solicitudesInspeccion');
+
+      await this.cargarDatos();
       this.poblarSelectores();
       this.renderizarCenso();
       this.actualizarKPIs();
       this.renderizarLotes();
-      this.actualizarBadgeAviario();
-      this.actualizarVistaRegistroAviario();
       this.poblarSelectoresAnaliticaPuesta();
       this.renderizarAnaliticaPuesta();
-      this.ejecutarAuditoriaIntegridad(false);
-      alert('Base de datos local restablecida en Estado Cero (0 ejemplares y 0 aviarios).');
+      this.renderizarSolicitudesInspeccion();
+      this.renderizarTablaUsuariosAdmin();
     }
   },
 
-  // Sincronización desde Supabase para usuarios autenticados (Supabase Auth)
+  // Sincronización desde Supabase cuando se tiene conexión
   async sincronizarDesdeSupabase() {
     if (!this.supabaseClient) return;
     try {
-      // Verificar sesión autenticada en Supabase Auth cuando esté disponible
-      if (this.supabaseClient.auth && typeof this.supabaseClient.auth.getSession === 'function') {
-        const { data: sessionData } = await this.supabaseClient.auth.getSession();
-        if (sessionData?.session?.user) {
-          this.estado.usuarioAutenticado = sessionData.session.user;
-        }
-      }
-
-      console.log('[Supabase] Consultando registros reales en la nube...');
-      const { data: expRemotas, error: errE } = await this.supabaseClient.from('explotaciones').select('*');
-      if (!errE && Array.isArray(expRemotas)) {
-        await this.db.putBatch('explotaciones', expRemotas);
-        this.estado.explotaciones = expRemotas;
-      }
-
+      console.log('[Supabase] Consultando actualizaciones remotas...');
       const { data: animalesRemotos, error: errA } = await this.supabaseClient.from('animales').select('*');
-      if (!errA && Array.isArray(animalesRemotos)) {
+      if (!errA && animalesRemotos && animalesRemotos.length > 0) {
         await this.db.putBatch('animales', animalesRemotos);
-        this.estado.animales = animalesRemotos;
-        this.poblarSelectores();
+        this.estado.animales = animalesRemotos.filter(a => this.perteneceAUsuarioActivo(a));
         this.renderizarCenso();
         this.actualizarKPIs();
-        this.ejecutarAuditoriaIntegridad(false);
       }
+      // Sincronizar perfiles de usuarios y solicitudes de inspección si existen tablas en Supabase
+      try {
+        const { data: usuariosRemotos, error: errU } = await this.supabaseClient.from('perfiles_usuarios').select('*');
+        if (!errU && usuariosRemotos && usuariosRemotos.length > 0) {
+          await this.db.putBatch('usuarios', usuariosRemotos);
+          this.estado.usuarios = await this.db.getAll('usuarios');
+          this.renderizarTablaUsuariosAdmin();
+        }
+      } catch (_) {}
+
+      try {
+        const { data: solicitudesRemotas, error: errS } = await this.supabaseClient.from('solicitudes_inspeccion').select('*');
+        if (!errS && solicitudesRemotas && solicitudesRemotas.length > 0) {
+          await this.db.putBatch('solicitudesInspeccion', solicitudesRemotas);
+          const todasSol = await this.db.getAll('solicitudesInspeccion');
+          const u = this.estado.usuarioActivo;
+          if (u && (u.rol === 'admin' || u.rol === 'inspector')) {
+            this.estado.solicitudesInspeccion = todasSol;
+          } else if (u) {
+            this.estado.solicitudesInspeccion = todasSol.filter(s => String(s.usuario_id) === String(u.id));
+          }
+          this.renderizarSolicitudesInspeccion();
+        }
+      } catch (_) {}
     } catch (e) {
       console.warn('[Supabase] Error sincronizando desde nube:', e);
     }
@@ -553,6 +882,30 @@ const app = {
           }
           await this.db.delete('syncQueue', item.id);
           sincronizados++;
+        } else if (item.tipo === 'USUARIO_PERFIL' || item.tipo === 'CAMBIO_ROL_ADMIN') {
+          try {
+            await this.supabaseClient.from('perfiles_usuarios').upsert(item.payload);
+          } catch (_) {}
+          await this.db.delete('syncQueue', item.id);
+          sincronizados++;
+        } else if (item.tipo === 'SOLICITUD_INSPECCION') {
+          try {
+            await this.supabaseClient.from('solicitudes_inspeccion').upsert(item.payload);
+          } catch (_) {}
+          await this.db.delete('syncQueue', item.id);
+          sincronizados++;
+        } else if (item.tipo === 'LOTE_INCUBACION') {
+          try {
+            await this.supabaseClient.from('lotes_incubacion').upsert(item.payload);
+          } catch (_) {}
+          await this.db.delete('syncQueue', item.id);
+          sincronizados++;
+        } else if (item.tipo === 'BANCO_GERMOPLASMA') {
+          try {
+            await this.supabaseClient.from('banco_germoplasma').upsert(item.payload);
+          } catch (_) {}
+          await this.db.delete('syncQueue', item.id);
+          sincronizados++;
         }
       } catch (err) {
         console.error('[SyncQueue] Error al sincronizar item:', item, err);
@@ -561,22 +914,27 @@ const app = {
 
     this.estado.syncQueue = await this.db.getAll('syncQueue');
     this.actualizarContadorSyncQueue();
+    if (sincronizados > 0) {
+      this.mostrarNotificacionToast(`☁️ Sincronizado: ${sincronizados} registro(s) subidos a Supabase.`, 'success');
+    }
     if (manual) {
       alert(`Sincronización completada. Se enviaron ${sincronizados} elementos a Supabase.`);
     }
   },
 
-  // Subir imagen en Base64 al Storage Bucket 'fotos-alacantina'
+  // Subir imagen en Base64 (WebP optimizado < 300 KB o JPEG/PNG) al Storage Bucket 'fotos-alacantina'
   async subirFotoStorage(animalId, tipoFoto, base64Data) {
     if (!this.supabaseClient) return null;
     try {
       const blob = this.base64ToBlob(base64Data);
-      const filePath = `${animalId}/${tipoFoto}_${Date.now()}.jpg`;
+      const mimeType = blob.type || 'image/webp';
+      const ext = mimeType.includes('webp') ? 'webp' : (mimeType.includes('png') ? 'png' : 'jpg');
+      const filePath = `${animalId}/${tipoFoto}_${Date.now()}.${ext}`;
 
       const { data, error } = await this.supabaseClient.storage
         .from('fotos-alacantina')
         .upload(filePath, blob, {
-          contentType: 'image/jpeg',
+          contentType: mimeType,
           upsert: true
         });
 
@@ -607,12 +965,30 @@ const app = {
   actualizarContadorSyncQueue() {
     const count = this.estado.syncQueue ? this.estado.syncQueue.length : 0;
     const badge = document.getElementById('sync-pending-count');
-    if (badge) {
-      if (count > 0) {
+    const btnSync = document.getElementById('btn-sync-queue');
+    const labelSync = document.getElementById('sync-monitor-label');
+
+    if (count > 0) {
+      if (badge) {
         badge.textContent = count;
         badge.classList.remove('hidden');
-      } else {
+      }
+      if (labelSync) {
+        labelSync.textContent = `☁️ ${count} ${count === 1 ? 'pendiente' : 'pendientes'}`;
+      }
+      if (btnSync) {
+        btnSync.className = 'relative px-2.5 py-1.5 rounded-xl bg-amber-950/90 hover:bg-amber-900/90 text-amber-300 border border-amber-500/70 text-xs font-bold flex items-center gap-1.5 transition shadow-sm';
+      }
+    } else {
+      if (badge) {
+        badge.textContent = '0';
         badge.classList.add('hidden');
+      }
+      if (labelSync) {
+        labelSync.textContent = '☁️ Sincronizado';
+      }
+      if (btnSync) {
+        btnSync.className = 'relative px-2.5 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-700/70 text-xs font-bold flex items-center gap-1.5 transition shadow-sm';
       }
     }
   },
@@ -620,67 +996,6 @@ const app = {
   // =========================================================================
   // 3. PESTAÑA 1: ALTA DE EJEMPLAR, GPS IN SITU Y 3 FOTOS OBLIGATORIAS
   // =========================================================================
-  obtenerVariedadesOficialesFemenino() {
-    return [
-      'Negra Moteada (Oficial)',
-      'Pinta o Exchequer (Oficial)',
-      'Blanca (Oficial)',
-      'Milflores (En proceso de reconocimiento)',
-      'Armiñada en negro (En proceso de reconocimiento)'
-    ];
-  },
-
-  normalizarVariedadFemenino(variedadRaw, fallback = 'Negra Moteada (Oficial)') {
-    const listaOficial = this.obtenerVariedadesOficialesFemenino();
-    if (!variedadRaw) return fallback;
-    const v = String(variedadRaw).trim();
-    if (listaOficial.includes(v)) return v;
-
-    const lower = v.toLowerCase();
-    if (lower.includes('exchequer') || lower.includes('pinta')) {
-      return 'Pinta o Exchequer (Oficial)';
-    }
-    if (lower.includes('motead')) {
-      return 'Negra Moteada (Oficial)';
-    }
-    if (lower.includes('blanc')) {
-      return 'Blanca (Oficial)';
-    }
-    if (lower.includes('milflores')) {
-      return 'Milflores (En proceso de reconocimiento)';
-    }
-    if (lower.includes('armiñad') || lower.includes('arminad')) {
-      return 'Armiñada en negro (En proceso de reconocimiento)';
-    }
-    return fallback;
-  },
-
-  obtenerDetalleAnatomicoVariedad(variedadRaw) {
-    const variedad = this.normalizarVariedadFemenino(variedadRaw);
-    if (variedad === 'Blanca (Oficial)') {
-      return {
-        variedad,
-        color_pico: 'Color hueso',
-        color_tarsos: 'Blanco-rosáceos (con pico hueso en Blanca)',
-        resumen_ficha: 'Pico color hueso · Tarsos blanco-rosáceos con pico hueso (Variedad Blanca).'
-      };
-    }
-    if (variedad === 'Negra Moteada (Oficial)' || variedad === 'Pinta o Exchequer (Oficial)') {
-      return {
-        variedad,
-        color_pico: 'Color córneo con manchas negras',
-        color_tarsos: 'Blanco-rosáceos con roña',
-        resumen_ficha: 'Pico color córneo con manchas negras · Tarsos blanco-rosáceos con roña (Variedades Negra Moteada y Pinta o Exchequer).'
-      };
-    }
-    return {
-      variedad,
-      color_pico: 'Color córneo con manchas negras (Moteada/Exchequer) | Color hueso (Blanca)',
-      color_tarsos: 'Blanco-rosáceos',
-      resumen_ficha: `${variedad}: Tarsos blanco-rosáceos · Estándar anatómico ESGA025 (pico color córneo con manchas negras en Moteada/Exchequer y color hueso en Blanca).`
-    };
-  },
-
   actualizarReglasSexo() {
     const sexo = document.getElementById('alta-sexo').value;
     const calibreHint = document.getElementById('alta-calibre-hint');
@@ -689,24 +1004,22 @@ const app = {
 
     if (sexo === 'Macho') {
       if (calibreHint) calibreHint.textContent = 'Calibre reglamentario: 20.0 mm (Gallo Repr.)';
+      if (pesoHint) pesoHint.textContent = 'Rango oficial reproductor: Gallo 3,000 kg – 3,500 kg (Media: 3.25 kg)';
       if (pesoInput) {
-        pesoInput.placeholder = 'Ej: 3.25';
-        const valAct = parseFloat(pesoInput.value);
-        if (!valAct || Math.abs(valAct - 2.40) < 0.005 || Math.abs(valAct - 3.20) < 0.005) {
+        pesoInput.placeholder = 'Ej: 3.25 (Media oficial Gallo: 3,000 - 3,500 kg)';
+        if (!pesoInput.value || pesoInput.value === '2.40' || pesoInput.value === '2.4') {
           pesoInput.value = '3.25';
         }
       }
-      if (pesoHint) pesoHint.textContent = 'Rango oficial ESGA025: Gallo 3.00 - 3.50 kg (Media: 3.25 kg) | Gallina 2.20 - 2.60 kg (Media: 2.40 kg)';
     } else {
       if (calibreHint) calibreHint.textContent = 'Calibre reglamentario: 18.0 mm (Gallina Repr.)';
+      if (pesoHint) pesoHint.textContent = 'Rango oficial reproductora: Gallina 2,200 kg – 2,600 kg (Media: 2.40 kg)';
       if (pesoInput) {
-        pesoInput.placeholder = 'Ej: 2.40';
-        const valAct = parseFloat(pesoInput.value);
-        if (!valAct || Math.abs(valAct - 3.25) < 0.005 || Math.abs(valAct - 3.20) < 0.005) {
+        pesoInput.placeholder = 'Ej: 2.40 (Media oficial Gallina: 2,200 - 2,600 kg)';
+        if (!pesoInput.value || pesoInput.value === '3.25') {
           pesoInput.value = '2.40';
         }
       }
-      if (pesoHint) pesoHint.textContent = 'Rango oficial ESGA025: Gallo 3.00 - 3.50 kg (Media: 3.25 kg) | Gallina 2.20 - 2.60 kg (Media: 2.40 kg)';
     }
     this.autogenerarCodigoOficial();
     this.validarPesoRacial();
@@ -746,15 +1059,15 @@ const app = {
     if (!peso || isNaN(peso)) return;
 
     let dentroDeRango = false;
-    if (sexo === 'Macho' && peso >= 3.00 && peso <= 3.50) dentroDeRango = true;
-    if (sexo === 'Hembra' && peso >= 2.20 && peso <= 2.60) dentroDeRango = true;
+    if (sexo === 'Macho' && peso >= 3.000 && peso <= 3.500) dentroDeRango = true;
+    if (sexo === 'Hembra' && peso >= 2.200 && peso <= 2.600) dentroDeRango = true;
 
     if (dentroDeRango) {
       feedback.className = 'text-[11px] text-emerald-400 mt-1 font-semibold';
-      feedback.textContent = `✓ Peso dentro del estándar racial oficial ESGA025 (${peso.toFixed(2)} kg · Media ref.: ${sexo === 'Macho' ? '3.25 kg' : '2.40 kg'}).`;
+      feedback.textContent = `✓ Peso dentro del estándar racial oficial (${peso.toFixed(3)} kg).`;
     } else {
       feedback.className = 'text-[11px] text-amber-400 mt-1 font-semibold';
-      feedback.textContent = `⚠️ Peso fuera del rango estricto ESGA025 (Gallo: 3.00-3.50 kg [Media 3.25 kg] | Gallina: 2.20-2.60 kg [Media 2.40 kg]).`;
+      feedback.textContent = `⚠️ Peso fuera del rango estricto de reproductor (Gallo: 3.0-3.5kg | Gallina: 2.2-2.6kg).`;
     }
   },
 
@@ -792,7 +1105,70 @@ const app = {
     );
   },
 
-  // Procesamiento y compresión en cliente de las 3 tomas fotográficas obligatorias
+  /**
+   * Compresor WebP transparente en cliente (Canvas HTML5):
+   * Convierte cualquier imagen de cámara o galería a formato WebP optimizado (< 300 KB)
+   * garantizando máxima fluidez offline/online sin perder calidad de inspección zootécnica.
+   */
+  comprimirImagenWebP(img, maxDim = 1280, maxBytes = 300 * 1024) {
+    const canvas = document.createElement('canvas');
+    let width = img.width || 1200;
+    let height = img.height || 900;
+
+    if (width > height && width > maxDim) {
+      height = Math.round((height * maxDim) / width);
+      width = maxDim;
+    } else if (height > maxDim) {
+      width = Math.round((width * maxDim) / height);
+      height = maxDim;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Comprobar soporte nativo de codificación image/webp en Canvas y ajustar calidad iterativamente (< 300 KB)
+    let quality = 0.84;
+    let dataUrl = canvas.toDataURL('image/webp', quality);
+    const mimeType = dataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+    if (mimeType === 'image/jpeg') {
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    const calcularBytesBase64 = (b64) => {
+      const idx = b64.indexOf(';base64,');
+      if (idx === -1) return b64.length;
+      return Math.ceil(((b64.length - (idx + 8)) * 3) / 4);
+    };
+
+    let bytes = calcularBytesBase64(dataUrl);
+    while (bytes > maxBytes && quality > 0.38) {
+      quality = Math.max(0.35, Number((quality - 0.1).toFixed(2)));
+      dataUrl = canvas.toDataURL(mimeType, quality);
+      bytes = calcularBytesBase64(dataUrl);
+    }
+
+    // Si aún supera 300 KB por resolución extrema, reducir escala un 20% adicional
+    if (bytes > maxBytes) {
+      canvas.width = Math.round(width * 0.8);
+      canvas.height = Math.round(height * 0.8);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      dataUrl = canvas.toDataURL(mimeType, 0.72);
+      bytes = calcularBytesBase64(dataUrl);
+    }
+
+    const kb = (bytes / 1024).toFixed(1);
+    console.log(`[Compresor WebP] Imagen optimizada en cliente: ${mimeType} · ${canvas.width}x${canvas.height}px · ${kb} KB (< 300 KB)`);
+    return {
+      dataUrl,
+      bytes,
+      kb,
+      mimeType
+    };
+  },
+
+  // Procesamiento y compresión WebP (< 300 KB) en cliente de las 3 tomas fotográficas obligatorias
   procesarCapturaFoto(tipoToma, inputElement) {
     const file = inputElement.files[0];
     if (!file) return;
@@ -801,29 +1177,12 @@ const app = {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Redimensionar y comprimir en canvas para optimizar almacenamiento y offline
-        const canvas = document.createElement('canvas');
-        const maxDim = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const base64Jpeg = canvas.toDataURL('image/jpeg', 0.82);
+        // Procesar en Canvas a formato WebP optimizado (< 300 KB) antes de guardar en IndexedDB o subir a Supabase
+        const comprimida = this.comprimirImagenWebP(img, 1280, 300 * 1024);
+        const base64Webp = comprimida.dataUrl;
 
         // Guardar en el estado temporal
-        this.estado.fotosCapturadas[tipoToma] = base64Jpeg;
+        this.estado.fotosCapturadas[tipoToma] = base64Webp;
 
         // Actualizar UI
         const slot = document.getElementById(`slot-${tipoToma}`);
@@ -833,13 +1192,16 @@ const app = {
         const badgeCaptura = document.getElementById(`badge-captura-${tipoToma}`);
 
         if (previewImg) {
-          previewImg.src = base64Jpeg;
+          previewImg.src = base64Webp;
           previewImg.classList.remove('hidden');
         }
         if (placeholder) placeholder.classList.add('hidden');
         if (slot) slot.classList.add('filled');
         if (btnEliminar) btnEliminar.classList.remove('hidden');
-        if (badgeCaptura) badgeCaptura.classList.remove('hidden');
+        if (badgeCaptura) {
+          badgeCaptura.textContent = `✓ WebP (${comprimida.kb} KB)`;
+          badgeCaptura.classList.remove('hidden');
+        }
       };
       img.src = e.target.result;
     };
@@ -880,7 +1242,7 @@ const app = {
   },
 
   // =========================================================================
-  // GESTOR DE FOTOGRAFÍAS OPCIONALES CON TITULADO / ETIQUETADO
+  // GESTOR DE FOTOGRAFÍAS OPCIONALES CON TITULADO / ETIQUETADO (COMPRESOR WEBP)
   // =========================================================================
   procesarCapturaFotoOpcional(inputElement) {
     const file = inputElement.files && inputElement.files[0];
@@ -894,30 +1256,15 @@ const app = {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Compresión y escalado Canvas JPEG cliente (máx 1200px, 0.82 calidad)
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 1200;
-
-        if (width > maxDim && width >= height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const base64Jpeg = canvas.toDataURL('image/jpeg', 0.82);
+        // Compresión transparente en cliente a formato WebP (< 300 KB) en Canvas
+        const comprimida = this.comprimirImagenWebP(img, 1280, 300 * 1024);
+        const base64Webp = comprimida.dataUrl;
 
         // Incorporar al estado reactivo
         this.estado.fotosOpcionalesCapturadas.push({
-          url: base64Jpeg,
+          url: base64Webp,
+          formato: 'WebP',
+          tamano_kb: Number(comprimida.kb),
           titulo: titulo || `Foto adicional #${this.estado.fotosOpcionalesCapturadas.length + 1}`,
           fecha: new Date().toISOString()
         });
@@ -1065,25 +1412,31 @@ const app = {
   async guardarNuevoAnimal(event) {
     event.preventDefault();
 
-    // 1. Vincular automáticamente la explotación / aviario activo
-    let aviario = this.estado.aviarioActivo;
+    const u = this.estado.usuarioActivo;
+    if (!u || this.estado.modoVisitante) {
+      alert('Debes iniciar sesión con una cuenta de usuario activa para dar de alta ejemplares.');
+      return;
+    }
+
+    // 1. Vincular estrictamente el aviario del usuario autenticado (app.estado.aviario)
+    let aviario = this.estado.aviario || this.estado.aviarioActivo;
     if (!aviario) {
       const selectVal = document.getElementById('alta-explotacion')?.value;
       if (selectVal) {
-        aviario = this.estado.explotaciones.find(e => e.id === selectVal);
+        aviario = this.estado.explotaciones.find(e => e.id === selectVal && this.perteneceAUsuarioActivo(e, u));
       }
     }
 
     if (!aviario) {
-      if (confirm('No tienes ningún aviario o explotación activa seleccionada.\n¿Deseas configurar tu aviario ahora para vincular automáticamente el código REGA y ubicación oficial?')) {
+      if (confirm('No tienes ningún aviario o explotación activa configurada en tu cuenta.\n¿Deseas configurar tu aviario ahora para vincular tu código REGA y ubicación?')) {
         this.abrirModalAviario(true);
-        return;
       }
+      return;
     }
 
-    const explotacionId = aviario ? aviario.id : (document.getElementById('alta-explotacion')?.value || null);
-    const codigoRega = aviario ? (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001') : 'TEMP-REGA-001';
-    const titularNombre = aviario ? (aviario.nombre_titular || 'Criador Asociado') : 'Criador Asociado';
+    const explotacionId = aviario.id;
+    const codigoRega = aviario.codigo_rega || aviario.rega || u.rega || 'TEMP-REGA-001';
+    const titularNombre = aviario.nombre_titular || u.nombre || '';
 
     const sexo = document.getElementById('alta-sexo').value;
     const anilla = document.getElementById('alta-anilla').value.trim();
@@ -1118,9 +1471,9 @@ const app = {
 
     const calibre = sexo === 'Macho' ? 20.0 : 18.0;
 
-    // GPS: Heredar automáticamente las coordenadas del aviario activo si no se capturó GPS específico
+    // GPS: Heredar dinámicamente las coordenadas reales del aviario del usuario logueado si no se capturó GPS puntual
     let gpsFinal = this.estado.gpsUbicacion;
-    if (!gpsFinal && aviario && aviario.latitud && aviario.longitud) {
+    if (!gpsFinal && aviario && aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
       gpsFinal = {
         latitud: Number(aviario.latitud),
         longitud: Number(aviario.longitud),
@@ -1129,19 +1482,16 @@ const app = {
       };
     }
 
-    const variedadNormalizada = this.normalizarVariedadFemenino(variedad);
-    const detalleAnatomico = this.obtenerDetalleAnatomicoVariedad(variedadNormalizada);
-    const pesoFinal = !isNaN(peso) && peso > 0 ? peso : (sexo === 'Macho' ? 3.25 : 2.40);
-
     const nuevoAnimal = {
       id: 'alac-' + Date.now(),
+      usuario_id: u.id,
       codigo_identificacion: codigoId,
       numero_anilla: anilla,
       calibre_anilla_mm: calibre,
       nombre: nombre || `Ejemplar ESGA025 #${anilla}`,
       sexo: sexo,
       fecha_nacimiento: fechaNac,
-      variedad: variedadNormalizada,
+      variedad: variedad,
       seccion_libro: seccion,
       id_padre: padreId,
       id_madre: madreId,
@@ -1149,16 +1499,15 @@ const app = {
       codigo_rega: codigoRega,
       titular_nombre: titularNombre,
       familia_origen: familia,
-      peso_actual_kg: pesoFinal,
+      peso_actual_kg: peso,
       rfid_chip_id: rfid,
       estado: 'Activo',
       coeficiente_consanguinidad: fx,
       feno_zoometria: {
         angulo_cola_grados: 70,
         perfil_pecho: 'Recto/Plano',
-        color_pico: detalleAnatomico.color_pico,
-        color_tarsos: detalleAnatomico.color_tarsos,
-        color_orejillas: 'Blanco puro'
+        color_tarsos: 'Blanco rosáceo',
+        color_orejillas: 'Blanco'
       },
       fotos: {
         lateral: this.estado.fotosCapturadas.lateral,
@@ -1470,8 +1819,9 @@ const app = {
 
     const filtrados = this.obtenerAnimalesFiltrados();
     this.actualizarConteoExportacion();
-    if (typeof this.ejecutarAuditoriaIntegridad === 'function') {
-      this.ejecutarAuditoriaIntegridad(false);
+
+    if (typeof this.actualizarPanelAuditoriaCenso === 'function' && this.estado.auditoria?.panelAbierto) {
+      this.actualizarPanelAuditoriaCenso();
     }
 
     if (filtrados.length === 0) {
@@ -1481,6 +1831,7 @@ const app = {
       if (msgVacio) msgVacio.classList.add('hidden');
     }
 
+    const f = this.estado.filtros || {};
     const filtroEtiqueta = (f.etiquetaGaleria || '').trim();
 
     filtrados.forEach(animal => {
@@ -1720,13 +2071,6 @@ const app = {
     document.getElementById('mf-padre-info').textContent = padre ? `${padre.numero_anilla} (${padre.codigo_identificacion})` : 'Sin registrar';
     document.getElementById('mf-madre-info').textContent = madre ? `${madre.numero_anilla} (${madre.codigo_identificacion})` : 'Sin registrar';
 
-    // Detalles anatómicos específicos por variedad (Pico y Tarsos - Estándar ESGA025)
-    const elAnatPicoTarsos = document.getElementById('mf-anatomia-pico-tarsos');
-    if (elAnatPicoTarsos) {
-      const detAnat = this.obtenerDetalleAnatomicoVariedad(animal.variedad);
-      elAnatPicoTarsos.textContent = detAnat.resumen_ficha;
-    }
-
     // Inspección morfológica resumen
     const insp = this.estado.inspecciones.find(i => i.animal_id === animal.id);
     const divInsp = document.getElementById('mf-inspeccion-resumen');
@@ -1874,25 +2218,12 @@ const app = {
     const totalPtsEl = document.getElementById('baremo-total-pts');
     const badgeVeredicto = document.getElementById('baremo-veredicto-badge');
 
-    // Validar rango ponderal estricto ESGA025 (Macho: 3.00-3.50 kg [media 3.25] | Hembra: 2.20-2.60 kg [media 2.40])
-    const animalSelId = document.getElementById('inspeccion-animal-select')?.value;
-    const animalSel = animalSelId ? this.estado.animales.find(a => a.id === animalSelId) : null;
-    const pesoVivo = animalSel ? Number(animalSel.peso_actual_kg) : NaN;
-    const fueraRangoPeso = animalSel && !isNaN(pesoVivo) && (
-      (animalSel.sexo === 'Macho' && (pesoVivo < 3.00 || pesoVivo > 3.50)) ||
-      (animalSel.sexo === 'Hembra' && (pesoVivo < 2.20 || pesoVivo > 2.60))
-    );
-
     totalPtsEl.textContent = total.toFixed(1);
 
     if (descalificado) {
       totalPtsEl.className = 'text-3xl font-extrabold text-red-500 font-mono';
       badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-red-950 border border-red-600 text-red-300';
-      badgeVeredicto.textContent = 'NO APTO (DESCALIFICADO POR DEFECTO REGLAMENTARIO ESGA025)';
-    } else if (fueraRangoPeso) {
-      totalPtsEl.className = 'text-3xl font-extrabold text-amber-400 font-mono';
-      badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-950 border border-amber-600 text-amber-300';
-      badgeVeredicto.textContent = `ALERTA DE PESO FUERA DE RANGO ESGA025 (${pesoVivo.toFixed(2)} kg · ${animalSel.sexo === 'Macho' ? '3.00-3.50 kg' : '2.20-2.60 kg'})`;
+      badgeVeredicto.textContent = 'NO APTO (DESCALIFICADO POR DEFECTO REGLAMENTARIO)';
     } else if (total >= 90.0) {
       totalPtsEl.className = 'text-3xl font-extrabold text-amber-400 font-mono';
       badgeVeredicto.className = 'inline-block mt-0.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-950 border border-amber-600 text-amber-300';
@@ -1918,7 +2249,8 @@ const app = {
     const animal = this.estado.animales.find(a => a.id === animalId);
     if (!animal) return;
 
-    const calificador = document.getElementById('inspeccion-calificador').value.trim() || 'Calificador Oficial CNZ';
+    const datosInsp = this.obtenerDatosInspectorActivo();
+    const calificador = document.getElementById('inspeccion-calificador').value.trim() || datosInsp.nombre || 'Inspector Zootécnico';
 
     const defOrejilla = document.getElementById('chk-def-orejilla').checked;
     const defPecho = document.getElementById('chk-def-pecho').checked;
@@ -1948,6 +2280,9 @@ const app = {
       animal_id: animalId,
       fecha_inspeccion: new Date().toISOString().split('T')[0],
       calificador_oficial: calificador,
+      inspector_id: datosInsp.id,
+      inspector_usuario_id: datosInsp.usuario_id,
+      firma_inspector_base64: datosInsp.firma_base64 || null,
       cabeza_cresta_cara: c1,
       cuello_esclavina: c2,
       pecho_tronco: c3,
@@ -2023,9 +2358,15 @@ const app = {
     const colorConforme = colorCascara.includes('crema');
     const conforme = (enRangoPeso && colorConforme);
 
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+
     const nuevoControl = {
       id: 'puesta-' + Date.now(),
       animal_id: animalId,
+      usuario_id: u?.id || animal.usuario_id || null,
+      explotacion_id: aviario?.id || animal.explotacion_id || null,
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || animal.codigo_rega || u?.rega || null,
       fecha_inicio: fInicio,
       fecha_fin: fFin,
       total_huevos_15d: totalHuevos,
@@ -2062,12 +2403,11 @@ const app = {
   // =========================================================================
 
   obtenerControlesPuestaSemilla() {
-    // Inicialización en Estado Cero: 0 controles de puesta ficticios
     return [];
   },
 
   cambiarSubtabPuesta(subtab) {
-    const tabs = ['analitica', 'rfid', 'registro', 'tabla'];
+    const tabs = ['analitica', 'rfid', 'registro', 'tabla', 'incubacion'];
     tabs.forEach(t => {
       const btn = document.getElementById(`btn-subtab-${t}-puesta`);
       const panel = document.getElementById(`subtab-${t}-puesta`);
@@ -2095,6 +2435,8 @@ const app = {
       this.poblarSelectoresRfid();
     } else if (subtab === 'tabla') {
       this.renderizarTablaHistorialPuesta();
+    } else if (subtab === 'incubacion') {
+      this.renderizarModuloIncubacion();
     } else if (subtab === 'registro') {
       const selectAnimal = document.getElementById('puesta-form-animal-select');
       const inspAnimal = document.getElementById('inspeccion-animal-select')?.value;
@@ -2108,25 +2450,30 @@ const app = {
   },
 
   poblarSelectoresAnaliticaPuesta() {
+    const gallinasPropias = (this.estado.animales || []).filter(a => a.sexo === 'Hembra' && this.perteneceAUsuarioActivo(a));
+    const lotesPropios = (this.estado.lotes || []).filter(l => this.perteneceAUsuarioActivo(l));
+
     // 1. Selector de gallina para analítica
     const selectAnimal = document.getElementById('filtro-analitica-animal');
     if (selectAnimal) {
       const valActual = selectAnimal.value;
       selectAnimal.innerHTML = '<option value="TODAS">Todas las gallinas reproductoras</option>';
-      this.estado.animales.filter(a => a.sexo === 'Hembra').forEach(a => {
+      gallinasPropias.forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
         opt.textContent = `#${a.numero_anilla} - ${a.nombre || a.codigo_identificacion} (${a.familia_origen})`;
         selectAnimal.appendChild(opt);
       });
-      if (valActual) selectAnimal.value = valActual;
+      if (valActual && (valActual === 'TODAS' || gallinasPropias.some(a => a.id === valActual))) {
+        selectAnimal.value = valActual;
+      }
     }
 
     // 2. Selector de lotes para analítica
     const optgroupLotes = document.getElementById('optgroup-analitica-lotes');
     if (optgroupLotes) {
       optgroupLotes.innerHTML = '';
-      (this.estado.lotes || []).forEach(lote => {
+      lotesPropios.forEach(lote => {
         const opt = document.createElement('option');
         opt.value = lote.codigo_lote || lote.id;
         opt.textContent = `${lote.codigo_lote} (${lote.familia_macho} → ${lote.familia_receptora})`;
@@ -2139,13 +2486,15 @@ const app = {
     if (selectFormAnimal) {
       const valActual = selectFormAnimal.value;
       selectFormAnimal.innerHTML = '<option value="">Selecciona una gallina...</option>';
-      this.estado.animales.filter(a => a.sexo === 'Hembra').forEach(a => {
+      gallinasPropias.forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
         opt.textContent = `#${a.numero_anilla} (${a.codigo_identificacion}) - ${a.nombre || 'Gallina'} [${a.familia_origen}]`;
         selectFormAnimal.appendChild(opt);
       });
-      if (valActual) selectFormAnimal.value = valActual;
+      if (valActual && gallinasPropias.some(a => a.id === valActual)) {
+        selectFormAnimal.value = valActual;
+      }
     }
   },
 
@@ -2154,7 +2503,12 @@ const app = {
     const loteFamilia = document.getElementById('filtro-analitica-lote')?.value || 'TODOS';
     const periodo = document.getElementById('filtro-analitica-periodo')?.value || 'TODAS';
 
-    let lista = [...(this.estado.controlesPuesta || [])];
+    // Aislar estrictamente para el usuario/aviario autenticado
+    let lista = (this.estado.controlesPuesta || []).filter(c => {
+      if (this.perteneceAUsuarioActivo(c)) return true;
+      const animal = this.estado.animales.find(a => a.id === c.animal_id);
+      return Boolean(animal && this.perteneceAUsuarioActivo(animal));
+    });
 
     // Filtro por animal
     if (animalId && animalId !== 'TODAS') {
@@ -3393,9 +3747,15 @@ const app = {
     const colorConforme = colorCascara.includes('crema');
     const conforme = enRangoPeso && colorConforme;
 
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+
     const nuevoControl = {
       id: 'puesta-rfid-' + Date.now(),
       animal_id: animal.id,
+      usuario_id: u?.id || animal.usuario_id || null,
+      explotacion_id: aviario?.id || animal.explotacion_id || null,
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || animal.codigo_rega || u?.rega || null,
       fecha_inicio: fechaSolo,
       fecha_fin: fechaSolo,
       hora_registro: fechaHora,
@@ -3867,36 +4227,51 @@ const app = {
     `;
   },
 
-  // Simulador de Apareamiento Preventivo (Gallo x Gallina)
+  // Simulador de Apareamiento Preventivo (Gallo x Gallina - 5 Generaciones Wright)
   simularCrucePreventivo() {
-    const machoId = document.getElementById('sim-macho').value;
-    const hembraId = document.getElementById('sim-hembra').value;
+    const machoId = document.getElementById('sim-macho')?.value;
+    const hembraId = document.getElementById('sim-hembra')?.value;
     const resultadoEl = document.getElementById('sim-fx-resultado');
     const recEl = document.getElementById('sim-recomendacion');
+    const boxEl = document.getElementById('sim-resultado-box');
 
     if (!machoId || !hembraId) {
-      resultadoEl.textContent = '--';
-      recEl.textContent = 'Selecciona ambos reproductores para simular el apareamiento.';
+      if (resultadoEl) resultadoEl.textContent = '--';
+      if (recEl) recEl.textContent = 'Selecciona ambos reproductores para simular el apareamiento.';
       return;
     }
 
-    const fx = this.zootecnia.calcularFxDescendencia(machoId, hembraId, this.estado.animales);
-    const fxPct = (fx * 100).toFixed(3);
+    const { fx, ancestrosComunes } = this.calcularFxWright5Gen(machoId, hembraId, this.estado.animales);
+    const fxPct = (fx * 100).toFixed(2);
+    const diag = this.obtenerDiagnosticoColorWright(fx);
 
-    resultadoEl.textContent = `${fx.toFixed(5)} (${fxPct}%)`;
+    if (resultadoEl) {
+      resultadoEl.textContent = `${fx.toFixed(4)} (${fxPct}%)`;
+      resultadoEl.className = `font-mono font-bold text-sm ${diag.textClass}`;
+    }
+    if (boxEl) {
+      boxEl.className = `p-3.5 rounded-lg border space-y-1.5 ${diag.borderClass}`;
+    }
 
-    if (fx > 0.0625) {
-      resultadoEl.className = 'font-mono font-bold text-sm text-red-400';
-      recEl.className = 'text-[11px] text-red-400 font-semibold';
-      recEl.innerHTML = `⚠️ <strong>CRUCE DESACONSEJADO:</strong> Consanguinidad esperada elevada (${fxPct}%). Alto riesgo de depresión consanguínea y pérdida de vigor híbrido según CNZ.`;
-    } else if (fx > 0.03) {
-      resultadoEl.className = 'font-mono font-bold text-sm text-amber-400';
-      recEl.className = 'text-[11px] text-amber-400 font-semibold';
-      recEl.innerHTML = `⚡ <strong>CRUCE MODERADO:</strong> Consanguinidad tolerable (${fxPct}%). Se recomienda compensar en la siguiente generación con otra familia.`;
-    } else {
-      resultadoEl.className = 'font-mono font-bold text-sm text-emerald-400';
-      recEl.className = 'text-[11px] text-emerald-400 font-semibold';
-      recEl.innerHTML = `✓ <strong>CRUCE ÓPTIMO RECOMENDADO:</strong> Consanguinidad muy baja (${fxPct}%). Cumple con el objetivo de mantenimiento de la variabilidad genética ESGA025.`;
+    const macho = (this.estado.animales || []).find(a => a.id === machoId);
+    const rotacionGobe = {
+      'Familia A': 'Familia B',
+      'Familia B': 'Familia C',
+      'Familia C': 'Familia D',
+      'Familia D': 'Familia E',
+      'Familia E': 'Familia A'
+    };
+    const famSugerida = macho?.familia_origen ? (rotacionGobe[macho.familia_origen] || 'Familia B') : 'Familia B';
+
+    if (recEl) {
+      recEl.className = `text-[11px] font-semibold ${diag.textClass}`;
+      recEl.innerHTML = `
+        <div><strong>${diag.etiqueta}</strong> (${fxPct}%).</div>
+        <div class="text-slate-300 font-normal mt-0.5">
+          ${ancestrosComunes.length > 0 ? `Ancestros comunes en 5 gen: ${ancestrosComunes.map(c => '#' + this.escaparHtml(c.anilla)).join(', ')}. ` : ''}
+          Regla de Gobe: El gallo #${this.escaparHtml(macho?.numero_anilla || '')} (${this.escaparHtml(macho?.familia_origen || '')}) rota óptimamente hacia hembras de <strong>${this.escaparHtml(famSugerida)}</strong>.
+        </div>
+      `;
     }
   },
 
@@ -4058,7 +4433,7 @@ const app = {
       const seccionLibro = a.seccion_libro || 'RN';
       const sexo = a.sexo || '';
       const fechaNac = a.fecha_nacimiento || '';
-      const variedad = this.normalizarVariedadFemenino(a.variedad);
+      const variedad = a.variedad || 'Moteada / Exchequer';
 
       // 3. Progenitores oficiales (anillas)
       const p = this.estado.animales.find(x => x.id === a.id_padre || x.codigo_identificacion === a.id_padre || x.numero_anilla === a.id_padre);
@@ -4194,10 +4569,10 @@ const app = {
       }
     });
 
-    // 7. Desglose por Variedades (Nomenclatura Unificada en Femenino ESGA025)
+    // 7. Desglose por Variedades
     const variedades = {};
     activos.forEach(a => {
-      const v = this.normalizarVariedadFemenino(a.variedad);
+      const v = a.variedad || 'Moteada / Exchequer';
       variedades[v] = (variedades[v] || 0) + 1;
     });
 
@@ -4464,24 +4839,25 @@ const app = {
 
     // 2. Recopilar datos de Explotación Ganadera y Criador Asociado
     let explotacion = this.estado.explotaciones.find(e => e.id === animal.explotacion_id);
-    if (!explotacion && this.estado.aviarioActivo) {
-      explotacion = this.estado.aviarioActivo;
+    if (!explotacion && (this.estado.aviario || this.estado.aviarioActivo)) {
+      explotacion = this.estado.aviario || this.estado.aviarioActivo;
     }
     if (!explotacion) {
       explotacion = {
-        nombre_titular: animal.titular_nombre || 'Criador Asociado ESGA025',
-        nombre_criadero: 'Aviario Oficial Alacantina',
-        codigo_rega: animal.codigo_rega || 'Sin REGA',
-        numero_socio: 'Aspirante',
+        nombre_titular: animal.titular_nombre || this.estado.usuarioActivo?.nombre || '',
+        nombre_criadero: 'Aviario Registrado ESGA025',
+        codigo_rega: animal.codigo_rega || this.estado.usuarioActivo?.rega || 'TEMP-REGA-001',
+        numero_socio: this.estado.usuarioActivo?.numero_socio || 'NS-000',
         municipio: 'Alicante',
         provincia: 'Alicante',
-        latitud: animal.geolocalizacion_alta?.latitud,
-        longitud: animal.geolocalizacion_alta?.longitud
+        latitud: animal.geolocalizacion_alta?.latitud ?? null,
+        longitud: animal.geolocalizacion_alta?.longitud ?? null
       };
     }
 
-    // 3. Recopilar Evaluación Morfológica Oficial (Baremo 100 Puntos CNZ)
+    // 3. Recopilar Evaluación Morfológica Oficial (Baremo 100 Puntos CNZ) e Inspector Dinámico
     const inspeccion = this.estado.inspecciones.find(i => i.animal_id === animal.id) || null;
+    const inspector = this.obtenerDatosInspectorActivo(inspeccion);
 
     // 4. Recopilar Control Oficial de Rendimiento y Puesta (15 Días)
     const controlPuesta = this.estado.controlesPuesta
@@ -4503,6 +4879,7 @@ const app = {
           ancestros,
           explotacion,
           inspeccion,
+          inspector,
           controlPuesta,
           fotos
         });
@@ -4515,7 +4892,7 @@ const app = {
         console.error('[App] Error al generar certificado zootécnico:', err);
         this.mostrarNotificacionToast('⚠️ Error al generar PDF cliente. Abriendo vista de impresión...', 'error');
         window.PDFEngine.abrirVentanaImpresionDirecta(
-          await window.PDFEngine.construirHtmlCertificado(animal, { ancestros, explotacion, inspeccion, controlPuesta, fotos }),
+          await window.PDFEngine.construirHtmlCertificado(animal, { ancestros, explotacion, inspeccion, inspector, controlPuesta, fotos }),
           `Certificado_ESGA025_${anillaLimpia}.pdf`
         );
       }
@@ -4575,10 +4952,10 @@ const app = {
       sugerenciaText.textContent = `Recomendación Gobe: Para cubrir hembras de ${familiaReceptora}, asignar un macho procedente de ${familiaOrigenSugerida}.`;
     }
 
-    // Filtrar select de gallos destacando los de esa familia
+    // Filtrar select de gallos destacando los de esa familia (solo animales del usuario/aviario activo)
     const selectGallo = document.getElementById('lote-gallo');
     if (selectGallo) {
-      const machos = this.estado.animales.filter(a => a.sexo === 'Macho');
+      const machos = this.estado.animales.filter(a => a.sexo === 'Macho' && this.perteneceAUsuarioActivo(a));
       selectGallo.innerHTML = '<option value="">-- Seleccionar Gallo Reproductor --</option>';
       machos.forEach(m => {
         const esSugerido = m.familia_origen === familiaOrigenSugerida;
@@ -4593,6 +4970,13 @@ const app = {
 
   async guardarNuevoLote(event) {
     event.preventDefault();
+
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+    if (!u || this.estado.modoVisitante) {
+      alert('Debes iniciar sesión con tu cuenta de criador para registrar lotes de reproducción.');
+      return;
+    }
 
     const codigo = document.getElementById('lote-codigo').value.trim();
     const receptora = document.getElementById('lote-familia-receptora').value;
@@ -4618,6 +5002,9 @@ const app = {
       temporada: temporada,
       rotacion_siguiente_familia: siguienteRotacion[receptora] || 'Familia A',
       activo: (estado === 'Activo'),
+      usuario_id: u.id,
+      explotacion_id: aviario?.id || u.explotacion_id || null,
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || u.rega || 'TEMP-REGA-001',
       notas: `Lote de apareamiento de temporada ${temporada} conforme a la Regla de Gobe.`
     };
 
@@ -4644,13 +5031,15 @@ const app = {
     const cont = document.getElementById('lista-lotes-container');
     if (!cont) return;
 
-    if (!this.estado.lotes || this.estado.lotes.length === 0) {
-      cont.innerHTML = '<p class="text-xs text-slate-500">No hay lotes de apareamiento registrados actualmente.</p>';
+    const lotesVisibles = (this.estado.lotes || []).filter(l => this.perteneceAUsuarioActivo(l));
+
+    if (lotesVisibles.length === 0) {
+      cont.innerHTML = '<p class="text-xs text-slate-500">No hay lotes de apareamiento registrados para este aviario/usuario actualmente.</p>';
       return;
     }
 
     cont.innerHTML = '';
-    this.estado.lotes.forEach(l => {
+    lotesVisibles.forEach(l => {
       const gallo = this.estado.animales.find(a => a.id === l.id_gallo);
       const card = document.createElement('div');
       card.className = 'p-3 rounded-lg bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs';
@@ -4769,10 +5158,28 @@ const app = {
     if (tabName === 'puesta') {
       tabName = 'inspeccion';
     }
+
+    const rolActual = this.obtenerRolUsuarioActual();
+
+    // Protección RBAC estricta para el Panel de Administración (Vista exclusiva Administrador)
+    if (tabName === 'admin' && rolActual !== 'administrador') {
+      this.mostrarNotificacionToast('🔒 Acceso restringido: El Panel de Administración es exclusivo para usuarios con rol Administrador.', 'warning');
+      tabName = 'censo';
+    }
+
+    // Protección Modo Visitante (Solo lectura: Censo, Pedigrí y Guía de Campo ESGA025)
+    if (rolActual === 'visitante' && ['registro', 'lotes', 'inspeccion-insitu', 'admin'].includes(tabName)) {
+      this.mostrarNotificacionToast('👀 Modo Visitante (Solo Lectura): Inicia sesión o regístrate para gestionar el censo, lotes o inspecciones.', 'info');
+      tabName = 'censo';
+    }
+
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-nav-btn').forEach(btn => {
       if (btn.id === 'tab-btn-inspeccion-insitu') {
         btn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold transition text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 shadow-sm';
+      } else if (btn.id === 'tab-btn-admin') {
+        const ocultoAdmin = rolActual !== 'administrador' ? ' hidden' : '';
+        btn.className = `tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold transition text-purple-300 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 shadow-sm${ocultoAdmin}`;
       } else {
         btn.className = 'tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800';
       }
@@ -4785,6 +5192,8 @@ const app = {
     if (targetBtn) {
       if (tabName === 'inspeccion-insitu') {
         targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition text-slate-950 bg-emerald-400 border-2 border-amber-300 shadow-lg';
+      } else if (tabName === 'admin') {
+        targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition text-white bg-purple-600 border-2 border-amber-300 shadow-lg';
       } else {
         targetBtn.className = 'tab-nav-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-amber-400 bg-slate-800 border border-amber-500/30';
       }
@@ -4795,10 +5204,38 @@ const app = {
     if (tabName === 'inspeccion') {
       setTimeout(() => {
         this.renderizarAnaliticaPuesta();
+        if (typeof this.renderizarModuloIncubacion === 'function') {
+          this.renderizarModuloIncubacion();
+        }
+      }, 50);
+    } else if (tabName === 'lotes') {
+      setTimeout(() => {
+        this.renderizarLotes();
+        if (typeof this.poblarSimuladorAcoplamientos === 'function') {
+          this.poblarSimuladorAcoplamientos();
+        }
+      }, 50);
+    } else if (tabName === 'mapa-gis') {
+      setTimeout(() => {
+        if (typeof this.actualizarMapaGIS === 'function') {
+          this.actualizarMapaGIS();
+        }
+      }, 80);
+    } else if (tabName === 'germoplasma') {
+      setTimeout(() => {
+        if (typeof this.renderizarModuloGermoplasma === 'function') {
+          this.renderizarModuloGermoplasma();
+        }
       }, 50);
     } else if (tabName === 'inspeccion-insitu') {
       setTimeout(() => {
         this.refrescarVistaInspeccionInSitu();
+        this.renderizarSolicitudesInspeccion();
+      }, 50);
+    } else if (tabName === 'admin') {
+      setTimeout(() => {
+        this.renderizarTablaUsuariosAdmin();
+        this.renderizarSolicitudesInspeccion();
       }, 50);
     }
   },
@@ -4910,13 +5347,16 @@ const app = {
       this.poblarSelectoresInSitu();
     }
 
-    // Select Filtro Variedad en Censo (5 Variedades Unificadas 100% en Femenino ESGA025)
+    // Select Filtro Variedad en Censo (FASE 2)
     const selectFiltroVariedad = document.getElementById('filtro-variedad');
     if (selectFiltroVariedad) {
-      const variedadesOficiales = this.obtenerVariedadesOficialesFemenino();
+      const variedades = new Set(['Moteada / Exchequer']);
+      this.estado.animales.forEach(a => {
+        if (a.variedad) variedades.add(a.variedad.trim());
+      });
       const valPrevio = selectFiltroVariedad.value || 'TODAS';
       selectFiltroVariedad.innerHTML = '<option value="TODAS">Variedad: Todas</option>';
-      variedadesOficiales.forEach(v => {
+      Array.from(variedades).sort().forEach(v => {
         const opt = document.createElement('option');
         opt.value = v;
         opt.textContent = v;
@@ -4933,6 +5373,15 @@ const app = {
     this.sugerirMachoGobe(document.getElementById('lote-familia-receptora')?.value || 'Familia B');
     this.poblarSelectoresAnaliticaPuesta();
     this.poblarSelectoresRfid();
+    if (typeof this.poblarSimuladorAcoplamientos === 'function') {
+      this.poblarSimuladorAcoplamientos();
+    }
+    if (typeof this.renderizarModuloIncubacion === 'function') {
+      this.renderizarModuloIncubacion();
+    }
+    if (typeof this.renderizarModuloGermoplasma === 'function') {
+      this.renderizarModuloGermoplasma();
+    }
   },
 
   // Modales de Configuración y SyncQueue
@@ -5023,55 +5472,118 @@ const app = {
   // 10. CONFIGURACIÓN DEL AVIARIO / CRIADOR, BADGE Y ACTUALIZACIÓN MASIVA
   // =========================================================================
 
-  // Comprobar si existe una explotación activa en localStorage / sesión o desplegar modal bienvenida
-  inicializarAviarioActivo() {
-    let aviarioActivoId = localStorage.getItem('alacantina_aviario_activo_id');
-    const modoVisitante = sessionStorage.getItem('alacantina_modo_visitante') === 'true';
+  // Comprobar e inicializar la explotación activa (app.estado.aviario / app.estado.aviarioActivo) vinculada estrictamente al usuario autenticado
+  async inicializarAviarioActivo() {
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
 
-    // Purga preventiva de IDs ficticios heredados en localStorage
-    if (aviarioActivoId === 'exp-01' || aviarioActivoId === 'exp-02') {
-      localStorage.removeItem('alacantina_aviario_activo_id');
-      localStorage.removeItem('alacantina_aviario_activo_datos');
-      aviarioActivoId = null;
+    // Si no hay sesión activa o está en Modo Visitante, limpiar app.estado.aviario y app.estado.aviarioActivo
+    if (!u || this.estado.modoVisitante) {
+      this.estado.aviario = null;
+      this.estado.aviarioActivo = null;
+      return;
     }
 
-    // 1. Buscar si hay una explotación guardada por ID
-    if (aviarioActivoId && this.estado.explotaciones && this.estado.explotaciones.length > 0) {
-      const exp = this.estado.explotaciones.find(e => e.id === aviarioActivoId);
-      if (exp) {
-        this.estado.aviarioActivo = exp;
+    const todasExplotacionesDB = await this.db.getAll('explotaciones');
+    const listaExplotaciones = Array.isArray(todasExplotacionesDB) && todasExplotacionesDB.length > 0
+      ? todasExplotacionesDB
+      : (this.estado.explotaciones || []);
+
+    let expUsuario = null;
+
+    // 1. Buscar estrictamente por usuario_id del usuario autenticado
+    if (u.id) {
+      expUsuario = listaExplotaciones.find(e => e.usuario_id && e.usuario_id === u.id) || null;
+    }
+
+    // 2. Si no se encontró por usuario_id, buscar por explotacion_id asignada al usuario activo
+    if (!expUsuario && u.explotacion_id) {
+      const candidata = listaExplotaciones.find(e => e.id === u.explotacion_id) || null;
+      if (candidata && (!candidata.usuario_id || candidata.usuario_id === u.id)) {
+        expUsuario = candidata;
       }
     }
 
-    // 2. Si no se encontró por ID, verificar si hay objeto completo guardado en localStorage
-    if (!this.estado.aviarioActivo) {
-      const raw = localStorage.getItem('alacantina_aviario_activo_datos');
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed && parsed.id && parsed.id !== 'exp-01' && parsed.id !== 'exp-02') {
-            this.estado.aviarioActivo = parsed;
-            if (!this.estado.explotaciones.some(e => e.id === parsed.id)) {
-              this.estado.explotaciones.push(parsed);
-              this.db.put('explotaciones', parsed);
-            }
-          } else {
-            localStorage.removeItem('alacantina_aviario_activo_datos');
-          }
-        } catch (e) {
-          console.warn('[Aviario] Error al parsear aviario guardado:', e);
+    // 3. Si no se encontró, buscar por código REGA oficial válido del usuario y coincidencia de titular
+    if (!expUsuario) {
+      const regaUser = (u.rega || '').trim().toUpperCase();
+      const tieneRegaOficial = this.esRegaOficialValido(regaUser);
+      expUsuario = listaExplotaciones.find(e => {
+        if (e.usuario_id && e.usuario_id !== u.id) return false;
+        const regaExp = (e.codigo_rega || e.rega || '').trim().toUpperCase();
+        if (tieneRegaOficial && regaExp === regaUser && (!e.nombre_titular || !u.nombre || e.nombre_titular.toLowerCase() === u.nombre.toLowerCase())) {
+          return true;
         }
-      }
+        return false;
+      }) || null;
     }
 
-    // 3. Si no hay aviario configurado y no se ha activado el modo visitante en esta sesión:
-    // Desplegar automáticamente el Modal de Bienvenida
-    if (!this.estado.aviarioActivo && !modoVisitante) {
-      console.log('[AlacantinApp v6] Sin aviario activo configurado. Desplegando modal de bienvenida en Estado Cero...');
-      setTimeout(() => {
-        this.abrirModalAviario(true);
-      }, 150);
+    const regaReal = (u.rega && this.esRegaOficialValido(u.rega))
+      ? u.rega.trim().toUpperCase()
+      : (u.codigo_provisional || 'TEMP-REGA-001');
+    const socioReal = u.numero_socio || (this.esRegaOficialValido(regaReal) ? ('SOC-' + regaReal.slice(-3)) : 'NS-000');
+    const nombreReal = u.nombre || u.email || 'Usuario Autenticado';
+
+    // 4. Si el usuario autenticado no tiene una explotación propia registrada aún, crear la suya con sus datos reales (sin coordenadas estáticas de prueba)
+    if (!expUsuario) {
+      expUsuario = {
+        id: (u.explotacion_id && !listaExplotaciones.some(e => e.id === u.explotacion_id && e.usuario_id && e.usuario_id !== u.id))
+          ? u.explotacion_id
+          : ('exp-usr-' + u.id),
+        usuario_id: u.id,
+        codigo_rega: regaReal,
+        rega: regaReal,
+        numero_socio: socioReal,
+        nombre_titular: nombreReal,
+        nombre_criadero: `Aviario de ${nombreReal}`,
+        municipio: u.municipio || 'Alicante',
+        provincia: u.provincia || 'Alicante',
+        telefono: u.telefono || '',
+        latitud: (u.latitud !== undefined && u.latitud !== null) ? Number(u.latitud) : null,
+        longitud: (u.longitud !== undefined && u.longitud !== null) ? Number(u.longitud) : null,
+        geolocalizacion_precision: (u.latitud !== undefined && u.latitud !== null) ? 10 : null,
+        activo: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      await this.db.put('explotaciones', expUsuario);
+      if (!Array.isArray(this.estado.explotaciones)) this.estado.explotaciones = [];
+      if (!this.estado.explotaciones.some(e => e.id === expUsuario.id)) {
+        this.estado.explotaciones.push(expUsuario);
+      }
+
+      u.explotacion_id = expUsuario.id;
+      await this.db.put('usuarios', u);
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
+    } else {
+      // Sobreescribir estrictamente con el usuario_id, código REGA y coordenadas GPS reales del usuario logueado
+      expUsuario.usuario_id = expUsuario.usuario_id || u.id;
+      if (u.nombre) expUsuario.nombre_titular = u.nombre;
+      if (u.telefono) expUsuario.telefono = u.telefono;
+      if (this.esRegaOficialValido(u.rega)) {
+        expUsuario.codigo_rega = u.rega.trim().toUpperCase();
+        expUsuario.rega = u.rega.trim().toUpperCase();
+      } else if (!this.esRegaOficialValido(expUsuario.codigo_rega)) {
+        expUsuario.codigo_rega = u.codigo_provisional || 'TEMP-REGA-001';
+        expUsuario.rega = expUsuario.codigo_rega;
+      }
+      if (u.numero_socio) {
+        expUsuario.numero_socio = u.numero_socio;
+      }
+      if (u.latitud !== undefined && u.latitud !== null && (expUsuario.latitud === undefined || expUsuario.latitud === null)) {
+        expUsuario.latitud = Number(u.latitud);
+      }
+      if (u.longitud !== undefined && u.longitud !== null && (expUsuario.longitud === undefined || expUsuario.longitud === null)) {
+        expUsuario.longitud = Number(u.longitud);
+      }
+      await this.db.put('explotaciones', expUsuario);
     }
+
+    // Sobreescribir estrictamente tanto app.estado.aviario como app.estado.aviarioActivo
+    this.estado.aviario = expUsuario;
+    this.estado.aviarioActivo = expUsuario;
+    localStorage.setItem('alacantina_aviario_activo_id', expUsuario.id);
+    localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(expUsuario));
   },
 
   // Abrir Modal de Configuración / Bienvenida
@@ -5085,7 +5597,7 @@ const app = {
     const selectExistentes = document.getElementById('select-aviarios-existentes');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
 
-    // Poblar selector de explotaciones existentes si las hay
+    // Poblar selector de explotaciones existentes visibles para este usuario
     if (selectExistentes) {
       selectExistentes.innerHTML = '<option value="">-- O seleccionar explotación existente registrada --</option>';
       if (this.estado.explotaciones && this.estado.explotaciones.length > 0) {
@@ -5102,21 +5614,23 @@ const app = {
       }
     }
 
+    const aviarioActual = this.estado.aviario || this.estado.aviarioActivo;
+
     // Configurar textos de bienvenida o edición
-    if (esBienvenida && !this.estado.aviarioActivo) {
+    if (esBienvenida && !aviarioActual) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
-      if (subtituloEl) subtituloEl.textContent = 'Bienvenido a AlacantinApp v6. Configura tu explotación zootécnica real o selecciona un rol en Estado Cero.';
-    } else if (this.estado.aviarioActivo) {
+      if (subtituloEl) subtituloEl.textContent = 'Bienvenido a AlacantinApp v6. Configura tu explotación zootécnica y código REGA oficial.';
+    } else if (aviarioActual) {
       if (tituloEl) tituloEl.textContent = 'Configuración del Aviario / Criador';
-      if (subtituloEl) subtituloEl.textContent = 'Actualiza los datos de tu explotación ganadera, código REGA oficial o geolocalización GPS.';
+      if (subtituloEl) subtituloEl.textContent = 'Actualiza los datos de tu explotación ganadera, código REGA oficial (ES + 12 dígitos) o geolocalización GPS.';
     }
 
     // Resetear temporal GPS
     this.estado.gpsAviarioTemporal = null;
 
     // Si hay un aviario activo, precargar sus datos en el formulario
-    if (this.estado.aviarioActivo) {
-      const av = this.estado.aviarioActivo;
+    if (aviarioActual) {
+      const av = aviarioActual;
       this.estado.editandoAviarioId = av.id;
 
       if (selectExistentes) selectExistentes.value = av.id;
@@ -5129,17 +5643,19 @@ const app = {
       const regaTramiteCheck = document.getElementById('aviario-rega-tramite');
       const munInput = document.getElementById('aviario-municipio');
       const provInput = document.getElementById('aviario-provincia');
+      const telInput = document.getElementById('aviario-telefono');
       const pill = document.getElementById('aviario-rega-status-pill');
 
-      if (titularInput) titularInput.value = av.nombre_titular || '';
+      if (titularInput) titularInput.value = av.nombre_titular || this.estado.usuarioActual?.nombre || '';
       if (nombreInput) nombreInput.value = av.nombre_criadero || '';
-      if (socioInput) socioInput.value = av.numero_socio || '';
+      if (socioInput) socioInput.value = av.numero_socio || this.estado.usuarioActual?.numero_socio || '';
       if (socioAspCheck) socioAspCheck.checked = (!av.numero_socio || av.numero_socio === 'NS-000');
+      if (telInput) telInput.value = av.telefono || this.estado.usuarioActual?.telefono || '';
 
-      const regaActual = av.codigo_rega || av.rega || '';
+      const regaActual = av.codigo_rega || av.rega || this.estado.usuarioActual?.rega || '';
       if (regaInput) regaInput.value = regaActual;
 
-      const esTempRega = (!regaActual || regaActual.startsWith('TEMP-REGA') || regaActual.toLowerCase().includes('sin rega'));
+      const esTempRega = (!regaActual || regaActual.startsWith('TEMP-REGA') || regaActual === 'NS-000' || regaActual.toLowerCase().includes('sin rega'));
       if (regaTramiteCheck) regaTramiteCheck.checked = esTempRega;
 
       if (pill) {
@@ -5162,7 +5678,7 @@ const app = {
       const badgeGps = document.getElementById('aviario-gps-badge');
       const btnGpsTexto = document.getElementById('btn-gps-aviario-texto');
 
-      if (av.latitud && av.longitud) {
+      if (av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
         if (latEl) latEl.textContent = Number(av.latitud).toFixed(6);
         if (lngEl) lngEl.textContent = Number(av.longitud).toFixed(6);
         if (precEl) precEl.textContent = av.geolocalizacion_precision || '--';
@@ -5190,13 +5706,24 @@ const app = {
           alertaCambio.classList.add('hidden');
         }
       }
+      this.alEscribirRega(regaActual);
     } else {
-      // Formulario limpio para nuevo aviario
+      // Formulario limpio para nuevo aviario, precargando datos del usuario actual si existe
       this.estado.editandoAviarioId = null;
       const form = document.getElementById('form-config-aviario');
       if (form) form.reset();
 
+      const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+      const titularInput = document.getElementById('aviario-titular');
+      const socioInput = document.getElementById('aviario-socio');
+      const regaInput = document.getElementById('aviario-rega');
+      const telInput = document.getElementById('aviario-telefono');
       const provInput = document.getElementById('aviario-provincia');
+
+      if (titularInput && u?.nombre) titularInput.value = u.nombre;
+      if (socioInput && u?.numero_socio) socioInput.value = u.numero_socio;
+      if (regaInput && u?.rega) regaInput.value = u.rega;
+      if (telInput && u?.telefono) telInput.value = u.telefono;
       if (provInput) provInput.value = 'Alicante';
 
       const latEl = document.getElementById('aviario-lat');
@@ -5229,37 +5756,8 @@ const app = {
 
   // Saltar por ahora / Modo Visitante
   saltarModoVisitante() {
-    sessionStorage.setItem('alacantina_modo_visitante', 'true');
-    this.estado.aviarioActivo = null;
-    localStorage.removeItem('alacantina_aviario_activo_id');
-    localStorage.removeItem('alacantina_aviario_activo_datos');
+    this.entrarComoVisitante();
     this.cerrarModalAviario();
-    this.actualizarBadgeAviario();
-    this.actualizarVistaRegistroAviario();
-  },
-
-  // Iniciar con rol de prueba / evaluación vinculado a un censo vacío (Estado Cero: 0 ejemplares, 0 aviarios ficticios)
-  iniciarConRolEstadoCero(rol = 'criador') {
-    sessionStorage.setItem('alacantina_modo_visitante', 'true');
-    this.estado.aviarioActivo = null;
-    localStorage.removeItem('alacantina_aviario_activo_id');
-    localStorage.removeItem('alacantina_aviario_activo_datos');
-    this.cambiarRolRBAC(rol);
-    const selRol = document.getElementById('selector-rol-rbac');
-    if (selRol) selRol.value = rol;
-    this.cerrarModalAviario();
-    this.actualizarBadgeAviario();
-    this.actualizarVistaRegistroAviario();
-    this.renderizarCenso();
-    this.actualizarKPIs();
-    if (typeof this.mostrarNotificacionToast === 'function') {
-      const nombresRol = {
-        criador: 'Criador Asociado',
-        inspector: 'Inspector Zootécnico CNZ',
-        direccion: 'Dirección Técnica LG'
-      };
-      this.mostrarNotificacionToast(`🛡️ Rol activo: ${nombresRol[rol] || rol} · Censo en Estado Cero (0 ejemplares).`, 'info');
-    }
   },
 
   // Toggle casilla "Aspirante / No socio aún"
@@ -5281,6 +5779,7 @@ const app = {
     const inputRega = document.getElementById('aviario-rega');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
+    const msgVal = document.getElementById('aviario-rega-validacion-msg');
 
     if (checked) {
       if (inputRega) {
@@ -5292,6 +5791,11 @@ const app = {
         pill.textContent = 'En trámite (Provisional)';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
       }
+      if (msgVal) {
+        msgVal.textContent = '🟡 REGA provisional en trámite (Rol Aspirante NS-000). Cuando introduzcas un REGA oficial (ES + 12 dígitos) serás promovido automáticamente a Criador Oficial.';
+        msgVal.className = 'text-[11px] font-semibold mt-1 text-amber-300';
+        msgVal.classList.remove('hidden');
+      }
     } else {
       if (inputRega && inputRega.value.startsWith('TEMP-REGA')) {
         inputRega.value = '';
@@ -5301,26 +5805,48 @@ const app = {
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
       }
       if (alertaCambio) alertaCambio.classList.add('hidden');
+      if (msgVal) msgVal.classList.add('hidden');
     }
   },
 
-  // Observador en tiempo real al escribir código REGA
+  // Observador en tiempo real al escribir código REGA (Validación ES + 12 dígitos y aviso de promoción)
   alEscribirRega(valor) {
     const v = (valor || '').trim().toUpperCase();
     const checkTramite = document.getElementById('aviario-rega-tramite');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
+    const msgVal = document.getElementById('aviario-rega-validacion-msg');
 
-    const esProvisional = (!v || v.startsWith('TEMP-REGA') || v.includes('SIN REGA'));
+    const esProvisional = (!v || v.startsWith('TEMP-REGA') || v === 'NS-000' || v.includes('SIN REGA'));
+    const esRegaOficialValido = /^ES\d{12}$/i.test(v);
 
     if (checkTramite) checkTramite.checked = esProvisional;
     if (pill) {
       if (esProvisional) {
         pill.textContent = 'En trámite (Provisional)';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
-      } else {
-        pill.textContent = 'REGA Oficial';
+      } else if (esRegaOficialValido) {
+        pill.textContent = '✓ REGA Oficial Válido';
         pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+      } else {
+        pill.textContent = 'Formato incompleto (ES + 12 dígitos)';
+        pill.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
+      }
+    }
+
+    if (msgVal) {
+      if (esRegaOficialValido) {
+        msgVal.textContent = '🟢 Código REGA oficial válido (ES + 12 dígitos). Al guardar, tu cuenta quedará acreditada como Criador Oficial con acceso total.';
+        msgVal.className = 'text-[11px] font-bold mt-1 text-emerald-400';
+        msgVal.classList.remove('hidden');
+      } else if (esProvisional) {
+        msgVal.textContent = '🟡 Identificador provisional (Aspirante). Introduce un REGA con formato ES + 12 dígitos (ej. ES030140001234) para promoción automática a Criador Oficial.';
+        msgVal.className = 'text-[11px] font-semibold mt-1 text-amber-300';
+        msgVal.classList.remove('hidden');
+      } else {
+        msgVal.textContent = '⚠️ El código REGA oficial debe tener exactamente el prefijo ES seguido de 12 dígitos numéricos (ej. ES030140001234), o marca "En trámite".';
+        msgVal.className = 'text-[11px] font-semibold mt-1 text-rose-400';
+        msgVal.classList.remove('hidden');
       }
     }
 
@@ -5416,6 +5942,7 @@ const app = {
     const regaTramiteCheck = document.getElementById('aviario-rega-tramite');
     const munInput = document.getElementById('aviario-municipio');
     const provInput = document.getElementById('aviario-provincia');
+    const telInput = document.getElementById('aviario-telefono');
     const pill = document.getElementById('aviario-rega-status-pill');
     const alertaCambio = document.getElementById('aviario-rega-cambio-alerta');
 
@@ -5423,6 +5950,7 @@ const app = {
     if (nombreInput) nombreInput.value = av.nombre_criadero || '';
     if (socioInput) socioInput.value = av.numero_socio || '';
     if (socioAspCheck) socioAspCheck.checked = (!av.numero_socio || av.numero_socio === 'NS-000');
+    if (telInput) telInput.value = av.telefono || this.estado.usuarioActual?.telefono || '';
 
     const regaActual = av.codigo_rega || av.rega || '';
     if (regaInput) regaInput.value = regaActual;
@@ -5448,7 +5976,7 @@ const app = {
     const precEl = document.getElementById('aviario-prec');
     const badgeGps = document.getElementById('aviario-gps-badge');
 
-    if (av.latitud && av.longitud) {
+    if (av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
       if (latEl) latEl.textContent = Number(av.latitud).toFixed(6);
       if (lngEl) lngEl.textContent = Number(av.longitud).toFixed(6);
       if (precEl) precEl.textContent = av.geolocalizacion_precision || '--';
@@ -5473,6 +6001,7 @@ const app = {
         alertaCambio.classList.add('hidden');
       }
     }
+    this.alEscribirRega(regaActual);
   },
 
   // Seleccionar aviario activo desde el selector desplegable en Tab 1
@@ -5480,6 +6009,7 @@ const app = {
     if (!explotacionId) return;
     const exp = this.estado.explotaciones.find(e => e.id === explotacionId);
     if (exp) {
+      this.estado.aviario = exp;
       this.estado.aviarioActivo = exp;
       localStorage.setItem('alacantina_aviario_activo_id', exp.id);
       localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(exp));
@@ -5489,7 +6019,7 @@ const app = {
     }
   },
 
-  // Guardar configuración del aviario y ejecutar actualización masiva si procede
+  // Guardar configuración del aviario y ejecutar actualización masiva + promoción automática por REGA
   async guardarConfigAviario(event) {
     event.preventDefault();
 
@@ -5501,6 +6031,7 @@ const app = {
     const regaTramite = document.getElementById('aviario-rega-tramite').checked;
     const municipio = document.getElementById('aviario-municipio').value.trim();
     const provincia = document.getElementById('aviario-provincia').value.trim() || 'Alicante';
+    const telefono = (document.getElementById('aviario-telefono')?.value || '').trim();
 
     if (!titular) {
       alert('Por favor, introduce el Nombre del Criador o Razón Social.');
@@ -5511,9 +6042,18 @@ const app = {
       return;
     }
 
+    // Validar formato estándar REGA (ES + 12 dígitos) si no está en trámite
+    const esProvisionalInput = regaTramite || !rega || rega.startsWith('TEMP-REGA') || rega === 'NS-000';
+    if (!esProvisionalInput && !/^ES\d{12}$/i.test(rega)) {
+      alert('⚠️ El código REGA oficial debe cumplir el formato estándar español: "ES" seguido de 12 dígitos numéricos (ejemplo: ES030140001234).\n\nSi todavía tienes el REGA en trámite, marca la casilla "En trámite / Sin REGA".');
+      return;
+    }
+
     // Regla de Socio Aspirante
     if (socioAspirante || !socio) {
-      socio = 'NS-000';
+      socio = /^ES\d{12}$/i.test(rega) ? ('SOC-' + rega.slice(-3)) : 'NS-000';
+    } else if (socio === 'NS-000' && /^ES\d{12}$/i.test(rega)) {
+      socio = 'SOC-' + rega.slice(-3);
     }
 
     // Regla de REGA en trámite / Sin REGA
@@ -5546,6 +6086,7 @@ const app = {
       }
     }
 
+    const uActivo = this.estado.usuarioActivo || this.estado.usuarioActual;
     const editandoId = this.estado.editandoAviarioId;
     let expFinal = null;
     let animalesActualizadosCount = 0;
@@ -5563,6 +6104,7 @@ const app = {
       const regaAnterior = expExistente.codigo_rega || expExistente.rega;
       const huboCambioRega = (regaAnterior !== rega);
 
+      expExistente.usuario_id = expExistente.usuario_id || uActivo?.id || null;
       expExistente.nombre_titular = titular;
       expExistente.nombre_criadero = nombreCriadero || titular;
       expExistente.numero_socio = socio;
@@ -5570,6 +6112,7 @@ const app = {
       expExistente.rega = rega;
       expExistente.municipio = municipio;
       expExistente.provincia = provincia;
+      if (telefono) expExistente.telefono = telefono;
       if (lat !== null) expExistente.latitud = lat;
       if (lng !== null) expExistente.longitud = lng;
       if (prec !== null) expExistente.geolocalizacion_precision = prec;
@@ -5580,14 +6123,15 @@ const app = {
       // 1. Guardar explotación actualizada en IndexedDB
       await this.db.put('explotaciones', expExistente);
 
-      // 2. Si hubo cambio de REGA: Ejecutar actualización masiva de todos los animales asociados
+      // 2. Si hubo cambio de REGA: Ejecutar actualización masiva de los animales de esta explotación/usuario
       if (huboCambioRega) {
         console.log(`[Aviario] Cambio de REGA detectado de ${regaAnterior} a ${rega}. Actualizando ejemplares asociados...`);
         
-        // Actualizar en IndexedDB
+        // Actualizar en IndexedDB únicamente los animales pertenecientes a esta explotación o usuario
         const todosAnimales = await this.db.getAll('animales');
         for (const a of todosAnimales) {
-          if (a.explotacion_id === expExistente.id || a.codigo_rega === regaAnterior) {
+          const esDelUsuarioOExplotacion = (a.explotacion_id === expExistente.id) || (uActivo?.id && a.usuario_id === uActivo.id);
+          if (esDelUsuarioOExplotacion) {
             a.codigo_rega = rega;
             a.titular_nombre = titular;
             await this.db.put('animales', a);
@@ -5597,7 +6141,7 @@ const app = {
 
         // Actualizar en estado reactivo en memoria
         this.estado.animales.forEach(a => {
-          if (a.explotacion_id === expExistente.id || a.codigo_rega === regaAnterior) {
+          if (a.explotacion_id === expExistente.id || (uActivo?.id && a.usuario_id === uActivo.id)) {
             a.codigo_rega = rega;
             a.titular_nombre = titular;
           }
@@ -5720,6 +6264,7 @@ const app = {
 
       const nuevaExp = {
         id: nuevoId,
+        usuario_id: uActivo?.id || null,
         codigo_rega: rega,
         rega: rega,
         numero_socio: socio,
@@ -5727,6 +6272,7 @@ const app = {
         nombre_criadero: nombreCriadero || titular,
         municipio: municipio,
         provincia: provincia,
+        telefono: telefono || '',
         latitud: lat,
         longitud: lng,
         geolocalizacion_precision: prec,
@@ -5764,14 +6310,24 @@ const app = {
       }
     }
 
-    // Establecer como aviario activo y persistir
+    // Establecer como aviario activo (app.estado.aviario y app.estado.aviarioActivo) y persistir
+    this.estado.aviario = expFinal;
     this.estado.aviarioActivo = expFinal;
     localStorage.setItem('alacantina_aviario_activo_id', expFinal.id);
     localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(expFinal));
     sessionStorage.removeItem('alacantina_modo_visitante');
 
+    if (uActivo) {
+      uActivo.explotacion_id = expFinal.id;
+      if (lat !== null) uActivo.latitud = lat;
+      if (lng !== null) uActivo.longitud = lng;
+    }
+
     this.estado.gpsAviarioTemporal = null;
     this.estado.editandoAviarioId = null;
+
+    // Verificar y ejecutar Promoción Automática de Rol si se introdujo un REGA Oficial Válido (ES + 12 dígitos)
+    const fuePromovidoACriador = await this.verificarYPromoverRolPorRega(rega, telefono, titular, socio);
 
     // Actualizar cola y UI completa
     this.estado.syncQueue = await this.db.getAll('syncQueue');
@@ -5779,12 +6335,17 @@ const app = {
     this.poblarSelectores();
     this.actualizarBadgeAviario();
     this.actualizarVistaRegistroAviario();
+    this.actualizarPastillaUsuario();
+    this.aplicarPermisosRBAC();
+    this.renderizarTablaUsuariosAdmin();
     this.renderizarCenso();
 
     // Cerrar el modal
     this.cerrarModalAviario();
 
-    if (animalesActualizadosCount > 0) {
+    if (fuePromovidoACriador) {
+      alert(`🎉 ¡PROMOCIÓN AUTOMÁTICA A CRIADOR OFICIAL!\n\nSe ha validado tu código REGA oficial (${rega}).\nTu cuenta ha sido actualizada automáticamente de "Aspirante" a "Criador Oficial" en Supabase y se han liberado todas las funciones del Libro Genealógico ESGA025.`);
+    } else if (animalesActualizadosCount > 0) {
       alert(`¡Aviario guardado con éxito!\nCódigo REGA: ${rega}\nSe han actualizado automáticamente ${animalesActualizadosCount} ejemplar(es) asociados a esta explotación.`);
     } else {
       alert(`¡Aviario "${expFinal.nombre_criadero || expFinal.nombre_titular}" guardado y configurado como activo!\nLos nuevos registros se vincularán automáticamente.`);
@@ -5793,64 +6354,87 @@ const app = {
 
   // Indicador visual en cabecera (Badge de Aviario Activo)
   actualizarBadgeAviario() {
-    const aviario = this.estado.aviarioActivo;
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    const aviario = (!u || this.estado.modoVisitante) ? null : (this.estado.aviario || this.estado.aviarioActivo);
     const nombreEl = document.getElementById('badge-aviario-nombre');
     const subtextoEl = document.getElementById('badge-aviario-subtexto');
     const estadoEl = document.getElementById('badge-aviario-estado');
 
-    if (aviario) {
-      const nombreMostrar = aviario.nombre_criadero || aviario.nombre_titular || 'Aviario Activo';
-      const rega = aviario.codigo_rega || aviario.rega;
-      const esProvisional = !rega || rega.startsWith('TEMP-REGA') || rega.toLowerCase().includes('sin rega');
+    if (aviario && u) {
+      const nombreMostrar = aviario.nombre_criadero || aviario.nombre_titular || u.nombre || 'Aviario Activo';
+      const regaRaw = (u.rega && /^ES\d{12}$/i.test(u.rega.trim()))
+        ? u.rega.trim().toUpperCase()
+        : (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001');
+      const esProvisional = !/^ES\d{12}$/i.test(regaRaw);
+      const regaMostrar = esProvisional ? 'TEMP-REGA-001' : regaRaw;
 
       if (nombreEl) nombreEl.textContent = nombreMostrar;
       if (subtextoEl) {
         if (esProvisional) {
-          subtextoEl.textContent = rega ? `REGA: ${rega} (Provisional)` : 'Sin REGA';
+          subtextoEl.textContent = `REGA: ${regaMostrar} (En trámite)`;
           subtextoEl.className = 'text-[10px] text-amber-400 font-mono truncate';
         } else {
-          subtextoEl.textContent = `REGA: ${rega}`;
+          subtextoEl.textContent = `REGA: ${regaMostrar}`;
           subtextoEl.className = 'text-[10px] text-emerald-300 font-mono truncate';
         }
       }
       if (estadoEl) {
         if (esProvisional) {
           estadoEl.textContent = 'En trámite';
-          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-amber-950 text-amber-400 border border-amber-800 hidden md:inline';
+          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-amber-950 text-amber-400 border border-amber-800 hidden lg:inline';
         } else {
           estadoEl.textContent = 'Oficial';
-          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden md:inline';
+          estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 hidden lg:inline';
         }
       }
     } else {
-      // Modo visitante o no configurado
-      if (nombreEl) nombreEl.textContent = 'Modo Visitante';
+      // Modo visitante o sin sesión activa
+      if (nombreEl) nombreEl.textContent = 'Sin Sesión';
       if (subtextoEl) {
-        subtextoEl.textContent = 'Sin REGA · Configurar Aviario';
+        subtextoEl.textContent = 'Sin REGA · Modo Lectura';
         subtextoEl.className = 'text-[10px] text-slate-400 font-mono truncate';
       }
       if (estadoEl) {
         estadoEl.textContent = 'Visitante';
-        estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700 hidden md:inline';
+        estadoEl.className = 'text-[9px] px-1 py-0.2 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700 hidden lg:inline';
       }
     }
   },
 
-  // Actualizar tarjeta compacta e indicadores en la pestaña de Registro (Tab 1)
+  // Actualizar tarjeta compacta e indicadores en la pestaña de Registro (Tab 1) y Censo (Tab 2)
   actualizarVistaRegistroAviario() {
-    const aviario = this.estado.aviarioActivo;
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    const aviario = (!u || this.estado.modoVisitante) ? null : (this.estado.aviario || this.estado.aviarioActivo);
     const boxInfo = document.getElementById('registro-aviario-info-box');
     const boxAviso = document.getElementById('registro-aviso-sin-aviario');
 
-    if (aviario) {
+    // Elementos de la ficha del aviario en Tab 2 (Censo) - IDs actuales en index.html
+    const censoTitulo = document.getElementById('censo-aviario-titulo');
+    const censoRegaPill = document.getElementById('censo-aviario-rega-pill');
+    const censoListosPill = document.getElementById('censo-aviario-listos-pill');
+    const censoSub = document.getElementById('censo-aviario-sub');
+
+    // Elementos alternativos legacy
+    const censoNombre = document.getElementById('censo-card-aviario-nombre');
+    const censoRega = document.getElementById('censo-card-aviario-rega');
+    const censoTitular = document.getElementById('censo-card-aviario-titular');
+    const censoGps = document.getElementById('censo-card-aviario-gps');
+    const censoTel = document.getElementById('censo-card-aviario-tel');
+
+    if (aviario && u) {
       if (boxInfo) boxInfo.classList.remove('hidden');
       if (boxAviso) boxAviso.classList.add('hidden');
 
-      const nombre = aviario.nombre_criadero || aviario.nombre_titular || 'Aviario Activo';
-      const rega = aviario.codigo_rega || aviario.rega || 'Sin REGA';
-      const socio = aviario.numero_socio || 'NS-000';
-      const titular = aviario.nombre_titular || 'Criador Asociado';
+      const titular = u.nombre || aviario.nombre_titular || u.email || 'Usuario Autenticado';
+      const nombre = aviario.nombre_criadero || `Aviario de ${titular}`;
+      const regaRaw = (u.rega && /^ES\d{12}$/i.test(u.rega.trim()))
+        ? u.rega.trim().toUpperCase()
+        : (aviario.codigo_rega || aviario.rega || 'TEMP-REGA-001');
+      const esProvisional = !/^ES\d{12}$/i.test(regaRaw);
+      const rega = esProvisional ? 'TEMP-REGA-001' : regaRaw;
+      const socio = u.numero_socio || aviario.numero_socio || (esProvisional ? 'NS-000' : ('SOC-' + rega.slice(-3)));
       const munProv = `${aviario.municipio || 'Alicante'}, ${aviario.provincia || 'Alicante'}`;
+      const telefono = u.telefono || aviario.telefono || 'Sin teléfono';
       
       const elNombre = document.getElementById('reg-box-aviario-nombre');
       const elRega = document.getElementById('reg-box-aviario-rega');
@@ -5862,17 +6446,15 @@ const app = {
       if (elNombre) elNombre.textContent = nombre;
       if (elRega) {
         elRega.textContent = `REGA: ${rega}`;
-        if (rega.startsWith('TEMP-REGA') || rega === 'Sin REGA') {
-          elRega.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
-        } else {
-          elRega.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
-        }
+        elRega.className = esProvisional
+          ? 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono'
+          : 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
       }
       if (elSocio) elSocio.textContent = `Socio: ${socio}`;
-      if (elTitular) elTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${titular}`;
-      if (elMun) elMun.innerHTML = `<i class="fa-solid fa-map-pin text-slate-500 mr-1"></i>${munProv}`;
+      if (elTitular) elTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${this.escaparHtml(titular)}`;
+      if (elMun) elMun.innerHTML = `<i class="fa-solid fa-map-pin text-slate-500 mr-1"></i>${this.escaparHtml(munProv)}`;
       if (elGps) {
-        if (aviario.latitud && aviario.longitud) {
+        if (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
           const lat = Number(aviario.latitud).toFixed(4);
           const lng = Number(aviario.longitud).toFixed(4);
           elGps.innerHTML = `<i class="fa-solid fa-satellite-dish mr-1"></i>GPS Aviario Heredado (${lat}, ${lng})`;
@@ -5883,15 +6465,72 @@ const app = {
         }
       }
 
+      // Calcular ejemplares listos para valorar (RN/RA) en este aviario
+      const listosCount = (this.estado.animales || []).filter(a =>
+        this.perteneceAUsuarioActivo(a, u, aviario) &&
+        (a.seccion_libro === 'RN' || a.seccion_libro === 'RA')
+      ).length;
+
+      // Actualizar Ficha del Aviario en Tab 2 (Censo) - IDs de index.html
+      if (censoTitulo) censoTitulo.textContent = nombre;
+      if (censoRegaPill) {
+        censoRegaPill.textContent = `REGA: ${rega}`;
+        censoRegaPill.className = esProvisional
+          ? 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40'
+          : 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+      }
+      if (censoListosPill) {
+        censoListosPill.textContent = `Listos para valorar (RN/RA): ${listosCount} ${listosCount === 1 ? 'ave' : 'aves'}`;
+      }
+      if (censoSub) {
+        const gpsStr = (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) ? 'GPS Verificado' : 'GPS Pendiente';
+        censoSub.textContent = `Titular: ${titular} · ${munProv} · Tel: ${telefono} · ${gpsStr}`;
+      }
+
+      // Actualizar también IDs alternativos si existen
+      if (censoNombre) censoNombre.textContent = nombre;
+      if (censoRega) {
+        censoRega.textContent = `REGA: ${rega}`;
+        censoRega.className = esProvisional
+          ? 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30'
+          : 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+      }
+      if (censoTitular) censoTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>${this.escaparHtml(titular)}`;
+      if (censoGps) {
+        if (aviario.latitud !== null && aviario.latitud !== undefined && aviario.longitud !== null && aviario.longitud !== undefined) {
+          censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-emerald-400 mr-1"></i>GPS: ${Number(aviario.latitud).toFixed(4)}, ${Number(aviario.longitud).toFixed(4)}`;
+        } else {
+          censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>GPS: ${this.escaparHtml(munProv)}`;
+        }
+      }
+      if (censoTel) censoTel.innerHTML = `<i class="fa-solid fa-phone text-amber-400 mr-1"></i>Tel: ${this.escaparHtml(telefono)}`;
+
       // Sincronizar selección en el dropdown de alta-explotacion si existe
       const selectExp = document.getElementById('alta-explotacion');
       if (selectExp && selectExp.value !== aviario.id) {
         selectExp.value = aviario.id;
       }
     } else {
-      // Modo visitante
+      // Modo visitante o sin sesión activa
       if (boxInfo) boxInfo.classList.add('hidden');
       if (boxAviso) boxAviso.classList.remove('hidden');
+
+      if (censoTitulo) censoTitulo.textContent = 'Modo Visitante (Consulta Pública)';
+      if (censoRegaPill) {
+        censoRegaPill.textContent = 'Sin REGA · Modo Lectura';
+        censoRegaPill.className = 'px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700';
+      }
+      if (censoListosPill) censoListosPill.textContent = 'Solo Lectura';
+      if (censoSub) censoSub.textContent = '👤 Visitante (Modo Lectura) · Inicia sesión para gestionar tu aviario';
+
+      if (censoNombre) censoNombre.textContent = 'Modo Visitante (Consulta Pública)';
+      if (censoRega) {
+        censoRega.textContent = 'Sin REGA';
+        censoRega.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700';
+      }
+      if (censoTitular) censoTitular.innerHTML = `<i class="fa-solid fa-user text-slate-500 mr-1"></i>Visitante`;
+      if (censoGps) censoGps.innerHTML = `<i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>GPS: Modo Lectura`;
+      if (censoTel) censoTel.innerHTML = `<i class="fa-solid fa-phone text-amber-400 mr-1"></i>Tel: --`;
     }
   },
 
@@ -5899,6 +6538,65 @@ const app = {
   // 11. FASE 6: MODO INSPECCIÓN ZOOTÉCNICA IN SITU, FIRMA DIGITAL Y GUÍA CAMPO
   // Cumplimiento: Estándar ESGA025 · Protocolo CNZ 2025 · Reg. (UE) 2016/1012
   // =========================================================================
+
+  // Extraer dinámicamente Nombre, ID/DNI y Firma Digital del perfil del usuario autenticado con rol Inspector Zootécnico / Administrador
+  obtenerDatosInspectorActivo(actaPrevia = null) {
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    const rol = this.obtenerRolUsuarioActual();
+    const esInspectorAutenticado = u && (rol === 'inspector' || rol === 'administrador');
+
+    const inputNombreVal = (document.getElementById('insitu-inspector-nombre')?.value || '').trim();
+    const inputIdVal = (document.getElementById('insitu-inspector-id')?.value || '').trim();
+    const inputTab3Val = (document.getElementById('inspeccion-calificador')?.value || '').trim();
+
+    const nombreDinamico = (esInspectorAutenticado && u.nombre)
+      ? u.nombre
+      : (actaPrevia?.calificador_oficial || inputNombreVal || inputTab3Val || u?.nombre || '');
+
+    const idDinamico = (esInspectorAutenticado && (u.dni || u.numero_socio || u.id))
+      ? (u.dni || u.numero_socio || u.id)
+      : (actaPrevia?.inspector_id || inputIdVal || u?.dni || u?.numero_socio || u?.id || '');
+
+    const firmaDinamica = this.estado.inspeccionInSitu?.firmaBase64
+      || (esInspectorAutenticado ? u.firma_base64 : null)
+      || actaPrevia?.firma_inspector_base64
+      || actaPrevia?.firma_storage_url
+      || u?.firma_base64
+      || null;
+
+    return {
+      nombre: nombreDinamico,
+      id: idDinamico,
+      dni: u?.dni || idDinamico,
+      rol: rol,
+      firma_base64: firmaDinamica
+    };
+  },
+
+  // Sincronizar campos de Calificador/Inspector en DOM (Fase 1 Tab 3 y Fase 6 Tab 6) con el perfil autenticado
+  sincronizarInputsInspectorAutenticado() {
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    const rol = this.obtenerRolUsuarioActual();
+    const inpInspId = document.getElementById('insitu-inspector-id');
+    const inpInspNombre = document.getElementById('insitu-inspector-nombre');
+    const inpCalifTab3 = document.getElementById('inspeccion-calificador');
+
+    if (u && (rol === 'inspector' || rol === 'administrador' || rol === 'criador' || rol === 'aspirante')) {
+      const idInspector = u.dni || u.numero_socio || u.id || '';
+      const nombreInspector = u.nombre || u.email || '';
+      if (inpInspId) inpInspId.value = idInspector;
+      if (inpInspNombre) inpInspNombre.value = nombreInspector;
+      if (inpCalifTab3) inpCalifTab3.value = nombreInspector;
+      if (u.firma_base64 && this.estado.inspeccionInSitu) {
+        this.estado.inspeccionInSitu.firmaBase64 = u.firma_base64;
+        this.estado.inspeccionInSitu.firmaConfirmada = true;
+      }
+    } else {
+      if (inpInspId) inpInspId.value = '';
+      if (inpInspNombre) inpInspNombre.value = '';
+      if (inpCalifTab3) inpCalifTab3.value = '';
+    }
+  },
 
   inicializarModuloInspeccionInSitu() {
     // 1. Inicializar fecha/hora actual en el campo de inspección in situ
@@ -5909,22 +6607,24 @@ const app = {
       inputFechaHora.value = new Date(now - offset).toISOString().slice(0, 16);
     }
 
-    // 2. Sincronizar rol RBAC inicial
-    const rolGuardado = localStorage.getItem('alacantina_rol_rbac') || 'inspector';
+    // 2. Sincronizar rol RBAC y datos reales del Inspector autenticado
+    const rolGuardado = this.obtenerRolUsuarioActual();
     this.estado.inspeccionInSitu.rolRBAC = rolGuardado;
-    const selectRol = document.getElementById('selector-rol-rbac');
-    if (selectRol) selectRol.value = rolGuardado;
     this.actualizarBadgeRBACInSitu(rolGuardado);
+    this.sincronizarInputsInspectorAutenticado();
 
-    // 3. Heredar coordenadas GPS iniciales del aviario activo si existe
-    if (this.estado.aviarioActivo && this.estado.aviarioActivo.latitud && this.estado.aviarioActivo.longitud) {
+    // 3. Heredar coordenadas GPS iniciales del aviario activo del usuario si existen
+    const av = this.estado.aviario || this.estado.aviarioActivo;
+    if (av && av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
       this.estado.inspeccionInSitu.gpsInSitu = {
-        latitud: Number(this.estado.aviarioActivo.latitud),
-        longitud: Number(this.estado.aviarioActivo.longitud),
-        precision_m: Number(this.estado.aviarioActivo.geolocalizacion_precision) || 5
+        latitud: Number(av.latitud),
+        longitud: Number(av.longitud),
+        precision_m: Number(av.geolocalizacion_precision) || 5
       };
-      this.actualizarUIGpsInSitu();
+    } else {
+      this.estado.inspeccionInSitu.gpsInSitu = null;
     }
+    this.actualizarUIGpsInSitu();
 
     // 4. Inicializar selectores, Canvas de firma digital, Guía de 12 Regiones y Actas
     this.poblarSelectoresInSitu();
@@ -5934,7 +6634,7 @@ const app = {
     this.recalcularInSitu();
     this.renderizarHistorialActasInSitu();
 
-    // Preseleccionar primer ejemplar aspirante (RN) o primer animal del censo
+    // Preseleccionar primer ejemplar aspirante (RN) o primer animal del censo visible
     if (this.estado.animales && this.estado.animales.length > 0 && !this.estado.inspeccionInSitu.animalActualId) {
       const aspirante = this.estado.animales.find(a => a.seccion_libro === 'RN') || this.estado.animales[0];
       if (aspirante) {
@@ -5946,6 +6646,7 @@ const app = {
   },
 
   refrescarVistaInspeccionInSitu() {
+    this.sincronizarInputsInspectorAutenticado();
     this.poblarSelectoresInSitu();
     this.redimensionarCanvasFirma();
     this.renderizarHistorialActasInSitu();
@@ -6041,7 +6742,7 @@ const app = {
     if (btnTxt) btnTxt.textContent = '🛰️ Localizando GPS...';
 
     if (!navigator.geolocation) {
-      this.mostrarNotificacionToast('⚠️ Navegador sin soporte GPS. Usando coordenadas REGA del aviario.', 'error');
+      this.mostrarNotificacionToast('⚠️ Navegador sin soporte GPS.', 'error');
       if (btnTxt) btnTxt.textContent = '📍 Capturar GPS In Situ';
       return;
     }
@@ -6061,29 +6762,32 @@ const app = {
         );
       },
       (err) => {
-        console.warn('[GPS InSitu] Fallback a coordenadas de explotación:', err);
-        const av = this.estado.aviarioActivo || this.estado.explotaciones[0];
-        if (av && av.latitud && av.longitud) {
+        console.warn('[GPS InSitu] Error al capturar GPS:', err);
+        const av = this.estado.aviario || this.estado.aviarioActivo;
+        if (av && av.latitud !== null && av.latitud !== undefined && av.longitud !== null && av.longitud !== undefined) {
           this.estado.inspeccionInSitu.gpsInSitu = {
             latitud: Number(av.latitud),
             longitud: Number(av.longitud),
             precision_m: Number(av.geolocalizacion_precision) || 6
           };
           this.actualizarUIGpsInSitu();
+          if (btnTxt) btnTxt.textContent = '📍 GPS Aviario';
+          this.mostrarNotificacionToast('📍 Usando coordenadas GPS registradas de la explotación.', 'info');
+        } else {
+          if (btnTxt) btnTxt.textContent = '📍 Capturar GPS In Situ';
+          this.mostrarNotificacionToast('⚠️ No se pudo obtener ubicación GPS.', 'error');
         }
-        if (btnTxt) btnTxt.textContent = '📍 GPS Aviario (Fallback)';
-        this.mostrarNotificacionToast('📍 Usando coordenadas GPS oficiales de la explotación REGA.', 'info');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   },
 
   actualizarUIGpsInSitu() {
-    const gps = this.estado.inspeccionInSitu.gpsInSitu;
+    const gps = this.estado.inspeccionInSitu?.gpsInSitu;
     const latEl = document.getElementById('insitu-gps-lat');
     const lngEl = document.getElementById('insitu-gps-lng');
     const precEl = document.getElementById('insitu-gps-prec');
-    if (gps && gps.latitud != null && gps.longitud != null) {
+    if (gps && gps.latitud !== null && gps.latitud !== undefined && gps.longitud !== null && gps.longitud !== undefined) {
       if (latEl) latEl.textContent = Number(gps.latitud).toFixed(6);
       if (lngEl) lngEl.textContent = Number(gps.longitud).toFixed(6);
       if (precEl) precEl.textContent = gps.precision_m || 5;
@@ -6175,9 +6879,9 @@ const app = {
 
     if (!animal) return;
 
-    // Obtener explotación vinculada
-    const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviarioActivo;
-    const regaAnimal = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'Sin REGA';
+    // Obtener explotación vinculada dinámicamente (sin fallback hardcodeado ES030140000001)
+    const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviario || this.estado.aviarioActivo;
+    const regaAnimal = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'TEMP-REGA-001';
 
     // Actualizar tarjeta resumen del ejemplar
     const imgEl = document.getElementById('insitu-animal-foto');
@@ -6208,12 +6912,19 @@ const app = {
       pesoFxEl.textContent = `${animal.peso_actual_kg ? animal.peso_actual_kg.toFixed(3) : '--'} kg · Fx: ${fxPct}%`;
     }
 
-    // Actualizar GPS si la explotación tiene coordenadas
-    if (exp && exp.latitud && exp.longitud) {
+    // Actualizar GPS solo si la explotación o el ejemplar tienen coordenadas reales
+    if (exp && exp.latitud !== null && exp.latitud !== undefined && exp.longitud !== null && exp.longitud !== undefined) {
       this.estado.inspeccionInSitu.gpsInSitu = {
         latitud: Number(exp.latitud),
         longitud: Number(exp.longitud),
         precision_m: Number(exp.geolocalizacion_precision) || 5
+      };
+      this.actualizarUIGpsInSitu();
+    } else if (animal.geolocalizacion_alta?.latitud && animal.geolocalizacion_alta?.longitud) {
+      this.estado.inspeccionInSitu.gpsInSitu = {
+        latitud: Number(animal.geolocalizacion_alta.latitud),
+        longitud: Number(animal.geolocalizacion_alta.longitud),
+        precision_m: Number(animal.geolocalizacion_alta.precision_m) || 5
       };
       this.actualizarUIGpsInSitu();
     }
@@ -6582,8 +7293,9 @@ const app = {
     const canvas = document.getElementById('canvas-firma-inspector');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const inspectorId = document.getElementById('insitu-inspector-id')?.value || 'INSP-CNZ-025';
-    const inspectorNombre = document.getElementById('insitu-inspector-nombre')?.value || 'Dr. Zootecnista CNZ';
+    const datosInsp = this.obtenerDatosInspectorActivo();
+    const inspectorId = datosInsp.id || 'ID-SIN-ASIGNAR';
+    const inspectorNombre = datosInsp.nombre || 'Inspector Autenticado';
 
     ctx.save();
     ctx.strokeStyle = this.estado.inspeccionInSitu.modoExteriorSolar ? '#0f172a' : '#38bdf8';
@@ -6596,7 +7308,7 @@ const app = {
     ctx.bezierCurveTo(465, 65, 495, 115, 520, 95);
     ctx.stroke();
 
-    // Subrayado y sello técnico
+    // Subrayado y sello técnico con los datos reales del Inspector autenticado
     ctx.beginPath();
     ctx.moveTo(110, 140);
     ctx.lineTo(485, 132);
@@ -6609,11 +7321,11 @@ const app = {
     this.estado.inspeccionInSitu.trazosFirma = 3;
   },
 
-  confirmarFirmaInspector() {
+  async confirmarFirmaInspector() {
     const canvas = document.getElementById('canvas-firma-inspector');
     if (!canvas) return false;
 
-    // Si el inspector pulsa confirmar sin haber trazado manualmente, trazamos su rúbrica digital acreditada en el canvas
+    // Si el inspector pulsa confirmar sin haber trazado manualmente, trazamos su rúbrica digital acreditada con su nombre e ID reales
     if (this.estado.inspeccionInSitu.trazosFirma === 0) {
       this.generarRubricaAutomaticaEnCanvas();
     }
@@ -6622,13 +7334,23 @@ const app = {
     this.estado.inspeccionInSitu.firmaBase64 = dataUrl;
     this.estado.inspeccionInSitu.firmaConfirmada = true;
 
+    // Guardar también la firma digital en el perfil del usuario autenticado (Inspector / Admin)
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (u) {
+      u.firma_base64 = dataUrl;
+      this.estado.usuarioActivo = u;
+      this.estado.usuarioActual = u;
+      await this.db.put('usuarios', u);
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
+    }
+
     const badge = document.getElementById('badge-estado-firma');
     if (badge) {
       badge.textContent = '✓ Firma Digital Confirmada (Base64)';
       badge.className = 'px-2.5 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500 uppercase';
     }
 
-    this.mostrarNotificacionToast('✍️ Firma manuscrita del inspector confirmada y codificada en Base64.', 'success');
+    this.mostrarNotificacionToast('✍️ Firma manuscrita del inspector confirmada y vinculada a tu perfil.', 'success');
     return true;
   },
 
@@ -6637,13 +7359,11 @@ const app = {
   // =========================================================================
   async guardarActaInspeccionInSitu() {
     // Verificar rol RBAC
-    if (this.estado.inspeccionInSitu.rolRBAC === 'criador') {
-      if (!confirm('Estás en el rol "Criador". La emisión de Actas Oficiales corresponde al Inspector Zootécnico CNZ.\n¿Deseas conmutar automáticamente al rol "Inspector Zootécnico CNZ" y emitir el acta?')) {
+    if (this.estado.inspeccionInSitu.rolRBAC === 'criador' || this.estado.inspeccionInSitu.rolRBAC === 'aspirante') {
+      if (!confirm('Estás en el rol de Criador/Aspirante. La emisión de Actas Oficiales corresponde al Inspector Zootécnico CNZ.\n¿Deseas conmutar automáticamente al modo Inspector y emitir el acta con tus datos de sesión?')) {
         return;
       }
       this.cambiarRolRBAC('inspector');
-      const selRol = document.getElementById('selector-rol-rbac');
-      if (selRol) selRol.value = 'inspector';
     }
 
     const animalId = this.estado.inspeccionInSitu.animalActualId || document.getElementById('insitu-animal-select')?.value;
@@ -6660,18 +7380,26 @@ const app = {
 
     // Confirmar firma automáticamente si aún no se pulsó Confirmar
     if (!this.estado.inspeccionInSitu.firmaConfirmada || !this.estado.inspeccionInSitu.firmaBase64) {
-      this.confirmarFirmaInspector();
+      await this.confirmarFirmaInspector();
     }
 
-    const inspectorId = (document.getElementById('insitu-inspector-id')?.value || 'INSP-CNZ-025').trim();
-    const inspectorNombre = (document.getElementById('insitu-inspector-nombre')?.value || 'Dr. Zootecnista CNZ ESGA025').trim();
+    // Extraer dinámicamente Nombre, ID/DNI y Firma Digital del usuario autenticado
+    const datosInspector = this.obtenerDatosInspectorActivo();
+    const inspectorId = datosInspector.id;
+    const inspectorNombre = datosInspector.nombre;
+
+    if (!inspectorNombre || !inspectorId) {
+      alert('Por favor, verifica que tu perfil de Inspector Zootécnico tenga Nombre e ID/DNI válidos.');
+      return;
+    }
+
     const fechaHoraVal = document.getElementById('insitu-fecha-hora')?.value || new Date().toISOString().slice(0, 16);
     const fechaSolo = fechaHoraVal.split('T')[0];
 
-    const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviarioActivo;
-    const codigoRega = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'Sin REGA';
-    const titularAviario = exp?.nombre_titular || animal.titular_nombre || 'Criador Oficial ESGA025';
-    const nombreAviario = exp?.nombre_criadero || 'Aviario Oficial Alacantina';
+    const exp = (this.estado.explotaciones || []).find(e => e.id === animal.explotacion_id) || this.estado.aviario || this.estado.aviarioActivo;
+    const codigoRega = animal.codigo_rega || exp?.codigo_rega || exp?.rega || 'TEMP-REGA-001';
+    const titularAviario = exp?.nombre_titular || animal.titular_nombre || '';
+    const nombreAviario = exp?.nombre_criadero || '';
 
     // Puntuaciones del Baremo de 100 Puntos
     const leer = (id) => parseFloat(document.getElementById(id)?.value) || 0;
@@ -6684,16 +7412,16 @@ const app = {
     const c7 = leer('insitu-rng-peso');
     const total = c1 + c2 + c3 + c4 + c5 + c6 + c7;
 
-    // Defectos descalificables detectados (5 defectos graves oficiales del Estándar 2025)
+    // Defectos descalificables detectados
     const defs = this.estado.inspeccionInSitu.defectos;
     const descalificado = Boolean(defs.orejilla || defs.pecho || defs.cola || defs.tarsos || defs.flameado);
 
     const TextosDefectos = [];
-    if (defs.orejilla) TextosDefectos.push('Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).');
-    if (defs.pecho) TextosDefectos.push('Pecho prominente o abombado (debe ser recto y plano).');
-    if (defs.cola) TextosDefectos.push('Cola baja (<70º sobre la horizontal) o larga.');
-    if (defs.flameado) TextosDefectos.push('Flameado de esclavina en variedades Moteada y Exchequer.');
-    if (defs.tarsos) TextosDefectos.push('Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).');
+    if (defs.orejilla) TextosDefectos.push('Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro)');
+    if (defs.pecho) TextosDefectos.push('Pecho prominente o abombado (debe ser recto y plano)');
+    if (defs.cola) TextosDefectos.push('Cola baja (<70º sobre la horizontal) o larga');
+    if (defs.flameado) TextosDefectos.push('Flameado de esclavina en variedades Moteada y Exchequer');
+    if (defs.tarsos) TextosDefectos.push('Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca)');
 
     const dictamen = this.estado.inspeccionInSitu.dictamenSeleccionado || 'APTO_RD';
     const seccionAnterior = animal.seccion_libro || 'RN';
@@ -6711,9 +7439,10 @@ const app = {
       calificacionTexto = 'No Apto / Baja';
     }
 
-    const gps = this.estado.inspeccionInSitu.gpsInSitu || { latitud: null, longitud: null, precision_m: null };
+    const gps = this.estado.inspeccionInSitu.gpsInSitu || (exp && exp.latitud && exp.longitud ? { latitud: exp.latitud, longitud: exp.longitud, precision_m: exp.geolocalizacion_precision || 5 } : null);
     const obsInput = (document.getElementById('insitu-observaciones')?.value || '').trim();
     const codigoActa = `ACTA-ESGA025-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const uActivo = this.estado.usuarioActivo || this.estado.usuarioActual;
 
     const nuevaActa = {
       id: 'insp-acta-' + Date.now(),
@@ -6727,16 +7456,18 @@ const app = {
       codigo_rega: codigoRega,
       nombre_aviario: nombreAviario,
       titular_aviario: titularAviario,
+      inspector_usuario_id: uActivo?.id || null,
       inspector_id: inspectorId,
+      inspector_dni: datosInspector.dni || inspectorId,
       calificador_oficial: inspectorNombre,
       rol_rbac: this.estado.inspeccionInSitu.rolRBAC,
       fecha_inspeccion: fechaSolo,
       fecha_hora_inspeccion: fechaHoraVal,
-      coordenadas_gps: {
+      coordenadas_gps: gps ? {
         latitud: gps.latitud,
         longitud: gps.longitud,
         precision_m: gps.precision_m
-      },
+      } : null,
       cabeza_cresta_cara: c1,
       cuello_esclavina: c2,
       pecho_tronco: c3,
@@ -6756,7 +7487,7 @@ const app = {
       calificacion: calificacionTexto,
       seccion_anterior: seccionAnterior,
       seccion_promovida: seccionPromovida,
-      firma_inspector_base64: this.estado.inspeccionInSitu.firmaBase64,
+      firma_inspector_base64: datosInspector.firma_base64 || this.estado.inspeccionInSitu.firmaBase64,
       firma_storage_url: null,
       observaciones: obsInput || `Acta Oficial de Inspección Zootécnica In Situ (${codigoActa}). Dictamen: ${calificacionTexto}. Puntuación: ${total.toFixed(1)}/100p. REGA: ${codigoRega}.`
     };
@@ -6888,15 +7619,18 @@ const app = {
       return;
     }
 
+    const datosInspActivo = this.obtenerDatosInspectorActivo();
+
     cont.innerHTML = lista.slice(0, 10).map(insp => {
       const animal = (this.estado.animales || []).find(a => a.id === insp.animal_id);
       const anilla = insp.numero_anilla || animal?.numero_anilla || '----';
       const codigoId = insp.codigo_identificacion || animal?.codigo_identificacion || 'ESGA025';
       const codigoActa = insp.codigo_acta || `ACTA-${insp.id.toUpperCase()}`;
-      const rega = insp.codigo_rega || animal?.codigo_rega || 'Sin REGA';
-      const gpsTxt = (insp.coordenadas_gps && insp.coordenadas_gps.latitud != null && insp.coordenadas_gps.longitud != null)
+      const rega = insp.codigo_rega || animal?.codigo_rega || 'TEMP-REGA-001';
+      const gpsTxt = (insp.coordenadas_gps && insp.coordenadas_gps.latitud !== null && insp.coordenadas_gps.longitud !== null)
         ? `${Number(insp.coordenadas_gps.latitud).toFixed(4)}, ${Number(insp.coordenadas_gps.longitud).toFixed(4)}`
         : 'Sin GPS';
+      const inspectorMostrar = insp.calificador_oficial || insp.inspector_id || datosInspActivo.nombre || 'Inspector Oficial';
       const esNoApto = insp.descalificado || insp.calificacion?.includes('No Apto');
       const colorBorde = esNoApto ? 'border-rose-700/70' : 'border-emerald-700/70';
 
@@ -6923,7 +7657,7 @@ const app = {
           <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400 font-mono">
             <span><i class="fa-solid fa-warehouse text-amber-400 mr-1"></i>REGA: ${this.escaparHtml(rega)}</span>
             <span><i class="fa-solid fa-location-dot text-sky-400 mr-1"></i>GPS: ${gpsTxt}</span>
-            <span><i class="fa-solid fa-user-check text-emerald-400 mr-1"></i>${this.escaparHtml(insp.inspector_id || 'INSP-CNZ-025')}</span>
+            <span><i class="fa-solid fa-user-check text-emerald-400 mr-1"></i>${this.escaparHtml(inspectorMostrar)}</span>
           </div>
         </div>
       `;
@@ -6941,17 +7675,18 @@ const app = {
     const modal = document.getElementById('modal-acta-inspeccion');
     if (!contenedor || !modal) return;
 
+    const datosInsp = this.obtenerDatosInspectorActivo(acta);
     const codigoActa = acta.codigo_acta || `ACTA-ESGA025-${acta.id.toUpperCase()}`;
     const fechaHora = acta.fecha_hora_inspeccion ? acta.fecha_hora_inspeccion.replace('T', ' ') : acta.fecha_inspeccion;
-    const rega = acta.codigo_rega || animal?.codigo_rega || 'Sin REGA';
-    const inspectorId = acta.inspector_id || 'INSP-CNZ-025';
-    const inspectorNombre = acta.calificador_oficial || 'Inspector Oficial CNZ ESGA025';
-    const lat = acta.coordenadas_gps?.latitud;
-    const lng = acta.coordenadas_gps?.longitud;
+    const rega = acta.codigo_rega || animal?.codigo_rega || 'TEMP-REGA-001';
+    const inspectorId = datosInsp.id || acta.inspector_id || 'Pendiente';
+    const inspectorNombre = datosInsp.nombre || acta.calificador_oficial || 'Inspector Zootécnico';
+    const firmaBase64 = datosInsp.firma_base64 || acta.firma_inspector_base64;
+    const tieneGps = acta.coordenadas_gps && acta.coordenadas_gps.latitud !== null && acta.coordenadas_gps.longitud !== null;
+    const gpsTexto = tieneGps
+      ? `Lat: ${Number(acta.coordenadas_gps.latitud).toFixed(6)}, Lng: ${Number(acta.coordenadas_gps.longitud).toFixed(6)}`
+      : 'No registrado';
     const prec = acta.coordenadas_gps?.precision_m ?? '--';
-    const gpsCoordsTxt = (lat != null && lng != null)
-      ? `Lat: ${Number(lat).toFixed(6)}, Lng: ${Number(lng).toFixed(6)}`
-      : 'Sin coordenadas GPS registradas';
     const defectosArr = Array.isArray(acta.defectos_detectados) && acta.defectos_detectados.length > 0
       ? acta.defectos_detectados
       : (acta.descalificado ? ['Defecto morfológico excluyente ESGA025'] : []);
@@ -6984,16 +7719,16 @@ const app = {
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-amber-400 uppercase block">Explotación Ganadera (REGA)</span>
           <strong class="text-sm font-mono text-white block mt-0.5">${this.escaparHtml(rega)}</strong>
-          <span class="text-[11px] text-slate-400">${this.escaparHtml(acta.nombre_aviario || acta.titular_aviario || 'Aviario Oficial ESGA025')}</span>
+          <span class="text-[11px] text-slate-400">${this.escaparHtml(acta.nombre_aviario || acta.titular_aviario || 'Aviario Asociado')}</span>
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-sky-400 uppercase block">Georreferencia GPS In Situ</span>
-          <strong class="text-xs font-mono text-emerald-400 block mt-0.5">${gpsCoordsTxt}</strong>
+          <strong class="text-xs font-mono text-emerald-400 block mt-0.5">${gpsTexto}</strong>
           <span class="text-[11px] text-slate-400">Precisión satelital: ±${prec} metros</span>
         </div>
         <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
           <span class="text-[10px] font-bold text-emerald-400 uppercase block">Inspector Zootécnico Acreditado</span>
-          <strong class="text-xs font-mono text-white block mt-0.5">ID: ${this.escaparHtml(inspectorId)}</strong>
+          <strong class="text-xs font-mono text-white block mt-0.5">ID/DNI: ${this.escaparHtml(inspectorId)}</strong>
           <span class="text-[11px] text-slate-400">${this.escaparHtml(inspectorNombre)}</span>
         </div>
       </div>
@@ -7005,11 +7740,8 @@ const app = {
           <div class="flex flex-wrap items-center gap-2 mt-0.5">
             <span class="text-sm font-black text-white font-mono">Anilla #${this.escaparHtml(acta.numero_anilla || animal?.numero_anilla || '----')}</span>
             <span class="text-xs font-mono text-amber-300">(${this.escaparHtml(acta.codigo_identificacion || animal?.codigo_identificacion || 'ESGA025')})</span>
-            <span class="text-xs text-slate-300">· ${this.escaparHtml(acta.sexo || animal?.sexo || 'Macho')} · ${this.escaparHtml(this.normalizarVariedadFemenino(acta.variedad || animal?.variedad))}</span>
+            <span class="text-xs text-slate-300">· ${this.escaparHtml(acta.sexo || animal?.sexo || 'Macho')} · ${this.escaparHtml(acta.variedad || animal?.variedad || 'Moteada / Exchequer')}</span>
           </div>
-          <p class="text-[10px] text-emerald-300 font-semibold mt-1">
-            ${this.escaparHtml(this.obtenerDetalleAnatomicoVariedad(acta.variedad || animal?.variedad).resumen_ficha)}
-          </p>
         </div>
         <div class="text-left sm:text-right">
           <span class="text-[10px] font-bold text-slate-400 uppercase block">Promoción Libro Genealógico</span>
@@ -7056,8 +7788,8 @@ const app = {
           <p>Almacenamiento: IndexedDB <code>SyncQueue</code> / Supabase Storage (Base64)</p>
         </div>
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-2 text-center min-w-[240px]">
-          ${acta.firma_inspector_base64
-            ? `<img src="${acta.firma_inspector_base64}" alt="Firma Inspector" class="h-20 mx-auto object-contain">`
+          ${firmaBase64
+            ? `<img src="${firmaBase64}" alt="Firma Inspector" class="h-20 mx-auto object-contain">`
             : `<div class="h-16 flex items-center justify-center text-slate-500 font-mono text-xs">Firmado: ${this.escaparHtml(inspectorId)}</div>`
           }
           <span class="block text-[10px] font-mono text-slate-400 border-t border-slate-800 pt-1 mt-1">
@@ -7138,12 +7870,12 @@ const app = {
       },
       {
         num: 4,
-        nombre: '4. Pico y Barbillas (Detalle por Variedad)',
+        nombre: '4. Pico y Barbillas',
         baremo: 'Bloque 1 (Cabeza, Cresta y Cara · Máx 15p)',
-        estandarGallo: 'Pico fuerte, bien curvado: color córneo con manchas negras para las variedades Moteada y Exchequer, y color hueso para la variedad Blanca. Barbillas medianamente largas, ovaladas, finas y sin pliegues.',
-        estandarGallina: 'Pico proporcionado (color córneo con manchas negras en Moteada/Exchequer; color hueso en Blanca) y barbillas redondeadas, finas y de rojo intenso.',
+        estandarGallo: 'Pico fuerte y bien curvado: color córneo con manchas negras para las variedades Negra Moteada y Pinta o Exchequer, y color hueso para la variedad Blanca. Barbillas medianamente largas, ovaladas, finas y sin pliegues.',
+        estandarGallina: 'Pico proporcionado (córneo con manchas negras en Negra Moteada / Pinta o Exchequer, y color hueso en Blanca) y barbillas redondeadas, finas y de rojo intenso.',
         defectosTaras: 'DESCALIFICA: Pico amarillo, pico cruzado, prognatismo o manchas blancas en barbillas.',
-        consejoCampo: 'Verificar que el pico sea color córneo con manchas negras en Negra Moteada / Pinta o Exchequer, y color hueso en Blanca.'
+        consejoCampo: 'Verificar el color del pico según variedad: córneo con manchas negras en Moteada/Exchequer y color hueso en Blanca.'
       },
       {
         num: 5,
@@ -7151,8 +7883,8 @@ const app = {
         baremo: 'Bloque 1 (Cabeza, Cresta y Cara · Máx 15p)',
         estandarGallo: 'De tamaño mediano, almendradas, lisas, ceñidas y de color BLANCO PURO esmaltado.',
         estandarGallina: 'Ovaladas/almendradas, lisas y de color blanco puro brillante.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #1 Estándar 2025): Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).',
-        consejoCampo: 'Rasgo crítico ESGA025: verificar blanco puro sin pigmento amarillo ni exceso de rojo.'
+        defectosTaras: 'DESCALIFICACIÓN OFICIAL #1: Orejilla amarilla, roja o con exceso de rojo (debe ser blanco puro).',
+        consejoCampo: 'Rasgo crítico ESGA025: verificar ausencia total de color amarillo, rojo o exceso de rojo en la orejilla.'
       },
       {
         num: 6,
@@ -7160,8 +7892,8 @@ const app = {
         baremo: 'Bloque 2 (Cuello y Esclavina · Máx 10p)',
         estandarGallo: 'Cuello medianamente largo, erguido y bien arqueado. Esclavina muy abundante cubriendo bien los hombros.',
         estandarGallina: 'Cuello gracioso con esclavina bien poblada sin transiciones bruscas.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #4 Estándar 2025): Flameado de esclavina en variedades Moteada y Exchequer.',
-        consejoCampo: 'Abrir las plumas de la esclavina en variedades Negra Moteada y Pinta o Exchequer para descartar flameado oculto.'
+        defectosTaras: 'DESCALIFICACIÓN OFICIAL #4: Flameado de esclavina en variedades Moteada y Exchequer.',
+        consejoCampo: 'Abrir las plumas de la esclavina en ejemplares de Negra Moteada y Pinta o Exchequer para descartar flameado.'
       },
       {
         num: 7,
@@ -7178,8 +7910,8 @@ const app = {
         baremo: 'Bloque 3 (Pecho y Tronco · Máx 20p)',
         estandarGallo: 'Pecho de perfil RECTO Y PLANO característico de la raza Alacantina (nunca prominente ni abombado). Quilla larga y recta.',
         estandarGallina: 'Pecho recto y plano, profundo y bien sostenido.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #2 Estándar 2025): Pecho prominente o abombado (debe ser recto y plano).',
-        consejoCampo: 'Observar al ejemplar de perfil estricto y palpar el esternón: la caída anterior del pecho debe ser recta y plana.'
+        defectosTaras: 'DESCALIFICACIÓN OFICIAL #2: Pecho prominente o abombado (debe ser recto y plano).',
+        consejoCampo: 'Observar al ejemplar de perfil estricto y palpar el esternón: la línea anterior del pecho debe ser recta y plana.'
       },
       {
         num: 9,
@@ -7194,28 +7926,28 @@ const app = {
         num: 10,
         nombre: '10. Cola y Porte (Ángulo ≥ 70º)',
         baremo: 'Bloque 4 (Cola y Porte · Máx 20p)',
-        estandarGallo: 'Cola bien poblada, llevada alta en ángulo de al menos 70º sobre la horizontal y de longitud media proporcionada.',
+        estandarGallo: 'Cola bien poblada, llevada erguida en ángulo de al menos 70º sobre la horizontal y de longitud proporcionada. Hoces bien curvadas.',
         estandarGallina: 'Cola bien desarrollada, ligeramente abierta en abanico y llevada a ≥70º sobre la horizontal.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #3 Estándar 2025): Cola baja (<70º sobre la horizontal) o larga.',
-        consejoCampo: 'Evaluar al ave en reposo libre en suelo plano antes de capturarla para verificar que la cola no sea baja (<70º) ni larga.'
+        defectosTaras: 'DESCALIFICACIÓN OFICIAL #3: Cola baja (<70º sobre la horizontal) o larga.',
+        consejoCampo: 'Evaluar al ave en reposo libre en suelo plano antes de capturarla para verificar que la cola no sea baja (<70º) ni excesivamente larga.'
       },
       {
         num: 11,
-        nombre: '11. Muslos y Tarsos (Detalle por Variedad)',
+        nombre: '11. Muslos y Tarsos',
         baremo: 'Bloque 5 (Extremidades y Tarsos · Máx 15p)',
-        estandarGallo: 'Muslos largos, fuertes y bien visibles. Tarsos desnudos: blanco-rosáceos con roña en variedades Moteada/Exchequer, o blanco-rosáceos con pico hueso en variedad Blanca.',
-        estandarGallina: 'Muslos bien formados y tarsos blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca.',
-        defectosTaras: 'DESCALIFICACIÓN INMEDIATA (Defecto #5 Estándar 2025): Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).',
-        consejoCampo: 'Inspeccionar tarsos y pico conjuntamente según variedad: blanco-rosáceos con roña (Moteada/Exchequer) o blanco-rosáceos con pico hueso (Blanca).'
+        estandarGallo: 'Muslos largos, fuertes y visibles. Tarsos desnudos blanco-rosáceos con roña en Negra Moteada y Pinta o Exchequer, o blanco-rosáceos con pico hueso en Blanca.',
+        estandarGallina: 'Muslos bien formados y tarsos limpios blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca.',
+        defectosTaras: 'DESCALIFICACIÓN OFICIAL #5: Tarsos amarillos (deben ser blanco-rosáceos con roña en Moteada/Exchequer, o blanco-rosáceos con pico hueso en Blanca).',
+        consejoCampo: 'Inspeccionar las escamas de los tarsos verificando color blanco-rosáceo (con roña en Moteada/Exchequer o con pico hueso en Blanca) y ausencia total de pigmento amarillo.'
       },
       {
         num: 12,
-        nombre: '12. Dedos, Pesos Oficiales y 5 Variedades en Femenino',
+        nombre: '12. Dedos, Peso y Variedades en Femenino',
         baremo: 'Bloque 5, 6 y 7 (Extremidades, Variedad y Peso · 15p + 10p + 10p)',
-        estandarGallo: 'Cuatro (4) dedos rectos. Calibre anilla: 20 mm. Rango oficial Gallo: 3,000 kg – 3,500 kg (Media: 3.25 kg). Variedades en femenino: Negra Moteada (Oficial), Pinta o Exchequer (Oficial), Blanca (Oficial), Milflores (En proceso de reconocimiento) y Armiñada en negro (En proceso de reconocimiento).',
-        estandarGallina: 'Cuatro (4) dedos rectos y limpios. Calibre anilla: 18 mm. Rango oficial Gallina: 2,200 kg – 2,600 kg (Media: 2.40 kg).',
-        defectosTaras: 'DESCALIFICA: Peso fuera de rango (Gallo 3.00-3.50 kg / Gallina 2.20-2.60 kg), polidactilia o variedades ajenas al proyecto.',
-        consejoCampo: 'Verificar peso con báscula digital (media ref. 3.25 kg Macho / 2.40 kg Hembra) y encuadrar exclusivamente en las 5 variedades femeninas.'
+        estandarGallo: 'Cuatro (4) dedos rectos y limpios. Anilla oficial: 20 mm. Peso oficial Gallo: 3,000–3,500 kg (Media: 3.25 kg). Variedades en femenino: Negra Moteada (Oficial), Pinta o Exchequer (Oficial), Blanca (Oficial), Milflores y Armiñada en negro.',
+        estandarGallina: 'Cuatro (4) dedos rectos y limpios. Anilla oficial: 18 mm. Peso oficial Gallina: 2,200–2,600 kg (Media: 2.40 kg). Plumaje ceñido acorde a las 5 variedades en femenino.',
+        defectosTaras: 'DESCALIFICA: Polidactilia (5 dedos), peso fuera de rango oficial (♂ 3.00-3.50 kg / ♀ 2.20-2.60 kg) o variedades ajenas al estándar.',
+        consejoCampo: 'Comprobar los 4 dedos, el calibre de anilla (20mm Macho / 18mm Hembra) y pesar en báscula digital (medias: 3.25 kg Macho / 2.40 kg Hembra).'
       }
     ];
   },
@@ -7338,13 +8070,3655 @@ const app = {
   },
 
   // =========================================================================
-  // 12. FASE 6 (V6): MOTOR DE AUDITORÍA Y CONTROL DE CALIDAD ZOOTÉCNICA EN TIEMPO REAL
+  // 12. FASE 1 V6: ARQUITECTURA DE AUTENTICACIÓN (SUPABASE AUTH), RBAC,
+  //     PROMOCIÓN AUTOMÁTICA POR REGA, PANEL ADMIN Y SOLICITUD DE INSPECCIÓN
+  // =========================================================================
+
+  // Estado Cero: sin usuarios ficticios predefinidos
+  obtenerUsuariosSemillaV6() {
+    return [];
+  },
+
+  // Estado Cero: sin solicitudes de inspección ficticias predefinidas
+  obtenerSolicitudesInspeccionSemillaV6() {
+    return [];
+  },
+
+  // Obtener el rol normalizado del usuario activo ('visitante' | 'aspirante' | 'criador' | 'inspector' | 'administrador')
+  obtenerRolUsuarioActual() {
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (this.estado.modoVisitante || !u) {
+      return 'visitante';
+    }
+    const rol = (u.rol || 'aspirante').toLowerCase();
+    if (['aspirante', 'criador', 'inspector', 'administrador', 'visitante'].includes(rol)) {
+      return rol;
+    }
+    return 'aspirante';
+  },
+
+  // Validar si un código REGA cumple el formato oficial español: ES + 12 dígitos numéricos
+  esRegaOficialValido(rega) {
+    if (!rega || typeof rega !== 'string') return false;
+    return /^ES\d{12}$/i.test(rega.trim());
+  },
+
+  // Formatear nombre corto con inicial del apellido
+  formatearNombreCortoPastilla(nombreCompleto, emailFallback = '') {
+    const base = (nombreCompleto || '').replace(/\(.*?\)/g, '').trim();
+    if (!base) {
+      return (emailFallback || '').trim() || 'Usuario';
+    }
+    const partes = base.split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return (emailFallback || '').trim() || 'Usuario';
+    if (partes.length === 1) return partes[0];
+    if (/^(dr\.|dra\.)$/i.test(partes[0]) && partes.length >= 3) {
+      return `${partes[0]} ${partes[1]} ${partes[2].charAt(0).toUpperCase()}.`;
+    }
+    return `${partes[0]} ${partes[1].charAt(0).toUpperCase()}.`;
+  },
+
+  // Extraer las iniciales reales del usuario autenticado
+  obtenerInicialesUsuario(nombreOEmail) {
+    if (!nombreOEmail || typeof nombreOEmail !== 'string') return '👤';
+    let limpio = nombreOEmail.replace(/\(.*?\)/g, '').replace(/^(dr\.|dra\.)\s*/i, '').trim();
+    if (!limpio) return '👤';
+
+    // Si es un email (ej. jose.cano@dominio.es), extraer de la parte local
+    if (limpio.includes('@') && !limpio.includes(' ')) {
+      const localPart = limpio.split('@')[0];
+      const subPartes = localPart.split(/[._-]+/).filter(Boolean);
+      if (subPartes.length >= 2) {
+        return (subPartes[0].charAt(0) + subPartes[1].charAt(0)).toUpperCase();
+      }
+      return localPart.slice(0, 2).toUpperCase();
+    }
+
+    const partes = limpio.split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '👤';
+    if (partes.length === 1) {
+      const p = partes[0].replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '');
+      return (p.slice(0, 2) || 'US').toUpperCase();
+    }
+    const ini1 = partes[0].replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').charAt(0) || partes[0].charAt(0);
+    const ini2 = partes[1].replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').charAt(0) || partes[1].charAt(0);
+    return (ini1 + ini2).toUpperCase();
+  },
+
+  // Sincronizar objeto de usuario desde Supabase Auth (getUser / session.user) + tabla perfiles_usuarios / IndexedDB
+  async sincronizarUsuarioDesdeAuth(supUser) {
+    if (!supUser || !supUser.id) return null;
+
+    const emailReal = (supUser.email || '').trim().toLowerCase();
+    const meta = supUser.user_metadata || {};
+
+    // 1. Buscar en IndexedDB local por ID o Email
+    let usuariosDB = await this.db.getAll('usuarios');
+    if (Array.isArray(usuariosDB) && usuariosDB.length > 0) {
+      this.estado.usuarios = usuariosDB;
+    }
+    let perfilLocal = (this.estado.usuarios || []).find(
+      u => u.id === supUser.id || (emailReal && u.email && u.email.toLowerCase() === emailReal)
+    );
+
+    // 2. Si estamos online y hay cliente Supabase, intentar leer de tabla 'perfiles_usuarios'
+    let perfilRemoto = null;
+    if (navigator.onLine && this.supabaseClient) {
+      try {
+        const { data, error } = await this.supabaseClient
+          .from('perfiles_usuarios')
+          .select('*')
+          .eq('id', supUser.id)
+          .maybeSingle();
+        if (!error && data) {
+          perfilRemoto = data;
+        }
+      } catch (e) {
+        // Ignorar si la tabla aún no existe en remoto
+      }
+    }
+
+    const regaCandidata = (
+      perfilRemoto?.rega ||
+      perfilLocal?.rega ||
+      meta.rega ||
+      'TEMP-REGA-001'
+    ).toString().trim().toUpperCase();
+
+    const tieneRegaOficial = this.esRegaOficialValido(regaCandidata);
+    const regaFinal = tieneRegaOficial ? regaCandidata : 'TEMP-REGA-001';
+    const rolBase = (perfilRemoto?.rol || perfilLocal?.rol || meta.rol || 'aspirante').toLowerCase();
+    const rolFinal = (rolBase === 'aspirante' && tieneRegaOficial) ? 'criador' : rolBase;
+
+    const perfilUnificado = {
+      ...(perfilLocal || {}),
+      ...(perfilRemoto || {}),
+      id: supUser.id,
+      nombre: perfilRemoto?.nombre || perfilLocal?.nombre || meta.nombre || meta.full_name || emailReal.split('@')[0] || 'Usuario',
+      email: emailReal || perfilRemoto?.email || perfilLocal?.email || '',
+      telefono: perfilRemoto?.telefono || perfilLocal?.telefono || meta.telefono || '',
+      rega: regaFinal,
+      codigo_provisional: tieneRegaOficial ? null : 'TEMP-REGA-001',
+      numero_socio: perfilRemoto?.numero_socio || perfilLocal?.numero_socio || (tieneRegaOficial ? ('SOC-' + regaFinal.slice(-3)) : 'NS-000'),
+      rol: rolFinal,
+      created_at: perfilLocal?.created_at || supUser.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.db.put('usuarios', perfilUnificado);
+    const idx = (this.estado.usuarios || []).findIndex(u => u.id === perfilUnificado.id || (emailReal && u.email?.toLowerCase() === emailReal));
+    if (idx !== -1) {
+      this.estado.usuarios[idx] = perfilUnificado;
+    } else {
+      this.estado.usuarios.push(perfilUnificado);
+    }
+
+    return perfilUnificado;
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.1. INICIALIZACIÓN DE SESIÓN PERSISTENTE (SUPABASE AUTH + OFFLINE)
+  // -------------------------------------------------------------------------
+  async inicializarSesionAuthV6() {
+    this.estado.usuarioActivo = null;
+    this.estado.usuarioActual = null;
+    this.estado.aviario = null;
+    this.estado.aviarioActivo = null;
+
+    // 1. Comprobar si existe sesión persistida en localStorage / IndexedDB (Soporte Offline continuo)
+    const rawSession = localStorage.getItem('alacantina_v6_session');
+    const modoVisitanteGuardado = localStorage.getItem('alacantina_v6_modo_visitante') === 'true';
+
+    if (rawSession) {
+      try {
+        const sesionLocal = JSON.parse(rawSession);
+        if (sesionLocal && (sesionLocal.id || sesionLocal.email)) {
+          // Cargar siempre los datos más recientes desde IndexedDB 'usuarios'
+          const todosUsuariosDB = await this.db.getAll('usuarios');
+          if (Array.isArray(todosUsuariosDB) && todosUsuariosDB.length > 0) {
+            this.estado.usuarios = todosUsuariosDB;
+          }
+          const usuarioEnDB = (this.estado.usuarios || []).find(
+            u => (sesionLocal.id && u.id === sesionLocal.id) ||
+                 (u.email && sesionLocal.email && u.email.toLowerCase() === sesionLocal.email.toLowerCase())
+          );
+          const usuarioRestaurado = usuarioEnDB ? { ...sesionLocal, ...usuarioEnDB } : sesionLocal;
+
+          this.estado.usuarioActivo = usuarioRestaurado;
+          this.estado.usuarioActual = usuarioRestaurado;
+          this.estado.modoVisitante = false;
+          localStorage.setItem('alacantina_v6_session', JSON.stringify(usuarioRestaurado));
+          console.log(`[Auth V6] Sesión persistente restaurada (${navigator.onLine ? 'Online' : 'Offline'}):`, usuarioRestaurado.nombre || usuarioRestaurado.email, '- Rol:', usuarioRestaurado.rol);
+        }
+      } catch (e) {
+        console.warn('[Auth V6] Error al leer sesión local:', e);
+      }
+    }
+
+    // 2. Si hay cliente Supabase configurado y estamos online, verificar token real con supabase.auth.getUser() / getSession()
+    if (navigator.onLine && this.supabaseClient && this.supabaseClient.auth) {
+      try {
+        let supUser = null;
+        if (typeof this.supabaseClient.auth.getUser === 'function') {
+          const { data: userData } = await this.supabaseClient.auth.getUser();
+          if (userData && userData.user) {
+            supUser = userData.user;
+          }
+        }
+        if (!supUser && typeof this.supabaseClient.auth.getSession === 'function') {
+          const { data: sessionData } = await this.supabaseClient.auth.getSession();
+          if (sessionData?.session?.user) {
+            supUser = sessionData.session.user;
+          }
+        }
+
+        if (supUser) {
+          const perfilSincronizado = await this.sincronizarUsuarioDesdeAuth(supUser);
+          if (perfilSincronizado) {
+            this.estado.usuarioActivo = perfilSincronizado;
+            this.estado.usuarioActual = perfilSincronizado;
+            this.estado.modoVisitante = false;
+            localStorage.setItem('alacantina_v6_session', JSON.stringify(perfilSincronizado));
+            localStorage.removeItem('alacantina_v6_modo_visitante');
+          }
+        }
+      } catch (err) {
+        console.warn('[Supabase Auth] Continuando con sesión persistente en dispositivo:', err);
+      }
+    }
+
+    // 3. Si existe una sesión persistente válida, sincronizar su rol y actualizar la pastilla de inmediato
+    const usuarioActivo = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (usuarioActivo) {
+      this.estado.usuarioActivo = usuarioActivo;
+      this.estado.usuarioActual = usuarioActivo;
+      this.estado.inspeccionInSitu.rolRBAC = this.obtenerRolUsuarioActual();
+      this.actualizarPastillaUsuario();
+      this.sincronizarInputsInspectorAutenticado();
+      this.cerrarModalAuthAcceso();
+      return;
+    }
+
+    // 4. Si no hay sesión activa: limpiar aviario / aviarioActivo y mostrar la pastilla con "👤 Visitante (Modo Lectura)"
+    this.estado.usuarioActivo = null;
+    this.estado.usuarioActual = null;
+    this.estado.aviario = null;
+    this.estado.aviarioActivo = null;
+    this.estado.modoVisitante = true;
+    this.estado.inspeccionInSitu.rolRBAC = 'visitante';
+    this.actualizarPastillaUsuario();
+    this.sincronizarInputsInspectorAutenticado();
+
+    if (modoVisitanteGuardado) {
+      this.cerrarModalAuthAcceso();
+      return;
+    }
+
+    // 5. Si NO había sesión ni eligió visitante aún -> Mostrar Modal de Login/Acceso (#modal-auth-acceso)
+    this.abrirModalAuthAcceso('login');
+  },
+
+  abrirModalAuthAcceso(tab = 'login') {
+    const modal = document.getElementById('modal-auth-acceso');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    this.cambiarTabModalAuth(tab);
+  },
+
+  cerrarModalAuthAcceso() {
+    const modal = document.getElementById('modal-auth-acceso');
+    if (modal) modal.classList.add('hidden');
+  },
+
+  cambiarTabModalAuth(tab = 'login') {
+    const formLogin = document.getElementById('form-auth-login');
+    const formRegister = document.getElementById('form-auth-register');
+    const btnLogin = document.getElementById('btn-auth-tab-login') || document.getElementById('auth-tab-btn-login');
+    const btnRegister = document.getElementById('btn-auth-tab-register') || document.getElementById('auth-tab-btn-register');
+    const errBox = document.getElementById('auth-feedback-box') || document.getElementById('auth-error-msg');
+    if (errBox) errBox.classList.add('hidden');
+
+    if (tab === 'register') {
+      formLogin?.classList.add('hidden');
+      formRegister?.classList.remove('hidden');
+      if (btnRegister) {
+        btnRegister.className = 'py-2 px-3 rounded-lg text-xs font-extrabold transition bg-emerald-500 text-slate-950 shadow';
+      }
+      if (btnLogin) {
+        btnLogin.className = 'py-2 px-3 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white';
+      }
+    } else {
+      formRegister?.classList.add('hidden');
+      formLogin?.classList.remove('hidden');
+      if (btnLogin) {
+        btnLogin.className = 'py-2 px-3 rounded-lg text-xs font-extrabold transition bg-amber-500 text-slate-950 shadow';
+      }
+      if (btnRegister) {
+        btnRegister.className = 'py-2 px-3 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white';
+      }
+    }
+  },
+
+  mostrarErrorAuthModal(mensaje) {
+    const errBox = document.getElementById('auth-feedback-box') || document.getElementById('auth-error-msg');
+    if (!errBox) {
+      alert(mensaje);
+      return;
+    }
+    errBox.textContent = mensaje;
+    errBox.className = 'p-3 rounded-xl text-xs font-semibold border bg-rose-950/80 border-rose-700 text-rose-200';
+    errBox.classList.remove('hidden');
+  },
+
+  // [ Iniciar Sesión ]: Email + Contraseña con persistencia en dispositivo y Supabase Auth
+  async iniciarSesionUsuario(event) {
+    if (event) event.preventDefault();
+    const email = (document.getElementById('auth-login-email')?.value || '').trim().toLowerCase();
+    const password = (document.getElementById('auth-login-password')?.value || '').trim();
+    const recordar = document.getElementById('auth-login-remember')?.checked !== false;
+
+    if (!email || !password) {
+      this.mostrarErrorAuthModal('Por favor, introduce tu correo electrónico y contraseña.');
+      return;
+    }
+
+    let usuarioAutenticado = null;
+
+    // 1. Intentar autenticar contra Supabase Auth si está configurado y online
+    if (navigator.onLine && this.supabaseClient && this.supabaseClient.auth) {
+      try {
+        const { data, error } = await this.supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (!error && data?.user) {
+          usuarioAutenticado = await this.sincronizarUsuarioDesdeAuth(data.user);
+        }
+      } catch (err) {
+        console.warn('[Supabase Auth] Fallback a verificación local IndexedDB:', err);
+      }
+    }
+
+    // 2. Verificar en la base de datos local IndexedDB ('usuarios')
+    if (!usuarioAutenticado) {
+      const todosDB = await this.db.getAll('usuarios');
+      if (Array.isArray(todosDB) && todosDB.length > 0) {
+        this.estado.usuarios = todosDB;
+      }
+      const encontrado = (this.estado.usuarios || []).find(
+        u => (u.email || '').toLowerCase() === email
+      );
+      if (!encontrado) {
+        this.mostrarErrorAuthModal('No existe ninguna cuenta registrada con ese correo electrónico. Puedes darte de alta en la pestaña [ Registrarse ].');
+        return;
+      }
+      if (encontrado.password_hash && encontrado.password_hash !== password) {
+        this.mostrarErrorAuthModal('Contraseña incorrecta. Verifica tus credenciales o utiliza los botones de acceso rápido.');
+        return;
+      }
+      usuarioAutenticado = encontrado;
+    }
+
+    await this.activarSesionUsuario(usuarioAutenticado, recordar);
+    this.mostrarNotificacionToast(`🔐 Sesión iniciada: ${usuarioAutenticado.nombre || usuarioAutenticado.email}`, 'success');
+  },
+
+  // [ Registrarse ]: Alta rápida de nuevo usuario (Nombre, Email, Contraseña) -> Inicia como "Aspirante" (NS-000 / TEMP-REGA-001)
+  async registrarNuevoUsuario(event) {
+    if (event) event.preventDefault();
+    const nombre = (document.getElementById('auth-reg-nombre')?.value || '').trim();
+    const email = (document.getElementById('auth-reg-email')?.value || '').trim().toLowerCase();
+    const password = (document.getElementById('auth-reg-password')?.value || '').trim();
+    const telefono = (document.getElementById('auth-reg-telefono')?.value || '').trim();
+
+    if (!nombre || !email || !password) {
+      this.mostrarErrorAuthModal('Por favor, completa Nombre, Email y Contraseña para registrarte.');
+      return;
+    }
+
+    if (password.length < 6) {
+      this.mostrarErrorAuthModal('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    const todosDB = await this.db.getAll('usuarios');
+    if (Array.isArray(todosDB) && todosDB.length > 0) {
+      this.estado.usuarios = todosDB;
+    }
+
+    // Comprobar si el email ya está registrado
+    const yaExiste = (this.estado.usuarios || []).some(u => (u.email || '').toLowerCase() === email);
+    if (yaExiste) {
+      this.mostrarErrorAuthModal('Este correo electrónico ya está registrado. Pulsa en [ Iniciar Sesión ] para acceder.');
+      return;
+    }
+
+    let nuevoId = 'usr-' + Date.now();
+
+    // 1. Registrar en Supabase Auth si hay conexión y cliente configurado
+    if (navigator.onLine && this.supabaseClient && this.supabaseClient.auth) {
+      try {
+        const { data, error } = await this.supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              nombre,
+              telefono,
+              rol: 'aspirante',
+              rega: 'TEMP-REGA-001',
+              codigo_provisional: 'TEMP-REGA-001'
+            }
+          }
+        });
+        if (!error && data?.user?.id) {
+          nuevoId = data.user.id;
+        }
+      } catch (err) {
+        console.warn('[Supabase Auth] Registro offline en IndexedDB:', err);
+      }
+    }
+
+    // 2. Crear una explotación provisional vinculada estrictamente al nuevo Aspirante (sin coordenadas GPS estáticas de prueba)
+    const nuevaExpId = 'exp-asp-' + Date.now();
+    const nuevaExpAspirante = {
+      id: nuevaExpId,
+      usuario_id: nuevoId,
+      codigo_rega: 'TEMP-REGA-001',
+      rega: 'TEMP-REGA-001',
+      numero_socio: 'NS-000',
+      nombre_titular: nombre,
+      nombre_criadero: `Aviario de ${nombre}`,
+      municipio: 'Alicante',
+      provincia: 'Alicante',
+      telefono: telefono || '',
+      latitud: null,
+      longitud: null,
+      geolocalizacion_precision: null,
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.db.put('explotaciones', nuevaExpAspirante);
+
+    // 3. Todo nuevo usuario registrado inicia automáticamente con el rol "Aspirante" (NS-000 / TEMP-REGA-001)
+    const nuevoUsuario = {
+      id: nuevoId,
+      nombre: nombre,
+      email: email,
+      password_hash: password,
+      telefono: telefono || '',
+      rega: 'TEMP-REGA-001',
+      codigo_provisional: 'TEMP-REGA-001',
+      numero_socio: 'NS-000',
+      rol: 'aspirante',
+      explotacion_id: nuevaExpId,
+      latitud: null,
+      longitud: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.db.put('usuarios', nuevoUsuario);
+    if (!Array.isArray(this.estado.usuarios)) this.estado.usuarios = [];
+    this.estado.usuarios.push(nuevoUsuario);
+
+    // Sincronizar con Supabase o encolar en SyncQueue
+    await this.sincronizarPerfilUsuarioSupabase(nuevoUsuario, 'USUARIO_PERFIL');
+
+    // Activar sesión inmediatamente (filtrando y aislando todos los almacenes de IndexedDB para este nuevo usuario)
+    await this.activarSesionUsuario(nuevoUsuario, true);
+
+    this.mostrarNotificacionToast(`🟡 Cuenta creada como Aspirante (NS-000): ${nombre}`, 'info');
+  },
+
+  // Purga de cuentas demo: redirige a Estado Cero sin cuentas ficticias
+  async loginRapidoDemo() {
+    await this.entrarComoVisitante();
+  },
+
+  // Activar sesión de usuario en estado, aislar sus datos en IndexedDB y sobreescribir app.estado.aviario dinámicamente
+  async activarSesionUsuario(usuario, persistir = true) {
+    if (!usuario) return;
+
+    // 1. Asegurar sincronización con IndexedDB para este ID de usuario
+    const todosUsuariosDB = await this.db.getAll('usuarios');
+    const enDB = (todosUsuariosDB || []).find(
+      u => u.id === usuario.id || (u.email && usuario.email && u.email.toLowerCase() === usuario.email.toLowerCase())
+    );
+    const usuarioFinal = enDB ? { ...enDB, ...usuario } : usuario;
+
+    // 2. Reiniciar estado en memoria antes de hidratar la nueva cuenta para evitar contaminación entre sesiones
+    this.estado = {};
+    Object.assign(this.estado, this.obtenerEstadoInicialLimpio());
+
+    this.estado.usuarioActivo = usuarioFinal;
+    this.estado.usuarioActual = usuarioFinal;
+    this.estado.modoVisitante = false;
+    this.estado.inspeccionInSitu.rolRBAC = this.obtenerRolUsuarioActual();
+
+    if (persistir) {
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(usuarioFinal));
+    }
+    localStorage.removeItem('alacantina_v6_modo_visitante');
+    sessionStorage.removeItem('alacantina_modo_visitante');
+
+    // 3. Cargar datos desde IndexedDB filtrados estrictamente por el user.id autenticado e inicializar su aviario propio
+    await this.cargarDatos();
+    await this.inicializarAviarioActivo();
+    await this.cargarDatos();
+
+    // 4. Sincronizar datos dinámicos del Inspector en las vistas de calificación y actas
+    this.sincronizarInputsInspectorAutenticado();
+
+    // 5. Actualizar interfaz completa con los datos aislados del usuario activo
+    this.cerrarModalAuthAcceso();
+    this.poblarSelectores();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
+    this.actualizarPastillaUsuario();
+    this.aplicarPermisosRBAC();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    this.renderizarLotes();
+    this.poblarSelectoresAnaliticaPuesta();
+    this.renderizarAnaliticaPuesta();
+    this.renderizarTablaHistorialPuesta();
+    this.poblarSelectoresInSitu();
+    this.renderizarHistorialActasInSitu();
+    this.renderizarSolicitudesInspeccion();
+    this.renderizarTablaUsuariosAdmin();
+
+    // Redirigir a la vista más adecuada según el rol
+    const rol = this.obtenerRolUsuarioActual();
+    if (rol === 'administrador') {
+      this.cambiarTab('admin');
+    } else if (rol === 'inspector') {
+      this.cambiarTab('inspeccion-insitu');
+    } else {
+      this.cambiarTab('censo');
+    }
+  },
+
+  // [ Entrar como Visitante ]: Acceso de solo lectura al Estándar Racial ESGA025, Guía de Campo y Censo Público
+  async entrarComoVisitante() {
+    this.estado = {};
+    Object.assign(this.estado, this.obtenerEstadoInicialLimpio());
+    this.estado.modoVisitante = true;
+    this.estado.inspeccionInSitu.rolRBAC = 'visitante';
+
+    localStorage.removeItem('alacantina_v6_session');
+    localStorage.removeItem('alacantina_aviario_activo_id');
+    localStorage.removeItem('alacantina_aviario_activo_datos');
+    localStorage.setItem('alacantina_v6_modo_visitante', 'true');
+    sessionStorage.setItem('alacantina_modo_visitante', 'true');
+
+    await this.cargarDatos();
+    this.sincronizarInputsInspectorAutenticado();
+
+    this.cerrarModalAuthAcceso();
+    this.cerrarMenuMiCuenta();
+    this.poblarSelectores();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
+    this.actualizarPastillaUsuario();
+    this.aplicarPermisosRBAC();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    this.renderizarLotes();
+    this.poblarSelectoresAnaliticaPuesta();
+    this.renderizarAnaliticaPuesta();
+    this.cambiarTab('censo');
+
+    this.mostrarNotificacionToast('👤 Visitante (Modo Lectura): Censo Público, Pedigrí y Guía ESGA025', 'info');
+  },
+
+  // 2. PURGA DE MEMORIA Y AISLAMIENTO EN LOGOUT (LOGOUT PURGE & MULTI-ACCOUNT)
+  async cerrarSesion() {
+    if (navigator.onLine && this.supabaseClient && this.supabaseClient.auth) {
+      try {
+        await this.supabaseClient.auth.signOut();
+      } catch (e) {
+        console.warn('[Supabase Auth] signOut local:', e);
+      }
+    }
+
+    // 1. Reiniciar por completo el objeto en memoria (app.estado = {}) y rehidratar estructura limpia vacía
+    this.estado = {};
+    Object.assign(this.estado, this.obtenerEstadoInicialLimpio());
+    this.estado.modoVisitante = true;
+    this.estado.inspeccionInSitu.rolRBAC = 'visitante';
+
+    // 2. Purgar claves de sesión y aviario activo en localStorage / sessionStorage
+    localStorage.removeItem('alacantina_v6_session');
+    localStorage.removeItem('alacantina_v6_modo_visitante');
+    localStorage.removeItem('alacantina_aviario_activo_id');
+    localStorage.removeItem('alacantina_aviario_activo_datos');
+    sessionStorage.removeItem('alacantina_modo_visitante');
+
+    this.cerrarMenuMiCuenta();
+    this.cerrarModalMiCuenta();
+
+    // 3. Limpiar formularios, tablas, selectores y firma en el DOM para que no queden rastros del usuario anterior
+    this.limpiarFirmaInspector();
+    this.sincronizarInputsInspectorAutenticado();
+
+    const tbodyCenso = document.getElementById('tabla-censo-body');
+    if (tbodyCenso) {
+      tbodyCenso.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500 text-xs">Sin sesión activa. Inicia sesión o entra en Modo Visitante para consultar el censo.</td></tr>';
+    }
+    const lotesCont = document.getElementById('lista-lotes-container');
+    if (lotesCont) {
+      lotesCont.innerHTML = '<p class="text-xs text-slate-500">Sin sesión activa. Inicia sesión para gestionar tus lotes de apareamiento.</p>';
+    }
+    const tbodyPuesta = document.getElementById('tabla-historial-puesta-body');
+    if (tbodyPuesta) {
+      tbodyPuesta.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs">Sin sesión activa.</td></tr>';
+    }
+
+    // 4. Vaciar los elementos del DOM de la cabecera y restablecer la vista a "Visitante / Sin Sesión"
+    this.poblarSelectores();
+    this.poblarSelectoresAnaliticaPuesta();
+    this.renderizarAnaliticaPuesta();
+    this.actualizarKPIs();
+    this.actualizarPastillaUsuario();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
+    this.aplicarPermisosRBAC();
+
+    // 5. Abrir el modal de Login/Acceso (#modal-auth-acceso)
+    this.abrirModalAuthAcceso('login');
+    this.mostrarNotificacionToast('🚪 Sesión cerrada y memoria purgada. Vista restablecida a Visitante / Sin Sesión.', 'info');
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.2. PASTILLA/AVATAR DE USUARIO EN CABECERA Y MENÚ "MI CUENTA" (DINÁMICO)
+  // -------------------------------------------------------------------------
+  obtenerEtiquetaRol(rol, tieneRegaOficial = false) {
+    const r = (rol || '').toLowerCase();
+    if (r === 'administrador') return 'Administrador';
+    if (r === 'inspector') return 'Inspector Zootécnico';
+    if (r === 'criador' && tieneRegaOficial) return 'Criador Oficial';
+    if (r === 'criador' && !tieneRegaOficial) return 'Aspirante (NS-000)';
+    if (r === 'aspirante') return 'Aspirante (NS-000)';
+    if (r === 'visitante') return 'Visitante (Modo Lectura)';
+    return 'Aspirante (NS-000)';
+  },
+
+  // Alias explícito para compatibilidad con llamadas a app.renderizarMenuCuenta()
+  renderizarMenuCuenta() {
+    this.actualizarPastillaUsuario();
+  },
+
+  // Renderizado 100% dinámico de la pastilla de cabecera y menú desplegable "Mi Cuenta" sin datos mock
+  actualizarPastillaUsuario() {
+    // Sincronizar referencia entre usuarioActivo y usuarioActual
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (u) {
+      this.estado.usuarioActivo = u;
+      this.estado.usuarioActual = u;
+    }
+
+    const rol = this.obtenerRolUsuarioActual();
+
+    // Elementos principales del DOM en la pastilla de cabecera (#user-avatar-pill)
+    const pillBtn = document.getElementById('user-avatar-pill');
+    const avatarInicialesEl = document.getElementById('user-avatar-iniciales') || document.getElementById('user-pill-initials');
+    const nombreDisplayEl = document.getElementById('user-nombre-display') || document.getElementById('user-pill-status-text');
+    const rolDisplayEl = document.getElementById('user-rol-display') || document.getElementById('user-pill-role-sub');
+    const regaDisplayEl = document.getElementById('user-rega-display');
+
+    // Elementos del menú desplegable (#dropdown-mi-cuenta)
+    const dropInitials = document.getElementById('dropdown-user-initials');
+    const dropNombre = document.getElementById('dropdown-user-nombre') || document.getElementById('dropdown-cuenta-nombre');
+    const dropEmail = document.getElementById('dropdown-user-email') || document.getElementById('dropdown-cuenta-email');
+    const dropRolBadge = document.getElementById('dropdown-user-rol-badge') || document.getElementById('dropdown-cuenta-rol-badge');
+    const dropRega = document.getElementById('dropdown-user-rega') || document.getElementById('dropdown-cuenta-rega-badge');
+    const dropSocio = document.getElementById('dropdown-user-socio');
+    const dropTelefono = document.getElementById('dropdown-user-telefono');
+    const boxAccionesAuth = document.getElementById('dropdown-acciones-autenticado');
+    const boxAccionesVis = document.getElementById('dropdown-acciones-visitante');
+
+    // CASO 1: Sin sesión activa o en Modo Visitante -> Estado "👤 Visitante (Modo Lectura)" / "Sin Sesión / Visitante"
+    if (!u || rol === 'visitante') {
+      if (avatarInicialesEl) {
+        avatarInicialesEl.textContent = '👤';
+        avatarInicialesEl.className = 'h-7 w-7 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-black text-xs flex items-center justify-center shadow-inner shrink-0';
+      }
+      if (nombreDisplayEl) {
+        nombreDisplayEl.textContent = '👤 Visitante (Modo Lectura)';
+        nombreDisplayEl.className = 'block text-[11px] sm:text-xs font-bold text-slate-200 truncate';
+      }
+      if (rolDisplayEl) {
+        rolDisplayEl.textContent = 'Sin Sesión / Visitante';
+        rolDisplayEl.className = 'text-[9px] font-mono text-slate-400 truncate';
+      }
+      if (regaDisplayEl) {
+        regaDisplayEl.textContent = '';
+        regaDisplayEl.classList.add('hidden');
+      }
+      if (pillBtn) {
+        pillBtn.className = 'flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 transition shadow-md group';
+      }
+
+      // Limpiar y restaurar el menú desplegable a estado Visitante
+      if (dropInitials) {
+        dropInitials.textContent = '👤';
+        dropInitials.className = 'h-11 w-11 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-black text-sm flex items-center justify-center shrink-0';
+      }
+      if (dropNombre) dropNombre.textContent = 'Visitante (Modo Lectura)';
+      if (dropEmail) dropEmail.textContent = 'Sin sesión activa';
+      if (dropRolBadge) {
+        dropRolBadge.textContent = 'Visitante (Modo Lectura)';
+        dropRolBadge.className = 'inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700';
+      }
+      if (dropRega) {
+        dropRega.textContent = 'Sin Sesión';
+        dropRega.className = 'font-bold text-slate-400';
+      }
+      if (dropSocio) dropSocio.textContent = 'NS-000';
+      if (dropTelefono) dropTelefono.textContent = 'No registrado';
+      if (boxAccionesAuth) boxAccionesAuth.classList.add('hidden');
+      if (boxAccionesVis) boxAccionesVis.classList.remove('hidden');
+      return;
+    }
+
+    // CASO 2: Usuario Autenticado -> Renderizar exclusivamente los datos reales de su sesión
+    const nombreReal = (u.nombre || '').trim() || (u.email || '').trim() || 'Usuario';
+    const emailReal = (u.email || '').trim() || 'Sin email registrado';
+    const iniciales = this.obtenerInicialesUsuario(u.nombre || u.email);
+    const nombreCorto = this.formatearNombreCortoPastilla(u.nombre, u.email);
+
+    // Evaluar código REGA real del usuario activo (sin ningún REGA estático por defecto)
+    const regaGuardada = (u.rega || '').toString().trim().toUpperCase();
+    const tieneRegaOficial = this.esRegaOficialValido(regaGuardada);
+    const regaMostrar = tieneRegaOficial ? regaGuardada : 'TEMP-REGA-001';
+    const socioMostrar = u.numero_socio || (tieneRegaOficial ? ('SOC-' + regaMostrar.slice(-3)) : 'NS-000');
+    const telefonoMostrar = (u.telefono || '').trim() || 'No registrado';
+
+    // Determinar Badge de Rol y Estado según el rol real en Supabase/IndexedDB y la validez del REGA
+    let etiquetaRol = '';
+    let iconoEstado = '🟢';
+    let claseAvatar = '';
+    let clasePillBorder = '';
+    let claseRolBadgeDropdown = '';
+
+    if (rol === 'administrador') {
+      etiquetaRol = 'Administrador';
+      iconoEstado = '🟢';
+      claseAvatar = 'h-7 w-7 rounded-full bg-purple-500/25 border border-purple-400 text-purple-200 font-black text-xs flex items-center justify-center shadow-inner shrink-0';
+      clasePillBorder = 'border-purple-500/50 hover:border-purple-400';
+      claseRolBadgeDropdown = 'inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-300 border border-purple-700';
+    } else if (rol === 'inspector') {
+      etiquetaRol = 'Inspector Zootécnico';
+      iconoEstado = '🟢';
+      claseAvatar = 'h-7 w-7 rounded-full bg-sky-500/25 border border-sky-400 text-sky-200 font-black text-xs flex items-center justify-center shadow-inner shrink-0';
+      clasePillBorder = 'border-sky-500/50 hover:border-sky-400';
+      claseRolBadgeDropdown = 'inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-950 text-sky-300 border border-sky-700';
+    } else if (rol === 'criador' && tieneRegaOficial) {
+      etiquetaRol = 'Criador Oficial';
+      iconoEstado = '🟢';
+      claseAvatar = 'h-7 w-7 rounded-full bg-emerald-500/25 border border-emerald-400 text-emerald-200 font-black text-xs flex items-center justify-center shadow-inner shrink-0';
+      clasePillBorder = 'border-emerald-500/50 hover:border-emerald-400';
+      claseRolBadgeDropdown = 'inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700';
+    } else {
+      // Si es 'aspirante' o no dispone de REGA oficial válido -> "Aspirante (NS-000)"
+      etiquetaRol = 'Aspirante (NS-000)';
+      iconoEstado = '🟡';
+      claseAvatar = 'h-7 w-7 rounded-full bg-amber-500/25 border border-amber-400 text-amber-200 font-black text-xs flex items-center justify-center shadow-inner shrink-0';
+      clasePillBorder = 'border-amber-500/50 hover:border-amber-400';
+      claseRolBadgeDropdown = 'inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700';
+    }
+
+    // 1. Iniciales del Avatar (#user-avatar-iniciales)
+    if (avatarInicialesEl) {
+      avatarInicialesEl.textContent = iniciales;
+      avatarInicialesEl.className = claseAvatar;
+    }
+
+    // 2. Nombre a Mostrar (#user-nombre-display)
+    if (nombreDisplayEl) {
+      nombreDisplayEl.textContent = `${iconoEstado} ${nombreCorto} - ${regaMostrar}`;
+      nombreDisplayEl.title = `${nombreReal} (${emailReal})`;
+      nombreDisplayEl.className = 'block text-[11px] sm:text-xs font-bold text-white truncate';
+    }
+
+    // 3. Badge de Rol y Estado (#user-rol-display)
+    if (rolDisplayEl) {
+      rolDisplayEl.textContent = etiquetaRol;
+      rolDisplayEl.className = tieneRegaOficial
+        ? 'text-[9px] font-mono text-emerald-300 truncate'
+        : 'text-[9px] font-mono text-amber-300 truncate';
+    }
+
+    // 4. Código REGA / Estado (#user-rega-display) en tono verde si es oficial o amarillo/naranja si es TEMP-REGA-001
+    if (regaDisplayEl) {
+      regaDisplayEl.textContent = regaMostrar;
+      regaDisplayEl.className = tieneRegaOficial
+        ? 'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-950/90 text-emerald-300 border border-emerald-700/70'
+        : 'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-950/90 text-amber-300 border border-amber-600/70';
+      regaDisplayEl.classList.remove('hidden');
+    }
+
+    if (pillBtn) {
+      pillBtn.className = `flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-slate-800/95 hover:bg-slate-800 border ${clasePillBorder} transition shadow-md group`;
+    }
+
+    // 5. Actualizar elementos del menú desplegable "Mi Cuenta" (#dropdown-mi-cuenta)
+    if (dropInitials) {
+      dropInitials.textContent = iniciales;
+      dropInitials.className = tieneRegaOficial
+        ? 'h-11 w-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black text-sm flex items-center justify-center shrink-0'
+        : 'h-11 w-11 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 font-black text-sm flex items-center justify-center shrink-0';
+    }
+    if (dropNombre) dropNombre.textContent = nombreReal;
+    if (dropEmail) dropEmail.textContent = emailReal;
+    if (dropRolBadge) {
+      dropRolBadge.textContent = etiquetaRol;
+      dropRolBadge.className = claseRolBadgeDropdown;
+    }
+    if (dropRega) {
+      dropRega.textContent = tieneRegaOficial ? regaMostrar : `${regaMostrar} (En trámite)`;
+      dropRega.className = tieneRegaOficial ? 'font-bold text-emerald-400' : 'font-bold text-amber-400';
+    }
+    if (dropSocio) {
+      dropSocio.textContent = socioMostrar;
+      dropSocio.className = tieneRegaOficial ? 'font-bold text-sky-400' : 'font-bold text-amber-300';
+    }
+    if (dropTelefono) {
+      dropTelefono.textContent = telefonoMostrar;
+    }
+    if (boxAccionesAuth) boxAccionesAuth.classList.remove('hidden');
+    if (boxAccionesVis) boxAccionesVis.classList.add('hidden');
+  },
+
+  toggleMenuMiCuenta(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('dropdown-mi-cuenta');
+    if (dropdown) {
+      this.actualizarPastillaUsuario();
+      dropdown.classList.toggle('hidden');
+    }
+  },
+
+  cerrarMenuMiCuenta() {
+    const dropdown = document.getElementById('dropdown-mi-cuenta');
+    if (dropdown) dropdown.classList.add('hidden');
+  },
+
+  // 2. VINCULACIÓN CON EL MODAL "MI CUENTA" (#modal-mi-cuenta)
+  async abrirModalMiCuenta(focoSeccion = 'perfil') {
+    this.cerrarMenuMiCuenta();
+
+    let u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (!u || this.estado.modoVisitante) {
+      this.abrirModalAuthAcceso('login');
+      return;
+    }
+
+    // Cargar los valores reales más recientes guardados en IndexedDB / Supabase para el ID del usuario con sesión activa
+    try {
+      const usuariosDB = await this.db.getAll('usuarios');
+      if (Array.isArray(usuariosDB) && usuariosDB.length > 0) {
+        this.estado.usuarios = usuariosDB;
+        const fresco = usuariosDB.find(item => item.id === u.id || (item.email && u.email && item.email.toLowerCase() === u.email.toLowerCase()));
+        if (fresco) {
+          u = { ...u, ...fresco };
+          this.estado.usuarioActivo = u;
+          this.estado.usuarioActual = u;
+        }
+      }
+    } catch (e) {
+      console.warn('[Mi Cuenta] Error al refrescar perfil desde IndexedDB:', e);
+    }
+
+    const rol = this.obtenerRolUsuarioActual();
+    const regaRaw = (u.rega || '').toString().trim().toUpperCase();
+    const tieneRegaOficial = this.esRegaOficialValido(regaRaw);
+    const regaMostrar = tieneRegaOficial ? regaRaw : 'TEMP-REGA-001';
+    const socioMostrar = u.numero_socio || (tieneRegaOficial ? ('SOC-' + regaMostrar.slice(-3)) : 'NS-000');
+    const etiquetaRol = this.obtenerEtiquetaRol(rol, tieneRegaOficial);
+
+    // Actualizar cabecera del modal #modal-mi-cuenta
+    const avatarEl = document.getElementById('mi-cuenta-avatar') || document.getElementById('mi-cuenta-avatar-lg');
+    const nombreHeaderEl = document.getElementById('mi-cuenta-header-nombre');
+    const emailHeaderEl = document.getElementById('mi-cuenta-email-sub') || document.getElementById('mi-cuenta-header-email');
+    const rolBadgeEl = document.getElementById('mi-cuenta-rol-badge') || document.getElementById('mi-cuenta-header-rol-pill');
+
+    if (avatarEl) {
+      avatarEl.textContent = this.obtenerInicialesUsuario(u.nombre || u.email);
+    }
+    if (nombreHeaderEl) {
+      nombreHeaderEl.textContent = u.nombre || u.email || 'Mi Cuenta Zootécnica';
+    }
+    if (emailHeaderEl) {
+      emailHeaderEl.textContent = u.email || '';
+    }
+    if (rolBadgeEl) {
+      rolBadgeEl.textContent = etiquetaRol;
+      rolBadgeEl.className = (rol === 'aspirante' || (!tieneRegaOficial && rol === 'criador'))
+        ? 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700'
+        : 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700';
+    }
+
+    // Autocompletar los inputs de texto (Nombre, Email, Código REGA, Teléfono, Socio) con los datos reales del usuario activo
+    const inpNombre = document.getElementById('mi-cuenta-nombre');
+    const inpEmail = document.getElementById('mi-cuenta-email');
+    const inpTel = document.getElementById('mi-cuenta-telefono');
+    const inpSocio = document.getElementById('mi-cuenta-socio');
+    const inpRega = document.getElementById('mi-cuenta-rega');
+
+    if (inpNombre) inpNombre.value = u.nombre || '';
+    if (inpEmail) inpEmail.value = u.email || '';
+    if (inpTel) inpTel.value = u.telefono || '';
+    if (inpSocio) inpSocio.value = socioMostrar;
+    if (inpRega) {
+      inpRega.value = tieneRegaOficial ? regaRaw : 'TEMP-REGA-001';
+      this.validarInputRegaMiCuenta(inpRega.value);
+    }
+
+    const modal = document.getElementById('modal-mi-cuenta');
+    if (modal) modal.classList.remove('hidden');
+
+    if (focoSeccion === 'password') {
+      setTimeout(() => (document.getElementById('mi-cuenta-pass-nueva') || document.getElementById('mi-cuenta-new-password'))?.focus(), 100);
+    } else if (focoSeccion === 'rega') {
+      setTimeout(() => document.getElementById('mi-cuenta-rega')?.focus(), 100);
+    }
+  },
+
+  cerrarModalMiCuenta() {
+    document.getElementById('modal-mi-cuenta')?.classList.add('hidden');
+  },
+
+  validarInputRegaMiCuenta(valor) {
+    const v = (valor || '').trim().toUpperCase();
+    const pill = document.getElementById('mi-cuenta-rega-pill') || document.getElementById('mi-cuenta-rega-valid-pill');
+    const feedback = document.getElementById('mi-cuenta-rega-feedback');
+
+    if (!v || v === 'NS-000' || v.startsWith('TEMP-REGA')) {
+      if (pill) {
+        pill.textContent = 'TEMP-REGA-001 (En trámite)';
+        pill.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700 font-bold';
+      }
+      if (feedback) {
+        feedback.innerHTML = 'Estado actual: <strong class="text-amber-300">🟡 En trámite (TEMP-REGA-001 / NS-000)</strong>. Introduce un código REGA oficial (<code class="text-emerald-400">ES + 12 dígitos</code>) para promocionar automáticamente a <strong>🟢 Criador Oficial</strong>.';
+      }
+    } else if (this.esRegaOficialValido(v)) {
+      if (pill) {
+        pill.textContent = `✓ ${v} (REGA Oficial)`;
+        pill.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600 font-bold';
+      }
+      if (feedback) {
+        feedback.innerHTML = '✓ <strong class="text-emerald-400">Código REGA Oficial válido</strong>. Al pulsar en Guardar se actualizará tu perfil y la pastilla de sesión inmediatamente.';
+      }
+    } else {
+      if (pill) {
+        pill.textContent = 'Formato requerido: ES + 12 dígitos';
+        pill.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700 font-bold';
+      }
+      if (feedback) {
+        feedback.innerHTML = '⚠️ El código REGA oficial debe contener <code class="text-rose-300">ES</code> seguido de 12 dígitos numéricos (ej. <code class="text-emerald-400">ES030140001234</code>), o <code class="text-amber-300">TEMP-REGA-001</code> si sigue en trámite.';
+      }
+    }
+  },
+
+  // Guardar datos en "Mi Cuenta", promover rol si el REGA es válido y actualizar inmediatamente el DOM de la pastilla sin recargar
+  async guardarPerfilMiCuenta(event) {
+    if (event) event.preventDefault();
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (!u) return;
+
+    const nombre = (document.getElementById('mi-cuenta-nombre')?.value || '').trim();
+    const emailInput = (document.getElementById('mi-cuenta-email')?.value || '').trim().toLowerCase();
+    const telefono = (document.getElementById('mi-cuenta-telefono')?.value || '').trim();
+    let regaInput = (document.getElementById('mi-cuenta-rega')?.value || '').trim().toUpperCase();
+
+    if (!nombre) {
+      alert('El nombre completo no puede estar vacío.');
+      return;
+    }
+
+    // Validar código REGA si no es provisional
+    const esProvisional = (!regaInput || regaInput === 'NS-000' || regaInput.startsWith('TEMP-REGA'));
+    if (!esProvisional && !this.esRegaOficialValido(regaInput)) {
+      alert('⚠️ Formato REGA no válido.\n\nEl código REGA oficial debe estar compuesto por "ES" seguido de 12 dígitos numéricos (ejemplo: ES030140001234).\nSi aún está en trámite, deja "TEMP-REGA-001" o vacío.');
+      return;
+    }
+
+    const regaFinal = esProvisional ? 'TEMP-REGA-001' : regaInput;
+
+    u.nombre = nombre;
+    if (emailInput) u.email = emailInput;
+    u.telefono = telefono;
+    u.updated_at = new Date().toISOString();
+
+    this.estado.usuarioActivo = u;
+    this.estado.usuarioActual = u;
+
+    // Comprobar si hay promoción automática por REGA válido
+    const fuePromovido = await this.verificarYPromoverRolPorRega(regaFinal, telefono, nombre);
+
+    if (!fuePromovido) {
+      u.rega = regaFinal;
+      if (esProvisional) {
+        u.codigo_provisional = 'TEMP-REGA-001';
+        if (!u.numero_socio || u.numero_socio.startsWith('SOC-')) {
+          u.numero_socio = 'NS-000';
+        }
+      } else if (!u.numero_socio || u.numero_socio === 'NS-000') {
+        u.numero_socio = 'SOC-' + regaFinal.slice(-3);
+      }
+
+      await this.db.put('usuarios', u);
+      const idx = (this.estado.usuarios || []).findIndex(item => item.id === u.id);
+      if (idx !== -1) {
+        this.estado.usuarios[idx] = u;
+      } else {
+        this.estado.usuarios.push(u);
+      }
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
+      await this.sincronizarPerfilUsuarioSupabase(u, 'USUARIO_PERFIL');
+    }
+
+    // Sincronizar también en el aviario activo del usuario (app.estado.aviario y app.estado.aviarioActivo)
+    await this.inicializarAviarioActivo();
+    const avActivo = this.estado.aviario || this.estado.aviarioActivo;
+    if (avActivo) {
+      avActivo.usuario_id = u.id;
+      avActivo.nombre_titular = nombre;
+      avActivo.telefono = telefono;
+      avActivo.codigo_rega = regaFinal;
+      avActivo.rega = regaFinal;
+      avActivo.numero_socio = u.numero_socio || 'NS-000';
+      this.estado.aviario = avActivo;
+      this.estado.aviarioActivo = avActivo;
+      await this.db.put('explotaciones', avActivo);
+      localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(avActivo));
+    }
+
+    // Ejecutar inmediatamente la actualización del DOM de la pastilla y vistas sin recargar la página
+    this.sincronizarInputsInspectorAutenticado();
+    this.actualizarPastillaUsuario();
+    this.actualizarBadgeAviario();
+    this.actualizarVistaRegistroAviario();
+    this.aplicarPermisosRBAC();
+    this.renderizarTablaUsuariosAdmin();
+    this.cerrarModalMiCuenta();
+
+    if (fuePromovido) {
+      alert(`🎉 ¡PROMOCIÓN AUTOMÁTICA COMPLETADA!\n\nCódigo REGA validado: ${regaFinal}\nTu cuenta ha evolucionado automáticamente del rol "Aspirante" a "Criador Oficial" en Supabase y la pastilla de sesión se ha actualizado en tiempo real.`);
+    } else {
+      this.mostrarNotificacionToast('✅ Perfil y pastilla de sesión actualizados dinámicamente.', 'success');
+    }
+  },
+
+  // Cambiar contraseña desde el modal "Mi Cuenta"
+  async cambiarPasswordMiCuenta(event) {
+    if (event) event.preventDefault();
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (!u) return;
+
+    const elP1 = document.getElementById('mi-cuenta-pass-nueva') || document.getElementById('mi-cuenta-new-password');
+    const elP2 = document.getElementById('mi-cuenta-pass-confirm') || document.getElementById('mi-cuenta-confirm-password');
+    const p1 = (elP1?.value || '').trim();
+    const p2 = (elP2?.value || '').trim();
+
+    if (!p1 || p1.length < 6) {
+      alert('La nueva contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (p1 !== p2) {
+      alert('Las contraseñas introducidas no coinciden.');
+      return;
+    }
+
+    // Actualizar en Supabase Auth si hay sesión remota
+    if (navigator.onLine && this.supabaseClient && this.supabaseClient.auth) {
+      try {
+        await this.supabaseClient.auth.updateUser({ password: p1 });
+      } catch (e) {
+        console.warn('[Supabase Auth] Cambio de contraseña guardado en local:', e);
+      }
+    }
+
+    u.password_hash = p1;
+    u.updated_at = new Date().toISOString();
+    this.estado.usuarioActivo = u;
+    this.estado.usuarioActual = u;
+    await this.db.put('usuarios', u);
+    localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
+
+    if (elP1) elP1.value = '';
+    if (elP2) elP2.value = '';
+
+    this.mostrarNotificacionToast('🔑 Contraseña actualizada con éxito.', 'success');
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.3. EVOLUCIÓN AUTOMÁTICA DE ROLES Y PROMOCIÓN POR REGA (ES + 12 DÍGITOS)
+  // -------------------------------------------------------------------------
+  async verificarYPromoverRolPorRega(codigoRega, telefono = '', nombreTitular = '', numeroSocio = '') {
+    const usuario = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (!usuario) return false;
+
+    const regaLimpio = (codigoRega || '').trim().toUpperCase();
+    const esValido = this.esRegaOficialValido(regaLimpio);
+
+    if (telefono) usuario.telefono = telefono;
+    if (nombreTitular) usuario.nombre = nombreTitular;
+
+    if (!esValido) {
+      return false;
+    }
+
+    const rolAnterior = (usuario.rol || 'aspirante').toLowerCase();
+    usuario.rega = regaLimpio;
+    usuario.codigo_provisional = null;
+    if (numeroSocio && numeroSocio !== 'NS-000') {
+      usuario.numero_socio = numeroSocio;
+    } else if (!usuario.numero_socio || usuario.numero_socio === 'NS-000') {
+      usuario.numero_socio = 'SOC-' + regaLimpio.slice(-3);
+    }
+
+    let promovidoAhora = false;
+    // Si el usuario era "Aspirante", promociona automáticamente a "Criador Oficial" ('criador')
+    if (rolAnterior === 'aspirante') {
+      usuario.rol = 'criador';
+      this.estado.inspeccionInSitu.rolRBAC = 'criador';
+      promovidoAhora = true;
+    }
+
+    usuario.updated_at = new Date().toISOString();
+    this.estado.usuarioActivo = usuario;
+    this.estado.usuarioActual = usuario;
+
+    // Guardar en IndexedDB 'usuarios' y en el array reactivo
+    await this.db.put('usuarios', usuario);
+    const idx = (this.estado.usuarios || []).findIndex(u => u.id === usuario.id);
+    if (idx !== -1) {
+      this.estado.usuarios[idx] = usuario;
+    } else {
+      this.estado.usuarios.push(usuario);
+    }
+
+    // Persistir sesión actualizada en localStorage
+    localStorage.setItem('alacantina_v6_session', JSON.stringify(usuario));
+
+    // Sincronizar con Supabase Auth metadata y tabla 'perfiles_usuarios'
+    await this.sincronizarPerfilUsuarioSupabase(usuario, 'USUARIO_PERFIL');
+
+    if (promovidoAhora) {
+      this.mostrarNotificacionToast(`🟢 ¡Promoción automática a Criador Oficial! REGA validado: ${regaLimpio}`, 'success');
+    }
+
+    return promovidoAhora;
+  },
+
+  async sincronizarPerfilUsuarioSupabase(usuario, tipoCola = 'USUARIO_PERFIL') {
+    const payload = {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      email: usuario.email,
+      telefono: usuario.telefono || '',
+      rega: usuario.rega || 'TEMP-REGA-001',
+      numero_socio: usuario.numero_socio || 'NS-000',
+      rol: usuario.rol || 'aspirante',
+      updated_at: new Date().toISOString()
+    };
+
+    const activo = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (navigator.onLine && this.supabaseClient) {
+      try {
+        if (this.supabaseClient.auth && activo && activo.id === usuario.id) {
+          await this.supabaseClient.auth.updateUser({
+            data: {
+              nombre: payload.nombre,
+              telefono: payload.telefono,
+              rega: payload.rega,
+              rol: payload.rol
+            }
+          });
+        }
+        const { error } = await this.supabaseClient.from('perfiles_usuarios').upsert(payload);
+        if (error) throw error;
+        return;
+      } catch (err) {
+        console.warn('[Supabase] Encolando actualización de perfil/rol en SyncQueue:', err);
+      }
+    }
+
+    await this.db.put('syncQueue', {
+      id: 'sync-usr-' + Date.now(),
+      tipo: tipoCola,
+      payload: payload,
+      creado_en: Date.now()
+    });
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
+    this.actualizarContadorSyncQueue();
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.4. CONTROL DE ACCESO POR ROLES (RBAC) EN LA INTERFAZ
+  // -------------------------------------------------------------------------
+  aplicarPermisosRBAC() {
+    const rol = this.obtenerRolUsuarioActual();
+
+    const btnTabRegistro = document.getElementById('tab-btn-registro');
+    const btnTabLotes = document.getElementById('tab-btn-lotes');
+    const btnTabInSitu = document.getElementById('tab-btn-inspeccion-insitu');
+    const btnTabAdmin = document.getElementById('tab-btn-admin');
+
+    const bannerAspirante = document.getElementById('banner-aspirante-promocion');
+    const bannerVisitante = document.getElementById('banner-visitante-lectura');
+    const panelSolicitudesInSitu = document.getElementById('panel-solicitudes-inspeccion-insitu');
+    const fichaAviarioCenso = document.getElementById('censo-ficha-aviario-criador');
+
+    // 1. Pestaña exclusiva de Administración: SOLO visible para rol 'administrador'
+    if (btnTabAdmin) {
+      if (rol === 'administrador') {
+        btnTabAdmin.classList.remove('hidden');
+      } else {
+        btnTabAdmin.classList.add('hidden');
+      }
+    }
+
+    // 2. Banners contextuales superiores según el rol activo
+    if (bannerAspirante) {
+      if (rol === 'aspirante') {
+        bannerAspirante.classList.remove('hidden');
+      } else {
+        bannerAspirante.classList.add('hidden');
+      }
+    }
+
+    if (bannerVisitante) {
+      if (rol === 'visitante') {
+        bannerVisitante.classList.remove('hidden');
+      } else {
+        bannerVisitante.classList.add('hidden');
+      }
+    }
+
+    // 3. Visibilidad de pestañas de escritura vs solo lectura (Visitante)
+    if (rol === 'visitante') {
+      btnTabRegistro?.classList.add('opacity-50');
+      btnTabLotes?.classList.add('opacity-50');
+      btnTabInSitu?.classList.add('hidden');
+      fichaAviarioCenso?.classList.add('hidden');
+    } else {
+      btnTabRegistro?.classList.remove('opacity-50');
+      btnTabLotes?.classList.remove('opacity-50');
+      btnTabInSitu?.classList.remove('hidden');
+      fichaAviarioCenso?.classList.remove('hidden');
+    }
+
+    // 4. Panel de Solicitudes de Inspección Pendientes en Tab 6 (Visible para Inspector y Administrador)
+    if (panelSolicitudesInSitu) {
+      if (rol === 'inspector' || rol === 'administrador') {
+        panelSolicitudesInSitu.classList.remove('hidden');
+      } else {
+        panelSolicitudesInSitu.classList.add('hidden');
+      }
+    }
+
+    // 5. Actualizar badge de rol en Inspección In Situ
+    this.actualizarBadgeRBACInSitu(rol);
+  },
+
+  actualizarBadgeRBACInSitu(rol) {
+    const badge = document.getElementById('insitu-rbac-badge');
+    if (!badge) return;
+    const r = (rol || this.obtenerRolUsuarioActual()).toLowerCase();
+    if (r === 'inspector') {
+      badge.textContent = 'Rol Activo: Inspector Zootécnico CNZ';
+      badge.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-500';
+    } else if (r === 'administrador') {
+      badge.textContent = 'Rol Activo: Administrador General ESGA025';
+      badge.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-950 text-purple-300 border border-purple-500';
+    } else if (r === 'criador') {
+      badge.textContent = 'Rol Activo: Criador Oficial REGA';
+      badge.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-600';
+    } else if (r === 'aspirante') {
+      badge.textContent = 'Rol Activo: Aspirante (NS-000)';
+      badge.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-950 text-amber-300 border border-amber-500';
+    } else {
+      badge.textContent = 'Rol Activo: Visitante (Solo Lectura)';
+      badge.className = 'px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-800 text-slate-300 border border-slate-600';
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.5. PANEL EXCLUSIVO DE ADMINISTRACIÓN DE USUARIOS Y ROLES (VISTA ADMIN)
+  // -------------------------------------------------------------------------
+  renderizarTablaUsuariosAdmin() {
+    const tbody = document.getElementById('tabla-usuarios-admin-body');
+    if (!tbody) return;
+
+    const usuarios = this.estado.usuarios || [];
+
+    // Actualizar KPIs del Panel Admin
+    const elTotal = document.getElementById('kpi-admin-total-users');
+    const elAsp = document.getElementById('kpi-admin-aspirantes');
+    const elCri = document.getElementById('kpi-admin-criadores');
+    const elInsp = document.getElementById('kpi-admin-inspectores');
+    const elAdm = document.getElementById('kpi-admin-admins');
+
+    if (elTotal) elTotal.textContent = usuarios.length;
+    if (elAsp) elAsp.textContent = usuarios.filter(u => (u.rol || 'aspirante') === 'aspirante').length;
+    if (elCri) elCri.textContent = usuarios.filter(u => u.rol === 'criador').length;
+    if (elInsp) elInsp.textContent = usuarios.filter(u => u.rol === 'inspector').length;
+    if (elAdm) elAdm.textContent = usuarios.filter(u => u.rol === 'administrador').length;
+
+    // Filtros de búsqueda y rol en la vista Admin
+    const textoFiltro = (document.getElementById('admin-filtro-usuarios')?.value || '').trim().toLowerCase();
+    const rolFiltro = document.getElementById('admin-filtro-rol')?.value || 'TODOS';
+
+    const filtrados = usuarios.filter(u => {
+      const cumpleRol = rolFiltro === 'TODOS' || (u.rol || 'aspirante') === rolFiltro;
+      if (!cumpleRol) return false;
+      if (!textoFiltro) return true;
+      return (
+        (u.nombre || '').toLowerCase().includes(textoFiltro) ||
+        (u.email || '').toLowerCase().includes(textoFiltro) ||
+        (u.rega || '').toLowerCase().includes(textoFiltro) ||
+        (u.telefono || '').toLowerCase().includes(textoFiltro)
+      );
+    });
+
+    if (filtrados.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="px-4 py-8 text-center text-slate-400 text-xs">
+            No se encontraron usuarios registrados con los filtros seleccionados.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(u => {
+      const rol = (u.rol || 'aspirante').toLowerCase();
+      const iniciales = this.obtenerInicialesUsuario(u.nombre);
+      const regaVal = u.rega || 'NS-000';
+      const esRegaOficial = this.esRegaOficialValido(regaVal);
+      const esUsuarioActual = this.estado.usuarioActual && this.estado.usuarioActual.id === u.id;
+
+      const badgeRolEstilo = {
+        aspirante: 'bg-amber-950 text-amber-300 border-amber-700',
+        criador: 'bg-emerald-950 text-emerald-300 border-emerald-600',
+        inspector: 'bg-sky-950 text-sky-300 border-sky-600',
+        administrador: 'bg-purple-950 text-purple-300 border-purple-600'
+      }[rol] || 'bg-slate-800 text-slate-300 border-slate-700';
+
+      const iconoEstado = rol === 'aspirante' ? '🟡' : '🟢';
+
+      return `
+        <tr class="hover:bg-slate-800/60 transition ${esUsuarioActual ? 'bg-purple-950/20' : ''}">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-xs font-black text-amber-400 shrink-0">
+                ${this.escaparHtml(iniciales)}
+              </div>
+              <div>
+                <p class="font-bold text-white text-xs flex items-center gap-1.5">
+                  <span>${iconoEstado} ${this.escaparHtml(u.nombre)}</span>
+                  ${esUsuarioActual ? '<span class="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-black uppercase">Tú</span>' : ''}
+                </p>
+                <span class="text-[10px] text-slate-400 font-mono">Socio: ${this.escaparHtml(u.numero_socio || 'NS-000')}</span>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-300">
+            ${this.escaparHtml(u.email || '--')}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded text-xs font-mono font-bold border ${esRegaOficial ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700' : 'bg-amber-950/80 text-amber-300 border-amber-700'}">
+                ${this.escaparHtml(regaVal)}
+              </span>
+              <button type="button" onclick="app.editarRegaUsuarioAdmin('${u.id}')" title="Editar REGA del usuario" class="text-slate-400 hover:text-amber-400 p-1 rounded transition">
+                <i class="fa-solid fa-pen-to-square text-xs"></i>
+              </button>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-300 font-mono">
+            ${u.telefono ? `<a href="tel:${this.escaparHtml(u.telefono)}" class="hover:text-emerald-400 transition"><i class="fa-solid fa-phone mr-1 text-emerald-400"></i>${this.escaparHtml(u.telefono)}</a>` : '<span class="text-slate-500">Sin teléfono</span>'}
+          </td>
+          <td class="px-4 py-3">
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${badgeRolEstilo}">
+              ${this.escaparHtml(this.obtenerEtiquetaRol(rol, esRegaOficial))}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <select onchange="app.cambiarRolUsuarioAdmin('${u.id}', this.value)" class="bg-slate-950 border border-purple-500/50 hover:border-purple-400 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:border-amber-400 focus:outline-none cursor-pointer">
+              <option value="aspirante" ${rol === 'aspirante' ? 'selected' : ''}>🟡 Aspirante (NS-000)</option>
+              <option value="criador" ${rol === 'criador' ? 'selected' : ''}>🟢 Criador Oficial</option>
+              <option value="inspector" ${rol === 'inspector' ? 'selected' : ''}>📋 Inspector Zootécnico</option>
+              <option value="administrador" ${rol === 'administrador' ? 'selected' : ''}>🛡️ Administrador</option>
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  // Modificación manual de roles por parte del Administrador desde el selector desplegable
+  async cambiarRolUsuarioAdmin(userId, nuevoRol) {
+    if (this.obtenerRolUsuarioActual() !== 'administrador') {
+      alert('Acceso denegado: Solo un Administrador puede modificar roles de usuario.');
+      this.renderizarTablaUsuariosAdmin();
+      return;
+    }
+
+    const usuario = (this.estado.usuarios || []).find(u => u.id === userId);
+    if (!usuario) return;
+
+    const rolAnterior = usuario.rol;
+    usuario.rol = nuevoRol;
+    usuario.updated_at = new Date().toISOString();
+
+    await this.db.put('usuarios', usuario);
+
+    // Si el administrador modificó su propio rol, actualizar también su sesión activa
+    if (this.estado.usuarioActual && this.estado.usuarioActual.id === usuario.id) {
+      this.estado.usuarioActual.rol = nuevoRol;
+      this.estado.usuarioActivo = this.estado.usuarioActual;
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(this.estado.usuarioActual));
+      this.actualizarPastillaUsuario();
+      this.aplicarPermisosRBAC();
+    }
+
+    await this.sincronizarPerfilUsuarioSupabase(usuario, 'CAMBIO_ROL_ADMIN');
+    this.renderizarTablaUsuariosAdmin();
+
+    this.mostrarNotificacionToast(
+      `🛡️ Rol de "${usuario.nombre}" actualizado de ${this.obtenerEtiquetaRol(rolAnterior, this.esRegaOficialValido(usuario.rega))} a ${this.obtenerEtiquetaRol(nuevoRol, this.esRegaOficialValido(usuario.rega))}`,
+      'success'
+    );
+  },
+
+  // Permitir al Administrador asignar o corregir el REGA de un usuario (con promoción automática si es Aspirante)
+  async editarRegaUsuarioAdmin(userId) {
+    if (this.obtenerRolUsuarioActual() !== 'administrador') return;
+    const usuario = (this.estado.usuarios || []).find(u => u.id === userId);
+    if (!usuario) return;
+
+    const nuevoRega = prompt(
+      `Introduce el código REGA oficial para ${usuario.nombre} (formato ES + 12 dígitos, ej. ES030140001234) o NS-000 para provisional:`,
+      usuario.rega || 'NS-000'
+    );
+    if (nuevoRega === null) return;
+
+    const regaLimpio = nuevoRega.trim().toUpperCase();
+    if (regaLimpio !== 'NS-000' && !regaLimpio.startsWith('TEMP-REGA') && !this.esRegaOficialValido(regaLimpio)) {
+      alert('⚠️ Formato REGA inválido. Debe ser ES seguido de 12 dígitos numéricos (ej. ES030140001234) o NS-000.');
+      return;
+    }
+
+    usuario.rega = regaLimpio;
+    if (this.esRegaOficialValido(regaLimpio) && usuario.rol === 'aspirante') {
+      usuario.rol = 'criador';
+      usuario.numero_socio = 'SOC-' + regaLimpio.slice(-3);
+      this.mostrarNotificacionToast(`🟢 ${usuario.nombre} promovido automáticamente a Criador Oficial al validar REGA ${regaLimpio}`, 'success');
+    }
+    usuario.updated_at = new Date().toISOString();
+
+    await this.db.put('usuarios', usuario);
+    if (this.estado.usuarioActual && this.estado.usuarioActual.id === usuario.id) {
+      this.estado.usuarioActual = { ...usuario };
+      this.estado.usuarioActivo = this.estado.usuarioActual;
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(usuario));
+      this.actualizarPastillaUsuario();
+      this.aplicarPermisosRBAC();
+    }
+
+    await this.sincronizarPerfilUsuarioSupabase(usuario, 'USUARIO_PERFIL');
+    this.renderizarTablaUsuariosAdmin();
+  },
+
+  async abrirModalNuevoUsuarioAdmin() {
+    if (this.obtenerRolUsuarioActual() !== 'administrador') return;
+    const nombre = prompt('Nombre y Apellidos del nuevo usuario:');
+    if (!nombre || !nombre.trim()) return;
+    const email = prompt('Correo electrónico del usuario:');
+    if (!email || !email.trim()) return;
+    const regaInput = (prompt('Código REGA (ES + 12 dígitos) o dejar en NS-000 si es Aspirante:', 'NS-000') || 'NS-000').trim().toUpperCase();
+    const telefono = (prompt('Teléfono de contacto (ej. +34 600 000 000):', '+34 ') || '').trim();
+
+    const esRegaValido = this.esRegaOficialValido(regaInput);
+    const rolInicial = esRegaValido ? 'criador' : 'aspirante';
+
+    const nuevoUsuario = {
+      id: 'usr-' + Date.now(),
+      nombre: nombre.trim(),
+      email: email.trim().toLowerCase(),
+      password_hash: 'demo1234',
+      telefono: telefono,
+      rega: esRegaValido ? regaInput : 'TEMP-REGA-001',
+      numero_socio: esRegaValido ? ('SOC-' + regaInput.slice(-3)) : 'NS-000',
+      rol: rolInicial,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.db.put('usuarios', nuevoUsuario);
+    this.estado.usuarios.push(nuevoUsuario);
+    await this.sincronizarPerfilUsuarioSupabase(nuevoUsuario, 'USUARIO_PERFIL');
+    this.renderizarTablaUsuariosAdmin();
+    this.mostrarNotificacionToast(`✅ Usuario "${nuevoUsuario.nombre}" dado de alta con rol ${this.obtenerEtiquetaRol(rolInicial, esRegaValido)}.`, 'success');
+  },
+
+  async sincronizarUsuariosAdmin() {
+    await this.sincronizarDesdeSupabase();
+    this.renderizarTablaUsuariosAdmin();
+    this.renderizarSolicitudesInspeccion();
+    this.mostrarNotificacionToast('🔄 Lista de usuarios y solicitudes sincronizada.', 'info');
+  },
+
+  // -------------------------------------------------------------------------
+  // 12.6. MÓDULO DE SOLICITUD DE INSPECCIÓN ZOOTÉCNICA CON VALIDACIÓN DE TELÉFONO
+  // -------------------------------------------------------------------------
+  async abrirModalSolicitudInspeccion() {
+    if (this.obtenerRolUsuarioActual() === 'visitante') {
+      this.mostrarNotificacionToast('🔒 Inicia sesión o regístrate para solicitar una Inspección Zootécnica In Situ.', 'warning');
+      this.abrirModalAuthAcceso('login');
+      return;
+    }
+
+    let u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    if (u) {
+      try {
+        const usuariosDB = await this.db.getAll('usuarios');
+        const fresco = (usuariosDB || []).find(item => item.id === u.id || (item.email && u.email && item.email.toLowerCase() === u.email.toLowerCase()));
+        if (fresco) {
+          u = { ...u, ...fresco };
+          this.estado.usuarioActivo = u;
+          this.estado.usuarioActual = u;
+        }
+      } catch (e) {
+        // Ignorar si falla lectura puntual
+      }
+    }
+
+    const av = this.estado.aviario || this.estado.aviarioActivo;
+
+    // Calcular número de animales listos para valorar (en RN o RA) estrictamente del aviario/usuario autenticado
+    const animalesExplotacion = (this.estado.animales || []).filter(a => {
+      if (!this.perteneceAUsuarioActivo(a, u, av)) return false;
+      return a.seccion_libro === 'RN' || a.seccion_libro === 'RA';
+    });
+    const numSugerido = animalesExplotacion.length > 0 ? animalesExplotacion.length : Math.max(1, (this.estado.animales || []).length);
+
+    const inpNum = document.getElementById('sol-insp-num-animales');
+    const inpTel = document.getElementById('sol-insp-telefono');
+    const avisoSinTel = document.getElementById('sol-insp-aviso-sin-telefono');
+    const inpRega = document.getElementById('sol-insp-rega');
+    const inpCriador = document.getElementById('sol-insp-criador');
+    const inpLat = document.getElementById('sol-insp-gps-lat');
+    const inpLng = document.getElementById('sol-insp-gps-lng');
+    const inpObs = document.getElementById('sol-insp-observaciones');
+
+    const telefonoPerfil = (u?.telefono || av?.telefono || '').trim();
+    const regaReal = (u?.rega && this.esRegaOficialValido(u.rega))
+      ? u.rega.trim().toUpperCase()
+      : (av?.codigo_rega || av?.rega || u?.rega || 'TEMP-REGA-001');
+
+    if (inpNum) inpNum.value = numSugerido;
+    if (inpTel) {
+      inpTel.value = telefonoPerfil;
+      if (!telefonoPerfil) {
+        inpTel.classList.add('border-rose-500', 'ring-2', 'ring-rose-500/40');
+      } else {
+        inpTel.classList.remove('border-rose-500', 'ring-2', 'ring-rose-500/40');
+      }
+    }
+    if (avisoSinTel) {
+      if (!telefonoPerfil) {
+        avisoSinTel.classList.remove('hidden');
+      } else {
+        avisoSinTel.classList.add('hidden');
+      }
+    }
+
+    if (inpRega) inpRega.value = regaReal;
+    if (inpCriador) {
+      inpCriador.value = av
+        ? `${av.nombre_criadero || av.nombre_titular || u?.nombre || ''} (${av.municipio || 'Alicante'})`
+        : (u?.nombre || u?.email || '');
+    }
+    if (inpLat) inpLat.value = (av?.latitud !== null && av?.latitud !== undefined && av?.latitud !== '') ? Number(av.latitud).toFixed(6) : '';
+    if (inpLng) inpLng.value = (av?.longitud !== null && av?.longitud !== undefined && av?.longitud !== '') ? Number(av.longitud).toFixed(6) : '';
+    if (inpObs && !inpObs.value) inpObs.value = '';
+
+    document.getElementById('modal-solicitud-inspeccion')?.classList.remove('hidden');
+
+    if (!telefonoPerfil && inpTel) {
+      setTimeout(() => inpTel.focus(), 120);
+    }
+  },
+
+  cerrarModalSolicitudInspeccion() {
+    document.getElementById('modal-solicitud-inspeccion')?.classList.add('hidden');
+  },
+
+  capturarGPSSolicitudInspeccion() {
+    const inpLat = document.getElementById('sol-insp-gps-lat');
+    const inpLng = document.getElementById('sol-insp-gps-lng');
+
+    if (!('geolocation' in navigator)) {
+      alert('Geolocalización GPS no soportada en este navegador.');
+      return;
+    }
+
+    this.mostrarNotificacionToast('🛰️ Obteniendo coordenadas GPS de la explotación...', 'info');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (inpLat) inpLat.value = pos.coords.latitude.toFixed(6);
+        if (inpLng) inpLng.value = pos.coords.longitude.toFixed(6);
+        this.mostrarNotificacionToast(`📍 GPS actualizado (±${Math.round(pos.coords.accuracy)}m)`, 'success');
+      },
+      (err) => {
+        console.warn('[GPS Solicitud] Error:', err);
+        alert('No se pudo obtener el GPS en tiempo real: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  },
+
+  async guardarSolicitudInspeccion(event) {
+    if (event) event.preventDefault();
+
+    const inpTel = document.getElementById('sol-insp-telefono');
+    const avisoSinTel = document.getElementById('sol-insp-aviso-sin-telefono');
+    const numAnimales = parseInt(document.getElementById('sol-insp-num-animales')?.value, 10) || 1;
+    const telefono = (inpTel?.value || '').trim();
+    const codigoRega = (document.getElementById('sol-insp-rega')?.value || 'TEMP-REGA-001').trim().toUpperCase();
+    const criadorAviario = (document.getElementById('sol-insp-criador')?.value || '').trim();
+    const latInput = parseFloat(document.getElementById('sol-insp-gps-lat')?.value);
+    const lngInput = parseFloat(document.getElementById('sol-insp-gps-lng')?.value);
+    const observaciones = (document.getElementById('sol-insp-observaciones')?.value || '').trim();
+
+    // Validación estricta de teléfono (mínimo 9 dígitos numéricos reales)
+    const digitosTel = telefono.replace(/\D+/g, '');
+    if (!telefono || digitosTel.length < 9) {
+      if (avisoSinTel) avisoSinTel.classList.remove('hidden');
+      if (inpTel) {
+        inpTel.classList.add('border-rose-500', 'ring-2', 'ring-rose-500/40');
+        inpTel.focus();
+      }
+      alert('⚠️ Teléfono de Contacto obligatorio.\n\nTu perfil no tenía un teléfono válido o el campo está incompleto. Por favor, introduce un número de teléfono válido (mínimo 9 dígitos) antes de enviar la solicitud; se guardará automáticamente en tu perfil.');
+      return;
+    }
+
+    if (inpTel) inpTel.classList.remove('border-rose-500', 'ring-2', 'ring-rose-500/40');
+    if (avisoSinTel) avisoSinTel.classList.add('hidden');
+
+    const u = this.estado.usuarioActivo || this.estado.usuarioActual;
+    const av = this.estado.aviario || this.estado.aviarioActivo;
+
+    const latitud = !isNaN(latInput) ? latInput : (av?.latitud ?? null);
+    const longitud = !isNaN(lngInput) ? lngInput : (av?.longitud ?? null);
+
+    // Actualizar automáticamente el teléfono en el perfil de usuario en Supabase e IndexedDB
+    if (u) {
+      u.telefono = telefono;
+      if (latitud !== null && !u.latitud) u.latitud = latitud;
+      if (longitud !== null && !u.longitud) u.longitud = longitud;
+      u.updated_at = new Date().toISOString();
+      this.estado.usuarioActivo = u;
+      this.estado.usuarioActual = u;
+      await this.db.put('usuarios', u);
+      const idxU = (this.estado.usuarios || []).findIndex(item => item.id === u.id);
+      if (idxU !== -1) this.estado.usuarios[idxU] = u;
+      localStorage.setItem('alacantina_v6_session', JSON.stringify(u));
+      await this.sincronizarPerfilUsuarioSupabase(u, 'USUARIO_PERFIL');
+    }
+
+    if (av) {
+      av.telefono = telefono;
+      if (latitud !== null) av.latitud = latitud;
+      if (longitud !== null) av.longitud = longitud;
+      av.updated_at = new Date().toISOString();
+      this.estado.aviario = av;
+      this.estado.aviarioActivo = av;
+      await this.db.put('explotaciones', av);
+      localStorage.setItem('alacantina_aviario_activo_datos', JSON.stringify(av));
+    }
+
+    const nuevaSolicitud = {
+      id: 'sol-insp-' + Date.now(),
+      usuario_id: u?.id || null,
+      criador_nombre: u?.nombre || av?.nombre_titular || criadorAviario || 'Criador Asociado',
+      nombre_aviario: av?.nombre_criadero || criadorAviario || `Aviario de ${u?.nombre || 'Criador'}`,
+      explotacion_id: av?.id || u?.explotacion_id || null,
+      codigo_rega: codigoRega,
+      num_animales: numAnimales,
+      telefono_contacto: telefono,
+      latitud: latitud,
+      longitud: longitud,
+      municipio: av ? `${av.municipio || 'Alicante'} (${av.provincia || 'Alicante'})` : 'Alicante',
+      observaciones_horario: observaciones || 'Disponible mañanas. Ejemplares listos para valoración morfológica oficial in situ.',
+      estado: 'PENDIENTE',
+      created_at: new Date().toISOString()
+    };
+
+    // 1. Guardar en IndexedDB 'solicitudesInspeccion'
+    await this.db.put('solicitudesInspeccion', nuevaSolicitud);
+    this.estado.solicitudesInspeccion.unshift(nuevaSolicitud);
+
+    // 2. Sincronizar con Supabase o encolar en SyncQueue
+    if (navigator.onLine && this.supabaseClient) {
+      try {
+        const { error } = await this.supabaseClient.from('solicitudes_inspeccion').upsert(nuevaSolicitud);
+        if (error) throw error;
+      } catch (err) {
+        await this.db.put('syncQueue', {
+          id: 'sync-sol-' + Date.now(),
+          tipo: 'SOLICITUD_INSPECCION',
+          payload: nuevaSolicitud,
+          creado_en: Date.now()
+        });
+      }
+    } else {
+      await this.db.put('syncQueue', {
+        id: 'sync-sol-' + Date.now(),
+        tipo: 'SOLICITUD_INSPECCION',
+        payload: nuevaSolicitud,
+        creado_en: Date.now()
+      });
+    }
+
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
+    this.actualizarContadorSyncQueue();
+    this.actualizarPastillaUsuario();
+    this.actualizarVistaRegistroAviario();
+    this.renderizarSolicitudesInspeccion();
+    this.cerrarModalSolicitudInspeccion();
+
+    alert(
+      `📩 ¡SOLICITUD DE INSPECCIÓN ZOOTÉCNICA ENVIADA!\n\n` +
+      `• Explotación REGA: ${codigoRega}\n` +
+      `• Ejemplares a evaluar: ${numAnimales} aves\n` +
+      `• Teléfono actualizado en tu perfil: ${telefono}\n` +
+      `• Disponibilidad: ${nuevaSolicitud.observaciones_horario}\n\n` +
+      `El Inspector Zootécnico y la Dirección Técnica han recibido tu solicitud con acceso directo para llamarte o escribirte por WhatsApp.`
+    );
+  },
+
+  // Limpiar teléfono para URL oficial de WhatsApp (https://wa.me/34612345678)
+  formatearTelefonoWhatsApp(telefono) {
+    let digitos = (telefono || '').replace(/\D+/g, '');
+    if (!digitos) return '';
+    if (digitos.length === 9 && /^[6789]/.test(digitos)) {
+      digitos = '34' + digitos;
+    }
+    return digitos;
+  },
+
+  // Renderizar tarjetas de Solicitudes de Inspección Pendientes en Vista Inspector (Tab 6) y Vista Admin
+  renderizarSolicitudesInspeccion() {
+    const gridInSitu = document.getElementById('grid-solicitudes-inspeccion-insitu');
+    const gridAdmin = document.getElementById('grid-solicitudes-inspeccion-admin');
+    const badgeCountInSitu = document.getElementById('badge-solicitudes-pendientes-count');
+    const badgeNav = document.getElementById('badge-nav-solicitudes-pendientes');
+
+    const todas = (this.estado.solicitudesInspeccion || []).slice().sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+    const pendientesCount = todas.filter(s => s.estado !== 'COMPLETADA').length;
+
+    if (badgeCountInSitu) {
+      badgeCountInSitu.textContent = `${pendientesCount} pendiente${pendientesCount === 1 ? '' : 's'}`;
+    }
+    if (badgeNav) {
+      if (pendientesCount > 0) {
+        badgeNav.textContent = pendientesCount;
+        badgeNav.classList.remove('hidden');
+      } else {
+        badgeNav.classList.add('hidden');
+      }
+    }
+
+    const generarHtmlTarjetas = (lista) => {
+      if (!lista || lista.length === 0) {
+        return `
+          <div class="col-span-full p-6 rounded-xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-400">
+            No hay solicitudes de inspección zootécnica registradas en este momento.
+          </div>
+        `;
+      }
+
+      return lista.map(sol => {
+        const telLimpio = (sol.telefono_contacto || '').replace(/\s+/g, '');
+        const waPhone = this.formatearTelefonoWhatsApp(sol.telefono_contacto);
+        const waMsg = encodeURIComponent(
+          `Hola ${sol.criador_nombre}, soy Inspector Zootécnico del Club Gallina Alacantina (ESGA025). Me pongo en contacto contigo respecto a tu solicitud de inspección in situ para ${sol.num_animales} ejemplares en la explotación REGA ${sol.codigo_rega}.`
+        );
+        const waUrl = `https://wa.me/${waPhone}?text=${waMsg}`;
+        const telUrl = `tel:${telLimpio}`;
+
+        const fechaStr = sol.created_at
+          ? new Date(sol.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+          : 'Reciente';
+        const esPendiente = sol.estado !== 'COMPLETADA';
+        const esRegaValido = this.esRegaOficialValido(sol.codigo_rega);
+        const gpsStr = (sol.latitud !== null && sol.latitud !== undefined && sol.longitud !== null && sol.longitud !== undefined)
+          ? `${Number(sol.latitud).toFixed(4)}, ${Number(sol.longitud).toFixed(4)}`
+          : 'GPS pendiente';
+
+        return `
+          <div class="p-4 rounded-xl bg-slate-900/95 border ${esPendiente ? 'border-amber-500/50 shadow-md shadow-amber-950/20' : 'border-emerald-800/60 opacity-85'} flex flex-col justify-between gap-3">
+            <div class="space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${esPendiente ? 'bg-amber-400 text-slate-950' : 'bg-emerald-950 text-emerald-300 border border-emerald-700'}">
+                    ${esPendiente ? '⏳ Pendiente de Visita' : '✓ Inspección Atendida'}
+                  </span>
+                  <h4 class="text-sm font-black text-white mt-1.5">${this.escaparHtml(sol.criador_nombre)}</h4>
+                  <p class="text-xs text-amber-300 font-semibold">${this.escaparHtml(sol.nombre_aviario || 'Aviario Asociado')}</p>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-600 text-emerald-300 font-black text-xs block">
+                    🐓 ${sol.num_animales} Aves
+                  </span>
+                  <span class="text-[10px] text-slate-400 font-mono block mt-1">${fechaStr}</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] bg-slate-950/90 p-2.5 rounded-lg border border-slate-800">
+                <div class="truncate">
+                  <span class="text-slate-500 block text-[10px]">Código REGA:</span>
+                  <span class="font-mono font-bold ${esRegaValido ? 'text-emerald-400' : 'text-amber-400'}">${this.escaparHtml(sol.codigo_rega)}</span>
+                </div>
+                <div class="truncate">
+                  <span class="text-slate-500 block text-[10px]">Teléfono Contacto:</span>
+                  <span class="font-mono font-bold text-white"><i class="fa-solid fa-phone text-emerald-400 mr-1"></i>${this.escaparHtml(sol.telefono_contacto)}</span>
+                </div>
+                <div class="sm:col-span-2 truncate">
+                  <span class="text-slate-500 text-[10px] mr-1">📍 GPS Explotación:</span>
+                  <span class="font-mono text-sky-300 text-[11px]">${gpsStr} · ${this.escaparHtml(sol.municipio || 'Alicante')}</span>
+                </div>
+              </div>
+
+              <div class="p-2.5 rounded-lg bg-amber-950/25 border border-amber-800/40 text-xs text-amber-100">
+                <span class="text-[10px] font-black uppercase text-amber-400 block mb-0.5">
+                  <i class="fa-regular fa-clock mr-1"></i>Horario / Observaciones del Criador:
+                </span>
+                <p class="leading-snug text-[11px]">${this.escaparHtml(sol.observaciones_horario || 'Sin observaciones adicionales.')}</p>
+              </div>
+            </div>
+
+            <!-- Botones de Acción Directa: [ Llamar por Teléfono ] (tel:) y [ Enviar WhatsApp ] (https://wa.me/) -->
+            <div class="pt-2 border-t border-slate-800 space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <a href="${telUrl}" class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow transition text-center">
+                  <i class="fa-solid fa-phone-volume"></i> Llamar por Teléfono
+                </a>
+                <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow transition text-center">
+                  <i class="fa-brands fa-whatsapp text-sm"></i> Enviar WhatsApp
+                </a>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <button type="button" onclick="app.atenderSolicitudInspeccion('${sol.id}')" class="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold transition">
+                  <i class="fa-solid fa-clipboard-check mr-1"></i>Cargar en Mesa de Inspección
+                </button>
+                <button type="button" onclick="app.cambiarEstadoSolicitudInspeccion('${sol.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold transition">
+                  ${esPendiente ? '✓ Marcar Atendida' : '↺ Reabrir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    if (gridInSitu) gridInSitu.innerHTML = generarHtmlTarjetas(todas);
+    if (gridAdmin) gridAdmin.innerHTML = generarHtmlTarjetas(todas);
+  },
+
+  // Cargar los datos de una solicitud directamente en la mesa de Inspección In Situ (Tab 6)
+  atenderSolicitudInspeccion(solicitudId) {
+    const sol = (this.estado.solicitudesInspeccion || []).find(s => s.id === solicitudId);
+    if (!sol) return;
+
+    // Sincronizar coordenadas GPS de la solicitud con la inspección in situ
+    if (sol.latitud !== null && sol.latitud !== undefined && sol.longitud !== null && sol.longitud !== undefined) {
+      this.estado.inspeccionInSitu.gpsInSitu = {
+        latitud: Number(sol.latitud),
+        longitud: Number(sol.longitud),
+        precision_m: 5
+      };
+      this.actualizarUIGpsInSitu();
+    }
+
+    // Buscar primer ejemplar de esa explotación o REGA para preseleccionarlo
+    const animalExp = (this.estado.animales || []).find(
+      a => a.explotacion_id === sol.explotacion_id || a.codigo_rega === sol.codigo_rega
+    );
+
+    this.cambiarTab('inspeccion-insitu');
+
+    if (animalExp) {
+      const sel = document.getElementById('insitu-animal-select');
+      if (sel) sel.value = animalExp.id;
+      this.cargarAnimalInSitu(animalExp.id);
+    }
+
+    this.mostrarNotificacionToast(
+      `📋 Cargada solicitud de ${sol.criador_nombre} (${sol.codigo_rega} · ${sol.num_animales} aves)`,
+      'info'
+    );
+  },
+
+  async cambiarEstadoSolicitudInspeccion(solicitudId) {
+    const sol = (this.estado.solicitudesInspeccion || []).find(s => s.id === solicitudId);
+    if (!sol) return;
+
+    sol.estado = sol.estado === 'COMPLETADA' ? 'PENDIENTE' : 'COMPLETADA';
+    await this.db.put('solicitudesInspeccion', sol);
+    this.renderizarSolicitudesInspeccion();
+
+    this.mostrarNotificacionToast(
+      sol.estado === 'COMPLETADA'
+        ? `✅ Solicitud de ${sol.criador_nombre} marcada como atendida.`
+        : `⏳ Solicitud de ${sol.criador_nombre} reabierta como pendiente.`,
+      'info'
+    );
+  },
+
+  // =========================================================================
+  // 12. FASE 4: SIMULADOR PREVENTIVO DE CRUZAMIENTOS (F_x WRIGHT 5 GEN)
+  // Y GESTOR DE LOTES DE INCUBACIÓN / NACEDORA / ANILLADO ENTENTE EUROPEA
+  // =========================================================================
+
+  irASimuladorAcoplamientos() {
+    this.cambiarTab('lotes');
+    setTimeout(() => {
+      this.poblarSimuladorAcoplamientos();
+      const card = document.getElementById('card-simulador-acoplamientos-preventivo');
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
+  },
+
+  /**
+   * Analiza hasta 5 generaciones ancestrales de un individuo para el cálculo de Wright (Fx)
+   */
+  obtenerAncestros5Generaciones(individuoId, censo, generacionActual = 0, visitados = new Set()) {
+    const mapa = {};
+    if (!individuoId || generacionActual > 5 || visitados.has(individuoId)) return mapa;
+    visitados.add(individuoId);
+
+    const ind = (censo || []).find(a => a.id === individuoId);
+    if (!ind) return mapa;
+
+    if (!mapa[individuoId]) mapa[individuoId] = [];
+    mapa[individuoId].push(generacionActual);
+
+    if (generacionActual < 5) {
+      if (ind.id_padre) {
+        const rutasP = this.obtenerAncestros5Generaciones(ind.id_padre, censo, generacionActual + 1, new Set(visitados));
+        for (const [id, dists] of Object.entries(rutasP)) {
+          if (!mapa[id]) mapa[id] = [];
+          mapa[id].push(...dists);
+        }
+      }
+      if (ind.id_madre) {
+        const rutasM = this.obtenerAncestros5Generaciones(ind.id_madre, censo, generacionActual + 1, new Set(visitados));
+        for (const [id, dists] of Object.entries(rutasM)) {
+          if (!mapa[id]) mapa[id] = [];
+          mapa[id].push(...dists);
+        }
+      }
+    }
+    return mapa;
+  },
+
+  /**
+   * Calcula en tiempo real el Coeficiente de Consanguinidad de Wright (Fx) estimado
+   * para la descendencia futura analizando las 5 generaciones ancestrales de ambos progenitores:
+   * Fx = sum (1/2)^(n1 + n2 + 1) * (1 + FA)
+   */
+  calcularFxWright5Gen(machoId, hembraId, censo = null) {
+    const lista = censo || this.estado.animales || [];
+    if (!machoId || !hembraId) return { fx: 0, ancestrosComunes: [] };
+    if (machoId === hembraId) return { fx: 0.5, ancestrosComunes: [machoId] };
+
+    const macho = lista.find(a => a.id === machoId);
+    const hembra = lista.find(a => a.id === hembraId);
+
+    const caminosPadre = this.obtenerAncestros5Generaciones(machoId, lista, 0);
+    const caminosMadre = this.obtenerAncestros5Generaciones(hembraId, lista, 0);
+
+    let fxTotal = 0.0;
+    const idsComunes = Object.keys(caminosPadre).filter(id => caminosMadre[id]);
+    const detalleComunes = [];
+
+    idsComunes.forEach(ancId => {
+      const distsP = caminosPadre[ancId];
+      const distsM = caminosMadre[ancId];
+      const ancObj = lista.find(a => a.id === ancId);
+      const fA = ancObj ? (Number(ancObj.coeficiente_consanguinidad) || 0) : 0;
+
+      let aporteAncestro = 0;
+      distsP.forEach(n1 => {
+        distsM.forEach(n2 => {
+          if (n1 + n2 <= 10) {
+            aporteAncestro += Math.pow(0.5, n1 + n2 + 1) * (1 + fA);
+          }
+        });
+      });
+      fxTotal += aporteAncestro;
+      if (ancObj) {
+        detalleComunes.push({
+          id: ancId,
+          anilla: ancObj.numero_anilla,
+          nombre: ancObj.nombre || ancObj.codigo_identificacion,
+          aporte: aporteAncestro
+        });
+      }
+    });
+
+    // Si pertenecen a la misma Familia Gobe sin genealogía completa cargada pero comparten línea cerrada fundacional,
+    // considerar el parentesco intrafamiliar preventivo (medio hermanos / primos Gobe)
+    if (fxTotal === 0 && macho && hembra && macho.familia_origen && macho.familia_origen === hembra.familia_origen) {
+      fxTotal = 0.0625; // 6.25% (cruce intrafamiliar misma Familia Gobe)
+      detalleComunes.push({
+        id: macho.familia_origen,
+        anilla: macho.familia_origen,
+        nombre: `Línea Materna/Paterna cerrada (${macho.familia_origen})`,
+        aporte: 0.0625
+      });
+    }
+
+    return {
+      fx: Math.min(1.0, fxTotal),
+      ancestrosComunes: detalleComunes
+    };
+  },
+
+  obtenerDiagnosticoColorWright(fx) {
+    const pct = fx * 100;
+    if (pct < 5.0) {
+      return {
+        nivel: 'VERDE',
+        icono: '🟢',
+        etiqueta: '🟢 Verde: Apto / Baja Consanguinidad (F_x < 5%)',
+        resumenCorto: 'Apto / Baja Consanguinidad',
+        borderClass: 'border-emerald-500/70 bg-emerald-950/20',
+        badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-600',
+        textClass: 'text-emerald-400'
+      };
+    } else if (pct <= 10.0) {
+      return {
+        nivel: 'AMARILLO',
+        icono: '🟡',
+        etiqueta: '🟡 Amarillo: Precaución / Consanguinidad Moderada (5% <= F_x <= 10%)',
+        resumenCorto: 'Precaución / Consanguinidad Moderada',
+        borderClass: 'border-amber-500/70 bg-amber-950/20',
+        badgeClass: 'bg-amber-950 text-amber-300 border-amber-600',
+        textClass: 'text-amber-400'
+      };
+    } else {
+      return {
+        nivel: 'ROJO',
+        icono: '🔴',
+        etiqueta: '🔴 Rojo: Alerta de Inbreeding / Consanguinidad Elevada (F_x > 10%)',
+        resumenCorto: 'Alerta de Inbreeding / Consanguinidad Elevada',
+        borderClass: 'border-red-500/80 bg-red-950/25',
+        badgeClass: 'bg-red-950 text-red-300 border-red-600',
+        textClass: 'text-red-400'
+      };
+    }
+  },
+
+  poblarSimuladorAcoplamientos() {
+    const selectMacho = document.getElementById('sim-gobe-macho');
+    const checklistHembras = document.getElementById('sim-gobe-hembras-checklist');
+    if (!selectMacho || !checklistHembras) return;
+
+    const animalesPropios = (this.estado.animales || []).filter(a => a.estado !== 'Baja' && this.perteneceAUsuarioActivo(a));
+    const machos = animalesPropios.filter(a => a.sexo === 'Macho');
+    const hembras = animalesPropios.filter(a => a.sexo === 'Hembra');
+
+    const machoPrevio = selectMacho.value;
+    selectMacho.innerHTML = '<option value="">-- Seleccionar Gallo Reproductor --</option>';
+    machos.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = `♂ #${m.numero_anilla} · ${m.nombre || m.codigo_identificacion} (${m.familia_origen || 'Sin familia'} · ${m.seccion_libro})`;
+      selectMacho.appendChild(opt);
+    });
+    if (machoPrevio && machos.some(m => m.id === machoPrevio)) {
+      selectMacho.value = machoPrevio;
+    } else if (machos.length > 0) {
+      selectMacho.value = machos[0].id;
+    }
+
+    // Preservar selección previa de gallinas o preseleccionar las primeras 2
+    const seleccionadasPrevias = new Set(
+      Array.from(document.querySelectorAll('.sim-gobe-hembra-chk:checked')).map(el => el.value)
+    );
+
+    if (hembras.length === 0) {
+      checklistHembras.innerHTML = '<div class="p-3 text-center text-xs text-slate-500">No hay gallinas reproductoras activas en el censo actual.</div>';
+    } else {
+      checklistHembras.innerHTML = hembras.map((h, idx) => {
+        const checked = seleccionadasPrevias.size > 0
+          ? seleccionadasPrevias.has(h.id)
+          : idx < 3;
+        return `
+          <label class="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-800 cursor-pointer transition text-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <input type="checkbox"
+                     class="sim-gobe-hembra-chk rounded border-slate-600 text-pink-500 focus:ring-pink-500"
+                     value="${h.id}"
+                     data-familia="${this.escaparHtml(h.familia_origen || '')}"
+                     ${checked ? 'checked' : ''}
+                     onchange="app.ejecutarSimuladorAcoplamientoPreventivo()">
+              <span class="font-mono font-bold text-white">#${this.escaparHtml(h.numero_anilla)}</span>
+              <span class="text-slate-300 truncate">${this.escaparHtml(h.nombre || h.codigo_identificacion)}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-950/70 text-pink-300 border border-pink-800/60 shrink-0">
+              ${this.escaparHtml(h.familia_origen || 'Sin fam.')}
+            </span>
+          </label>
+        `;
+      }).join('');
+    }
+
+    this.ejecutarSimuladorAcoplamientoPreventivo();
+  },
+
+  seleccionarFamiliaSimulador(filtroFamilia) {
+    const checkboxes = document.querySelectorAll('.sim-gobe-hembra-chk');
+    checkboxes.forEach(chk => {
+      if (filtroFamilia === 'TODAS') {
+        chk.checked = true;
+      } else if (filtroFamilia === 'NINGUNA') {
+        chk.checked = false;
+      } else if (filtroFamilia) {
+        chk.checked = (chk.getAttribute('data-familia') === filtroFamilia);
+      }
+    });
+    this.ejecutarSimuladorAcoplamientoPreventivo();
+  },
+
+  aplicarGalloSugeridoSimulador(galloId) {
+    const selectMacho = document.getElementById('sim-gobe-macho');
+    if (selectMacho && galloId) {
+      selectMacho.value = galloId;
+      this.ejecutarSimuladorAcoplamientoPreventivo();
+      this.mostrarNotificacionToast('🧬 Aplicado Gallo alternativo según rotación circular de Gobe.', 'success');
+    }
+  },
+
+  descartarHembrasIncompatiblesSimulador(machoId) {
+    const checkboxes = document.querySelectorAll('.sim-gobe-hembra-chk:checked');
+    let descartadas = 0;
+    checkboxes.forEach(chk => {
+      const { fx } = this.calcularFxWright5Gen(machoId, chk.value, this.estado.animales);
+      if (fx >= 0.05) {
+        chk.checked = false;
+        descartadas++;
+      }
+    });
+    this.ejecutarSimuladorAcoplamientoPreventivo();
+    this.mostrarNotificacionToast(
+      descartadas > 0
+        ? `✅ Se retiraron ${descartadas} hembra(s) con F_x >= 5% del lote simulado.`
+        : 'ℹ️ Todas las hembras seleccionadas ya presentan F_x < 5%.',
+      'info'
+    );
+  },
+
+  ejecutarSimuladorAcoplamientoPreventivo() {
+    const selectMacho = document.getElementById('sim-gobe-macho');
+    const badgeFamiliaMacho = document.getElementById('sim-gobe-macho-familia-badge');
+    const cardDiag = document.getElementById('sim-gobe-diagnostico-card');
+    const badgeSemaforo = document.getElementById('sim-gobe-semaforo-badge');
+    const fxGlobalEl = document.getElementById('sim-gobe-fx-valor-global');
+    const desgloseCont = document.getElementById('sim-gobe-desglose-parejas');
+    const sugerenciasCont = document.getElementById('sim-gobe-sugerencias-content');
+
+    if (!selectMacho || !cardDiag || !desgloseCont) return;
+
+    const machoId = selectMacho.value;
+    const macho = (this.estado.animales || []).find(a => a.id === machoId);
+    if (badgeFamiliaMacho) {
+      badgeFamiliaMacho.textContent = macho ? `${macho.familia_origen || 'Sin Familia'} · #${macho.numero_anilla}` : 'Sin selección';
+    }
+
+    const hembrasIds = Array.from(document.querySelectorAll('.sim-gobe-hembra-chk:checked')).map(el => el.value);
+
+    if (!macho || hembrasIds.length === 0) {
+      cardDiag.className = 'p-4 rounded-xl bg-slate-950 border-2 border-slate-800 transition-all space-y-3';
+      if (badgeSemaforo) {
+        badgeSemaforo.className = 'mt-1 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-slate-900 text-slate-300 border border-slate-700';
+        badgeSemaforo.innerHTML = '<span>⚪ Selecciona 1 Gallo y al menos 1 Gallina</span>';
+      }
+      if (fxGlobalEl) {
+        fxGlobalEl.textContent = '--';
+        fxGlobalEl.className = 'font-mono font-black text-xl text-slate-400';
+      }
+      desgloseCont.innerHTML = '<div class="p-4 text-center text-xs text-slate-500">Selecciona un Gallo reproductor y marca una o varias Gallinas para calcular el $F_x$ a 5 generaciones.</div>';
+      if (sugerenciasCont) {
+        sugerenciasCont.innerHTML = 'Selecciona los reproductores para recibir recomendaciones de rotación circular de machos o sustitución de hembras según la Regla de Gobe.';
+      }
+      return;
+    }
+
+    const resultadosParejas = hembrasIds.map(hId => {
+      const hembra = (this.estado.animales || []).find(a => a.id === hId);
+      const calc = this.calcularFxWright5Gen(macho.id, hId, this.estado.animales);
+      const diag = this.obtenerDiagnosticoColorWright(calc.fx);
+      return {
+        hembra,
+        fx: calc.fx,
+        fxPct: (calc.fx * 100).toFixed(2),
+        ancestrosComunes: calc.ancestrosComunes,
+        diag
+      };
+    }).filter(r => r.hembra);
+
+    const fxMax = Math.max(...resultadosParejas.map(r => r.fx), 0);
+    const fxMedio = resultadosParejas.reduce((acc, r) => acc + r.fx, 0) / (resultadosParejas.length || 1);
+    const diagGlobal = this.obtenerDiagnosticoColorWright(fxMax);
+
+    cardDiag.className = `p-4 rounded-xl border-2 transition-all space-y-3 ${diagGlobal.borderClass}`;
+    if (badgeSemaforo) {
+      badgeSemaforo.className = `mt-1 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black border ${diagGlobal.badgeClass}`;
+      badgeSemaforo.textContent = diagGlobal.etiqueta;
+    }
+    if (fxGlobalEl) {
+      fxGlobalEl.className = `font-mono font-black text-lg sm:text-xl ${diagGlobal.textClass}`;
+      fxGlobalEl.textContent = resultadosParejas.length === 1
+        ? `F_x = ${(fxMax * 100).toFixed(2)}%`
+        : `Media: ${(fxMedio * 100).toFixed(2)}% · Máx: ${(fxMax * 100).toFixed(2)}%`;
+    }
+
+    desgloseCont.innerHTML = resultadosParejas.map(r => {
+      const comunesTxt = r.ancestrosComunes.length > 0
+        ? `Ancestros comunes (5 Gen): ${r.ancestrosComunes.map(c => `#${this.escaparHtml(c.anilla)}`).join(', ')}`
+        : 'Sin ancestros comunes en 5 generaciones (F_x = 0.00%)';
+      return `
+        <div class="p-2.5 rounded-lg bg-slate-900/95 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div>
+            <div class="flex items-center gap-2">
+              <span>${r.diag.icono}</span>
+              <span class="font-mono font-bold text-white">♂ #${this.escaparHtml(macho.numero_anilla)} × ♀ #${this.escaparHtml(r.hembra.numero_anilla)}</span>
+              <span class="text-slate-300 font-semibold">(${this.escaparHtml(r.hembra.nombre || r.hembra.codigo_identificacion)})</span>
+              <span class="px-1.5 py-0.2 rounded text-[10px] bg-pink-950/80 text-pink-300 border border-pink-800/50">${this.escaparHtml(r.hembra.familia_origen || 'Sin fam.')}</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-0.5">${comunesTxt}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="font-mono font-black text-sm ${r.diag.textClass}">F_x: ${r.fxPct}%</span>
+            <span class="block text-[10px] ${r.diag.textClass}">${r.diag.resumenCorto}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Generar sugerencias de rotación de machos o sustitución de hembras según la Regla de Gobe
+    if (sugerenciasCont) {
+      const rotacionGobeHacia = {
+        'Familia A': 'Familia B',
+        'Familia B': 'Familia C',
+        'Familia C': 'Familia D',
+        'Familia D': 'Familia E',
+        'Familia E': 'Familia A'
+      };
+      const donanteIdealPorFamilia = {
+        'Familia B': 'Familia A',
+        'Familia C': 'Familia B',
+        'Familia D': 'Familia C',
+        'Familia E': 'Familia D',
+        'Familia A': 'Familia E'
+      };
+
+      const famMacho = macho.familia_origen || 'Familia A';
+      const famReceptoraIdeal = rotacionGobeHacia[famMacho] || 'Familia B';
+      const parejasEnRiesgo = resultadosParejas.filter(r => r.fx >= 0.05);
+
+      // Buscar mejor gallo alternativo para el conjunto de hembras seleccionadas
+      const todosMachos = (this.estado.animales || []).filter(a => a.sexo === 'Macho' && a.estado !== 'Baja' && a.id !== macho.id && this.perteneceAUsuarioActivo(a));
+      let mejorGalloAlt = null;
+      let menorFxAlt = Infinity;
+
+      todosMachos.forEach(mAlt => {
+        const maxFxConMAlt = Math.max(...hembrasIds.map(hId => this.calcularFxWright5Gen(mAlt.id, hId, this.estado.animales).fx), 0);
+        const famHembraPrincipal = resultadosParejas[0]?.hembra?.familia_origen;
+        const cumpleGobe = famHembraPrincipal && donanteIdealPorFamilia[famHembraPrincipal] === mAlt.familia_origen;
+        const score = maxFxConMAlt - (cumpleGobe ? 0.001 : 0);
+        if (score < menorFxAlt) {
+          menorFxAlt = maxFxConMAlt;
+          mejorGalloAlt = mAlt;
+        }
+      });
+
+      // Buscar hembras alternativas de la familia receptora ideal con Fx < 5%
+      const hembrasAlternativas = (this.estado.animales || []).filter(
+        a => a.sexo === 'Hembra' && a.estado !== 'Baja' && !hembrasIds.includes(a.id) && this.perteneceAUsuarioActivo(a)
+      ).filter(hAlt => this.calcularFxWright5Gen(macho.id, hAlt.id, this.estado.animales).fx < 0.05);
+
+      if (parejasEnRiesgo.length === 0) {
+        sugerenciasCont.innerHTML = `
+          <div class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-emerald-200 text-xs space-y-1">
+            <p>✅ <strong>Acoplamiento Óptimo según Regla de Gobe y Wright ($F_x &lt; 5\%$):</strong> El Gallo <strong>#${this.escaparHtml(macho.numero_anilla)} (${this.escaparHtml(famMacho)})</strong> presenta total compatibilidad genética con las ${resultadosParejas.length} hembra(s) seleccionada(s).</p>
+            <p class="text-[11px] text-emerald-300/90">• Según el círculo de Gobe, los machos de <strong>${this.escaparHtml(famMacho)}</strong> rotan preferentemente hacia el lote de <strong>${this.escaparHtml(famReceptoraIdeal)}</strong>.</p>
+          </div>
+        `;
+      } else {
+        let htmlSug = `
+          <div class="space-y-2">
+            <p class="text-amber-300 font-semibold">
+              ⚠️ Se han detectado <strong>${parejasEnRiesgo.length} acoplamiento(s)</strong> con consanguinidad $F_x \ge 5\%$. Alternativas recomendadas por la Regla de Gobe:
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-[11px] text-slate-300">
+              <li><strong>Rotación Circular de Macho:</strong> El gallo actual pertenece a <strong>${this.escaparHtml(famMacho)}</strong>, por lo que su destino óptimo sin parentesco es cubrir hembras de <strong>${this.escaparHtml(famReceptoraIdeal)}</strong>.</li>
+        `;
+        if (mejorGalloAlt) {
+          htmlSug += `
+              <li><strong>Sustitución de Reproductor Macho:</strong> Cambiar al Gallo <strong>#${this.escaparHtml(mejorGalloAlt.numero_anilla)} (${this.escaparHtml(mejorGalloAlt.nombre || mejorGalloAlt.codigo_identificacion)} · ${this.escaparHtml(mejorGalloAlt.familia_origen)})</strong> reduce el $F_x$ máximo del lote al <strong>${(menorFxAlt * 100).toFixed(2)}%</strong>.</li>
+          `;
+        }
+        if (hembrasAlternativas.length > 0) {
+          const hEj = hembrasAlternativas.slice(0, 2).map(h => `#${this.escaparHtml(h.numero_anilla)} (${this.escaparHtml(h.familia_origen)})`).join(', ');
+          htmlSug += `
+              <li><strong>Sustitución de Hembras:</strong> Retirar las gallinas con parentesco común y sustituirlas por reproductoras compatibles (${hEj}).</li>
+          `;
+        }
+        htmlSug += `</ul><div class="flex flex-wrap items-center gap-2 pt-1">`;
+        if (mejorGalloAlt) {
+          htmlSug += `
+            <button type="button" onclick="app.aplicarGalloSugeridoSimulador('${mejorGalloAlt.id}')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>Rotar a Gallo #${this.escaparHtml(mejorGalloAlt.numero_anilla)} (${this.escaparHtml(mejorGalloAlt.familia_origen)})</span>
+            </button>
+          `;
+        }
+        htmlSug += `
+            <button type="button" onclick="app.seleccionarFamiliaSimulador('${famReceptoraIdeal}')" class="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-venus-mars"></i>
+              <span>Cargar Lote Receptor Gobe (${this.escaparHtml(famReceptoraIdeal)})</span>
+            </button>
+            <button type="button" onclick="app.descartarHembrasIncompatiblesSimulador('${macho.id}')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-[11px] transition">
+              Desmarcar Hembras con $F_x \ge 5\%$
+            </button>
+          </div></div>
+        `;
+        sugerenciasCont.innerHTML = htmlSug;
+      }
+    }
+  },
+
+  // =========================================================================
+  // GESTOR DE LOTES DE INCUBACIÓN Y TRAZABILIDAD DE RECRÍA (DÍA 21 + ANILLAS EE)
+  // =========================================================================
+
+  obtenerLotesIncubacionSemilla() {
+    return [];
+  },
+
+  recalcularFechasIncubacionForm() {
+    const inputEntrada = document.getElementById('inc-fecha-entrada');
+    const inputMiraje = document.getElementById('inc-fecha-miraje');
+    const inputEclosion = document.getElementById('inc-fecha-eclosion');
+    const inputPuesta = document.getElementById('inc-fecha-puesta');
+    if (!inputEntrada || !inputEntrada.value) return;
+
+    const fechaBase = new Date(inputEntrada.value + 'T12:00:00');
+    if (isNaN(fechaBase.getTime())) return;
+
+    if (inputPuesta && !inputPuesta.value) {
+      const fPuesta = new Date(fechaBase);
+      fPuesta.setDate(fPuesta.getDate() - 7);
+      inputPuesta.value = fPuesta.toISOString().split('T')[0];
+    }
+
+    if (inputMiraje) {
+      const fMiraje = new Date(fechaBase);
+      fMiraje.setDate(fMiraje.getDate() + 7); // Día 7: Ovoscopia / Miraje oficial
+      inputMiraje.value = fMiraje.toISOString().split('T')[0];
+    }
+
+    if (inputEclosion) {
+      const fEclosion = new Date(fechaBase);
+      fEclosion.setDate(fEclosion.getDate() + 21); // Día 21: Eclosión en Nacedora
+      inputEclosion.value = fEclosion.toISOString().split('T')[0];
+    }
+  },
+
+  obtenerHuevosAptosPorFamilia(familiaGobe = null) {
+    const controlesPropios = (this.estado.controlesPuesta || []).filter(c => this.perteneceAUsuarioActivo(c));
+    const controlesAptos = controlesPropios.filter(c => {
+      const peso = Number(c.peso_medio_huevo_g) || 0;
+      const enRangoPeso = peso >= 55.0 && peso <= 70.0;
+      if (!enRangoPeso || c.conforme_estandar === false) return false;
+      if (!familiaGobe || familiaGobe === 'TODAS') return true;
+      const gallina = (this.estado.animales || []).find(a => a.id === c.animal_id);
+      return gallina && gallina.familia_origen === familiaGobe;
+    });
+
+    const totalHuevosAptos = controlesAptos.reduce((acc, c) => acc + (Number(c.total_huevos_15d) || 0), 0);
+    const pesoMedio = controlesAptos.length > 0
+      ? (controlesAptos.reduce((acc, c) => acc + (Number(c.peso_medio_huevo_g) || 60), 0) / controlesAptos.length).toFixed(1)
+      : '61.5';
+
+    return {
+      totalHuevosAptos,
+      pesoMedio,
+      numControles: controlesAptos.length
+    };
+  },
+
+  alCambiarLoteGobeIncubacion(valorSelect) {
+    const inputHuevos = document.getElementById('inc-huevos-cargados');
+    const infoAptos = document.getElementById('inc-huevos-aptos-info');
+    const inputNombre = document.getElementById('inc-nombre-lote');
+
+    let familia = valorSelect;
+    const loteObj = (this.estado.lotes || []).find(l => l.id === valorSelect);
+    if (loteObj) {
+      familia = loteObj.familia_receptora;
+    }
+
+    const { totalHuevosAptos, pesoMedio } = this.obtenerHuevosAptosPorFamilia(familia);
+    if (inputHuevos && totalHuevosAptos > 0) {
+      inputHuevos.value = totalHuevosAptos;
+    }
+    if (infoAptos) {
+      infoAptos.textContent = totalHuevosAptos > 0
+        ? `✓ ${totalHuevosAptos} huevos aptos (55-70g · Media ${pesoMedio}g)`
+        : `Rango estándar 55g - 70g (${familia || 'Lote Gobe'})`;
+    }
+    if (inputNombre && !inputNombre.value.trim() && familia) {
+      const numSiguiente = ((this.estado.lotesIncubacion || []).length + 1).toString().padStart(2, '0');
+      inputNombre.value = `Incubación #${numSiguiente} - ${familia.replace('Familia ', 'Familia Gobe ')}`;
+    }
+  },
+
+  renderizarModuloIncubacion() {
+    const selectLote = document.getElementById('inc-lote-gobe-select');
+    const contLista = document.getElementById('lista-lotes-incubacion-container');
+    if (!contLista) return;
+
+    // Inicializar fechas por defecto en el formulario si están vacías
+    const inputEntrada = document.getElementById('inc-fecha-entrada');
+    if (inputEntrada && !inputEntrada.value) {
+      inputEntrada.value = new Date().toISOString().split('T')[0];
+      this.recalcularFechasIncubacionForm();
+    }
+
+    // Poblar selector de Lotes Gobe / Familias
+    if (selectLote) {
+      const valActual = selectLote.value;
+      const lotesPropios = (this.estado.lotes || []).filter(l => this.perteneceAUsuarioActivo(l));
+      selectLote.innerHTML = '<option value="">-- Seleccionar Lote / Familia Gobe --</option>';
+      lotesPropios.forEach(l => {
+        const gallo = (this.estado.animales || []).find(a => a.id === l.id_gallo);
+        const opt = document.createElement('option');
+        opt.value = l.id;
+        opt.textContent = `${l.codigo_lote} · ${l.familia_receptora} (Gallo: ${gallo ? '#' + gallo.numero_anilla : l.familia_macho})`;
+        selectLote.appendChild(opt);
+      });
+      ['Familia A', 'Familia B', 'Familia C', 'Familia D', 'Familia E'].forEach(fam => {
+        const opt = document.createElement('option');
+        opt.value = fam;
+        opt.textContent = `Lote Reproductor ${fam} (Regla de Gobe)`;
+        selectLote.appendChild(opt);
+      });
+      if (valActual) selectLote.value = valActual;
+    }
+
+    const lotesInc = (this.estado.lotesIncubacion || []).filter(li => this.perteneceAUsuarioActivo(li));
+    const stockAptosGlobal = this.obtenerHuevosAptosPorFamilia('TODAS');
+
+    // Calcular KPIs globales de incubación y nacedora
+    const totalCargados = lotesInc.reduce((acc, l) => acc + (Number(l.huevos_cargados) || 0), 0);
+    const lotesConMiraje = lotesInc.filter(l => l.huevos_fertiles !== null && l.huevos_fertiles !== undefined && l.huevos_fertiles !== '');
+    const totalCargadosMiraje = lotesConMiraje.reduce((acc, l) => acc + (Number(l.huevos_cargados) || 0), 0);
+    const totalFertiles = lotesConMiraje.reduce((acc, l) => acc + (Number(l.huevos_fertiles) || 0), 0);
+    const pctFertilidadGlobal = totalCargadosMiraje > 0 ? ((totalFertiles / totalCargadosMiraje) * 100).toFixed(1) : '0.0';
+
+    const lotesConNacedora = lotesInc.filter(l => l.pollitos_nacidos !== null && l.pollitos_nacidos !== undefined && l.pollitos_nacidos !== '');
+    const totalBaseNacedora = lotesConNacedora.reduce((acc, l) => acc + (Number(l.huevos_fertiles) || Number(l.huevos_cargados) || 0), 0);
+    const totalNacidos = lotesConNacedora.reduce((acc, l) => acc + (Number(l.pollitos_nacidos) || 0), 0);
+    const pctNacimientoGlobal = totalBaseNacedora > 0 ? ((totalNacidos / totalBaseNacedora) * 100).toFixed(1) : '0.0';
+
+    const elKpiLotes = document.getElementById('kpi-inc-lotes');
+    const elKpiHuevos = document.getElementById('kpi-inc-huevos');
+    const elKpiStock = document.getElementById('kpi-inc-aptos-stock');
+    const elKpiFert = document.getElementById('kpi-inc-fertilidad');
+    const elKpiNac = document.getElementById('kpi-inc-nacimiento');
+
+    if (elKpiLotes) elKpiLotes.textContent = lotesInc.length;
+    if (elKpiHuevos) elKpiHuevos.textContent = totalCargados;
+    if (elKpiStock) elKpiStock.textContent = `Aptos en control puesta (55-70g): ${stockAptosGlobal.totalHuevosAptos} huevos`;
+    if (elKpiFert) elKpiFert.textContent = `${pctFertilidadGlobal}%`;
+    if (elKpiNac) elKpiNac.textContent = `${pctNacimientoGlobal}%`;
+
+    if (lotesInc.length === 0) {
+      contLista.innerHTML = `
+        <div class="p-8 rounded-xl bg-slate-900 border border-slate-800 text-center text-xs text-slate-400">
+          No hay lotes de incubación abiertos para este aviario. Utiliza el formulario superior para abrir un lote (ej. <em>Incubación #05 - Familia Gobe 2</em>) vinculando los huevos de 55 g a 70 g.
+        </div>
+      `;
+      return;
+    }
+
+    contLista.innerHTML = lotesInc.map(lote => {
+      const cargados = Number(lote.huevos_cargados) || 0;
+      const fertiles = (lote.huevos_fertiles !== null && lote.huevos_fertiles !== undefined && lote.huevos_fertiles !== '')
+        ? Number(lote.huevos_fertiles)
+        : null;
+      const nacidos = (lote.pollitos_nacidos !== null && lote.pollitos_nacidos !== undefined && lote.pollitos_nacidos !== '')
+        ? Number(lote.pollitos_nacidos)
+        : null;
+
+      const pctFertilidad = (fertiles !== null && cargados > 0)
+        ? ((fertiles / cargados) * 100).toFixed(1) + '%'
+        : 'Pendiente';
+      const baseNac = (fertiles !== null && fertiles > 0) ? fertiles : cargados;
+      const pctNacimientoSobreFertiles = (nacidos !== null && baseNac > 0)
+        ? ((nacidos / baseNac) * 100).toFixed(1) + '%'
+        : 'Pendiente';
+      const pctNacimientoSobreTotal = (nacidos !== null && cargados > 0)
+        ? ((nacidos / cargados) * 100).toFixed(1) + '%'
+        : '--';
+
+      const gallo = (this.estado.animales || []).find(a => a.id === lote.id_gallo);
+      const anilladosArr = Array.isArray(lote.pollitos_anillados) ? lote.pollitos_anillados : [];
+
+      return `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  ${this.escaparHtml(lote.estado_ciclo || 'En Incubadora')}
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-950/80 text-pink-300 border border-pink-800/60">
+                  ${this.escaparHtml(lote.familia_gobe || 'Familia Gobe')}
+                </span>
+                <span class="text-[11px] text-sky-300 font-mono">
+                  ♂ Gallo: ${gallo ? '#' + this.escaparHtml(gallo.numero_anilla) + ' (' + this.escaparHtml(gallo.nombre || gallo.codigo_identificacion) + ')' : 'Lote Gobe'}
+                </span>
+              </div>
+              <h5 class="text-base font-black text-white mt-1">${this.escaparHtml(lote.nombre_lote)}</h5>
+              <p class="text-[11px] text-slate-400">
+                Huevos vinculados (55 g - 70 g): <strong class="text-amber-300 font-mono">${cargados} huevos</strong> · ${this.escaparHtml(lote.peso_rango_g || '55 g - 70 g')}
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button"
+                      onclick="app.abrirModalAnillarPollitos('${lote.id}')"
+                      class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition">
+                <i class="fa-solid fa-ring"></i>
+                <span>💍 Asignar Anillas EE (♂ 20mm / ♀ 18mm)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Seguimiento del Calendario de 21 Días -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">1. Fecha de Puesta</span>
+              <span class="font-mono font-bold text-white mt-0.5 block">${this.escaparHtml(lote.fecha_puesta || '--')}</span>
+              <span class="text-[10px] text-emerald-400">Selección 55g - 70g</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-950 border border-amber-800/50">
+              <span class="text-[10px] text-amber-300 uppercase font-bold block">2. Entrada Incubadora</span>
+              <span class="font-mono font-bold text-amber-300 mt-0.5 block">${this.escaparHtml(lote.fecha_entrada || '--')}</span>
+              <span class="text-[10px] text-slate-400">Día 0 · 37.7 °C / 55% HR</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-950 border border-sky-800/50">
+              <span class="text-[10px] text-sky-300 uppercase font-bold block">3. Ovoscopia / Miraje</span>
+              <span class="font-mono font-bold text-sky-300 mt-0.5 block">${this.escaparHtml(lote.fecha_miraje || '--')}</span>
+              <span class="text-[10px] text-slate-400">Día 7-10 · Fértiles: <strong>${fertiles !== null ? fertiles : '--'}</strong></span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-950 border border-emerald-800/50">
+              <span class="text-[10px] text-emerald-300 uppercase font-bold block">4. Eclosión Estimada (Día 21)</span>
+              <span class="font-mono font-bold text-emerald-300 mt-0.5 block">${this.escaparHtml(lote.fecha_eclosion || '--')}</span>
+              <span class="text-[10px] text-slate-400">Nacedora · Nacidos: <strong>${nacidos !== null ? nacidos : '--'}</strong></span>
+            </div>
+          </div>
+
+          <!-- Balance de Nacedora y Controles de Actualización Rápida -->
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+            <div class="lg:col-span-5 grid grid-cols-3 gap-2 text-center">
+              <div class="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                <span class="text-[10px] text-slate-400 block">% Fertilidad</span>
+                <span class="font-mono font-black text-sm text-sky-400">${pctFertilidad}</span>
+                <span class="text-[9px] text-slate-500 block">${fertiles !== null ? `${fertiles}/${cargados} fértiles` : 'Sin miraje'}</span>
+              </div>
+              <div class="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                <span class="text-[10px] text-slate-400 block">% Nacimiento</span>
+                <span class="font-mono font-black text-sm text-emerald-400">${pctNacimientoSobreFertiles}</span>
+                <span class="text-[9px] text-slate-500 block">Total: ${pctNacimientoSobreTotal}</span>
+              </div>
+              <div class="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                <span class="text-[10px] text-slate-400 block">Anillados EE (RN)</span>
+                <span class="font-mono font-black text-sm text-amber-400">${anilladosArr.length} / ${nacidos !== null ? nacidos : 0}</span>
+                <span class="text-[9px] text-slate-500 block">♂20mm · ♀18mm</span>
+              </div>
+            </div>
+
+            <div class="lg:col-span-7 flex flex-wrap items-end gap-2">
+              <div class="flex-1 min-w-[110px]">
+                <label class="block text-[10px] text-sky-300 font-bold mb-1">Huevos Fértiles (Miraje)</label>
+                <input type="number" id="edit-inc-fertiles-${lote.id}" min="0" max="${cargados}" value="${fertiles !== null ? fertiles : ''}" placeholder="0 - ${cargados}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-sky-300 font-mono">
+              </div>
+              <div class="flex-1 min-w-[110px]">
+                <label class="block text-[10px] text-emerald-300 font-bold mb-1">Pollitos Nacidos (Día 21)</label>
+                <input type="number" id="edit-inc-nacidos-${lote.id}" min="0" max="${cargados}" value="${nacidos !== null ? nacidos : ''}" placeholder="0 - ${fertiles !== null ? fertiles : cargados}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-emerald-300 font-mono">
+              </div>
+              <div class="flex-1 min-w-[140px]">
+                <label class="block text-[10px] text-slate-400 font-bold mb-1">Fase del Lote</label>
+                <select id="edit-inc-estado-${lote.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                  <option value="En Incubadora" ${lote.estado_ciclo === 'En Incubadora' ? 'selected' : ''}>🌡️ En Incubadora</option>
+                  <option value="Ovoscopia Realizada" ${lote.estado_ciclo === 'Ovoscopia Realizada' ? 'selected' : ''}>🔦 Ovoscopia Realizada</option>
+                  <option value="En Nacedora" ${lote.estado_ciclo === 'En Nacedora' ? 'selected' : ''}>🐣 En Nacedora</option>
+                  <option value="Eclosionado / Recría" ${lote.estado_ciclo === 'Eclosionado / Recría' ? 'selected' : ''}>💍 Eclosionado / Recría</option>
+                </select>
+              </div>
+              <button type="button"
+                      onclick="app.actualizarDatosMirajeNacedora('${lote.id}')"
+                      class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-slate-950 font-bold text-xs transition shrink-0">
+                Guardar Balance
+              </button>
+            </div>
+          </div>
+
+          ${anilladosArr.length > 0 ? `
+            <div class="pt-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                Pollitos inscritos en Libro Genealógico (Sección RN) con Anilla Entente Europea:
+              </span>
+              <div class="flex flex-wrap gap-1.5">
+                ${anilladosArr.map(p => `
+                  <span onclick="app.verFichaAnimal('${p.id}')" class="cursor-pointer px-2.5 py-1 rounded-lg bg-amber-950/50 hover:bg-amber-900/60 border border-amber-700/50 text-[11px] font-mono text-amber-200 flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-ring text-amber-400"></i>
+                    <strong>#${this.escaparHtml(p.numero_anilla)}</strong>
+                    <span>(${p.sexo === 'Macho' ? '♂ Gallo 20mm' : '♀ Gallina 18mm'})</span>
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  },
+
+  async guardarLoteIncubacion(event) {
+    event.preventDefault();
+
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+    if (!u || this.estado.modoVisitante) {
+      alert('Debes iniciar sesión con tu cuenta de criador para abrir lotes de incubación.');
+      return;
+    }
+
+    const nombreLote = document.getElementById('inc-nombre-lote')?.value.trim();
+    const valorSelectGobe = document.getElementById('inc-lote-gobe-select')?.value;
+    const huevosCargados = parseInt(document.getElementById('inc-huevos-cargados')?.value || '0', 10);
+    const fechaPuesta = document.getElementById('inc-fecha-puesta')?.value;
+    const fechaEntrada = document.getElementById('inc-fecha-entrada')?.value;
+    const fechaMiraje = document.getElementById('inc-fecha-miraje')?.value;
+    const fechaEclosion = document.getElementById('inc-fecha-eclosion')?.value;
+    const fertilesStr = document.getElementById('inc-huevos-fertiles')?.value;
+    const nacidosStr = document.getElementById('inc-pollitos-nacidos')?.value;
+    const estadoCiclo = document.getElementById('inc-estado-ciclo')?.value || 'En Incubadora';
+
+    const loteApareamiento = (this.estado.lotes || []).find(l => l.id === valorSelectGobe);
+    const familiaGobe = loteApareamiento ? loteApareamiento.familia_receptora : (valorSelectGobe || 'Familia B');
+    const machosPropios = (this.estado.animales || []).filter(a => a.sexo === 'Macho' && this.perteneceAUsuarioActivo(a));
+    const idGallo = loteApareamiento?.id_gallo || machosPropios[0]?.id || null;
+
+    const infoAptos = this.obtenerHuevosAptosPorFamilia(familiaGobe);
+
+    const nuevoLoteInc = {
+      id: 'inc-' + Date.now(),
+      nombre_lote: nombreLote,
+      lote_apareamiento_id: loteApareamiento ? loteApareamiento.id : null,
+      familia_gobe: familiaGobe,
+      id_gallo: idGallo,
+      huevos_cargados: huevosCargados,
+      peso_rango_g: `55 g - 70 g (Media lote: ${infoAptos.pesoMedio} g)`,
+      fecha_puesta: fechaPuesta,
+      fecha_entrada: fechaEntrada,
+      fecha_miraje: fechaMiraje,
+      fecha_eclosion: fechaEclosion,
+      huevos_fertiles: fertilesStr !== '' ? parseInt(fertilesStr, 10) : null,
+      pollitos_nacidos: nacidosStr !== '' ? parseInt(nacidosStr, 10) : null,
+      estado_ciclo: estadoCiclo,
+      pollitos_anillados: [],
+      usuario_id: u.id,
+      explotacion_id: aviario?.id || u.explotacion_id || null,
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || u.rega || 'TEMP-REGA-001',
+      creado_en: new Date().toISOString()
+    };
+
+    await this.db.put('lotesIncubacion', nuevoLoteInc);
+    if (!Array.isArray(this.estado.lotesIncubacion)) this.estado.lotesIncubacion = [];
+    this.estado.lotesIncubacion.unshift(nuevoLoteInc);
+
+    if (navigator.onLine && this.supabaseClient) {
+      try {
+        const { error } = await this.supabaseClient.from('lotes_incubacion').upsert(nuevoLoteInc);
+        if (error) throw error;
+      } catch (_) {
+        await this.db.put('syncQueue', { tipo: 'LOTE_INCUBACION', payload: nuevoLoteInc, creado_en: Date.now() });
+      }
+    } else {
+      await this.db.put('syncQueue', { tipo: 'LOTE_INCUBACION', payload: nuevoLoteInc, creado_en: Date.now() });
+    }
+
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
+    this.actualizarContadorSyncQueue();
+    this.renderizarModuloIncubacion();
+
+    const form = document.getElementById('form-nuevo-lote-incubacion');
+    if (form) form.reset();
+    const inputEnt = document.getElementById('inc-fecha-entrada');
+    if (inputEnt) {
+      inputEnt.value = new Date().toISOString().split('T')[0];
+      this.recalcularFechasIncubacionForm();
+    }
+
+    this.mostrarNotificacionToast(`🐣 Lote "${nombreLote}" abierto con ${huevosCargados} huevos (55-70g). Eclosión Día 21: ${fechaEclosion}`, 'success');
+  },
+
+  async actualizarDatosMirajeNacedora(loteIncId) {
+    const lote = (this.estado.lotesIncubacion || []).find(l => l.id === loteIncId);
+    if (!lote) return;
+
+    const valFertiles = document.getElementById(`edit-inc-fertiles-${loteIncId}`)?.value;
+    const valNacidos = document.getElementById(`edit-inc-nacidos-${loteIncId}`)?.value;
+    const valEstado = document.getElementById(`edit-inc-estado-${loteIncId}`)?.value;
+
+    lote.huevos_fertiles = (valFertiles !== undefined && valFertiles !== '') ? parseInt(valFertiles, 10) : null;
+    lote.pollitos_nacidos = (valNacidos !== undefined && valNacidos !== '') ? parseInt(valNacidos, 10) : null;
+    if (valEstado) lote.estado_ciclo = valEstado;
+
+    await this.db.put('lotesIncubacion', lote);
+    if (!navigator.onLine || !this.supabaseClient) {
+      await this.db.put('syncQueue', { tipo: 'LOTE_INCUBACION', payload: lote, creado_en: Date.now() });
+      this.estado.syncQueue = await this.db.getAll('syncQueue');
+      this.actualizarContadorSyncQueue();
+    }
+
+    this.renderizarModuloIncubacion();
+    this.mostrarNotificacionToast(`✅ Balance de incubación y nacedora actualizado para "${lote.nombre_lote}".`, 'success');
+  },
+
+  abrirModalAnillarPollitos(loteIncId) {
+    const lote = (this.estado.lotesIncubacion || []).find(l => l.id === loteIncId);
+    if (!lote) return;
+
+    const modal = document.getElementById('modal-anillar-incubacion');
+    if (!modal) return;
+
+    document.getElementById('anillar-inc-lote-id').value = lote.id;
+    const subEl = document.getElementById('anillar-inc-lote-subtitle');
+    if (subEl) subEl.textContent = `${lote.nombre_lote} · Calibres EE: Gallo 20 mm / Gallina 18 mm`;
+
+    const gallo = (this.estado.animales || []).find(a => a.id === lote.id_gallo);
+    const padreLbl = document.getElementById('anillar-inc-padre-lbl');
+    const famLbl = document.getElementById('anillar-inc-familia-lbl');
+    const nacLbl = document.getElementById('anillar-inc-nacidos-lbl');
+    const aniLbl = document.getElementById('anillar-inc-anillados-lbl');
+
+    if (padreLbl) padreLbl.textContent = gallo ? `#${gallo.numero_anilla}` : 'Lote Gobe';
+    if (famLbl) famLbl.textContent = lote.familia_gobe || 'Familia B';
+    if (nacLbl) nacLbl.textContent = lote.pollitos_nacidos ?? 0;
+    if (aniLbl) aniLbl.textContent = Array.isArray(lote.pollitos_anillados) ? lote.pollitos_anillados.length : 0;
+
+    // Poblar selector de Madres del lote Gobe correspondiente
+    const selectMadre = document.getElementById('anillar-inc-madre');
+    if (selectMadre) {
+      const hembrasPropias = (this.estado.animales || []).filter(a => a.sexo === 'Hembra' && this.perteneceAUsuarioActivo(a));
+      const hembrasLote = hembrasPropias.filter(h => !lote.familia_gobe || h.familia_origen === lote.familia_gobe);
+      const listaMadres = hembrasLote.length > 0 ? hembrasLote : hembrasPropias;
+
+      selectMadre.innerHTML = '<option value="">-- Seleccionar Gallina Madre --</option>';
+      listaMadres.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `♀ #${m.numero_anilla} (${m.nombre || m.codigo_identificacion}) · ${m.familia_origen}`;
+        selectMadre.appendChild(opt);
+      });
+      if (listaMadres.length > 0) selectMadre.value = listaMadres[0].id;
+    }
+
+    this.actualizarCalibreAnillaModal();
+
+    // Renderizar historial de pollitos ya anillados en este lote
+    const histBox = document.getElementById('anillar-inc-historial-box');
+    const histLista = document.getElementById('anillar-inc-historial-lista');
+    const anillados = Array.isArray(lote.pollitos_anillados) ? lote.pollitos_anillados : [];
+    if (histBox && histLista) {
+      if (anillados.length > 0) {
+        histBox.classList.remove('hidden');
+        histLista.innerHTML = anillados.map(p => `
+          <span class="px-2 py-0.5 rounded bg-amber-950/70 border border-amber-700/60 text-[10px] font-mono text-amber-200">
+            #${this.escaparHtml(p.numero_anilla)} (${p.sexo === 'Macho' ? '♂ 20mm' : '♀ 18mm'})
+          </span>
+        `).join('');
+      } else {
+        histBox.classList.add('hidden');
+      }
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  },
+
+  cerrarModalAnillarPollitos() {
+    const modal = document.getElementById('modal-anillar-incubacion');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  },
+
+  actualizarCalibreAnillaModal() {
+    const sexoCod = document.getElementById('anillar-inc-sexo')?.value || 'H';
+    const inputCalibre = document.getElementById('anillar-inc-calibre');
+    const inputCodigo = document.getElementById('anillar-inc-codigo');
+    const calibreMm = sexoCod === 'M' ? 20 : 18;
+    const anio = new Date().getFullYear();
+
+    if (inputCalibre) {
+      inputCalibre.value = sexoCod === 'M'
+        ? '20 mm — Calibre Oficial Gallo (Entente Europea)'
+        : '18 mm — Calibre Oficial Gallina (Entente Europea)';
+    }
+    if (inputCodigo) {
+      const secuencial = ((this.estado.animales || []).length + 1).toString().padStart(4, '0');
+      inputCodigo.value = `EE-ES-${anio}-${calibreMm}-${secuencial}`;
+    }
+  },
+
+  async ejecutarAltaPollitoAnillado(event) {
+    event.preventDefault();
+
+    const loteId = document.getElementById('anillar-inc-lote-id')?.value;
+    const lote = (this.estado.lotesIncubacion || []).find(l => l.id === loteId);
+    if (!lote) return;
+
+    const sexoCod = document.getElementById('anillar-inc-sexo')?.value || 'H';
+    const sexoTexto = sexoCod === 'M' ? 'Macho' : 'Hembra';
+    const calibreMm = sexoCod === 'M' ? 20 : 18;
+    const numeroAnilla = document.getElementById('anillar-inc-codigo')?.value.trim();
+    const idMadre = document.getElementById('anillar-inc-madre')?.value || null;
+    const variedad = document.getElementById('anillar-inc-variedad')?.value || 'Milflores';
+    const nombre = document.getElementById('anillar-inc-nombre')?.value.trim() || `Recría ${lote.familia_gobe || ''} #${(lote.pollitos_anillados?.length || 0) + 1}`;
+
+    if (!numeroAnilla) {
+      alert('Introduce el código de anilla oficial Entente Europea.');
+      return;
+    }
+
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+    const madreObj = (this.estado.animales || []).find(a => a.id === idMadre);
+    const fxCalc = this.calcularFxWright5Gen(lote.id_gallo, idMadre, this.estado.animales);
+
+    const nuevoPollitoRN = {
+      id: 'alac-rn-' + Date.now(),
+      numero_anilla: numeroAnilla,
+      codigo_identificacion: numeroAnilla,
+      nombre: nombre,
+      sexo: sexoTexto,
+      calibre_anilla_mm: calibreMm,
+      fecha_nacimiento: lote.fecha_eclosion || new Date().toISOString().split('T')[0],
+      variedad: variedad,
+      tipo_cresta: 'Sencilla',
+      seccion_libro: 'RN',
+      familia_origen: madreObj?.familia_origen || lote.familia_gobe || 'Familia B',
+      id_padre: lote.id_gallo || null,
+      id_madre: idMadre,
+      lote_incubacion_id: lote.id,
+      coeficiente_consanguinidad: fxCalc.fx,
+      peso_g: sexoTexto === 'Macho' ? 450 : 380,
+      estado_reproductor: 'En recría (RN)',
+      estado: 'Activo',
+      explotacion_id: aviario?.id || u?.explotacion_id || lote.explotacion_id || 'exp-01',
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || u?.rega || lote.codigo_rega || 'TEMP-REGA-001',
+      usuario_id: u?.id || lote.usuario_id || null,
+      titular_nombre: u?.nombre || aviario?.nombre_titular || '',
+      geolocalizacion_alta: {
+        latitud: aviario?.latitud ?? null,
+        longitud: aviario?.longitud ?? null
+      },
+      fotos: {
+        lateral: './icons/logo.png',
+        cabeza: './icons/icon-192.png',
+        tarsos: './icons/icon-512.png',
+        galeria_opcional: []
+      }
+    };
+
+    await this.db.put('animales', nuevoPollitoRN);
+    this.estado.animales.unshift(nuevoPollitoRN);
+
+    if (!Array.isArray(lote.pollitos_anillados)) lote.pollitos_anillados = [];
+    lote.pollitos_anillados.push({
+      id: nuevoPollitoRN.id,
+      numero_anilla: numeroAnilla,
+      sexo: sexoTexto,
+      calibre_mm: calibreMm,
+      id_madre: idMadre
+    });
+    if (!lote.pollitos_nacidos || lote.pollitos_nacidos < lote.pollitos_anillados.length) {
+      lote.pollitos_nacidos = lote.pollitos_anillados.length;
+    }
+    lote.estado_ciclo = 'Eclosionado / Recría';
+    await this.db.put('lotesIncubacion', lote);
+
+    await this.db.put('syncQueue', { tipo: 'ALTA_ANIMAL', payload: nuevoPollitoRN, creado_en: Date.now() });
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
+    this.actualizarContadorSyncQueue();
+
+    this.poblarSelectores();
+    this.renderizarCenso();
+    this.actualizarKPIs();
+    this.renderizarModuloIncubacion();
+    this.abrirModalAnillarPollitos(lote.id);
+
+    this.mostrarNotificacionToast(
+      `💍 Pollito anillado con éxito: ${numeroAnilla} (${sexoTexto} · Calibre ${calibreMm} mm) inscrito en Sección RN.`,
+      'success'
+    );
+  },
+
+  // =========================================================================
+  // 13. FASE 5: MAPA INTERACTIVO GIS DE EXPLOTACIONES (LEAFLET / OSM) Y
+  // MÓDULO DEL BANCO DE GERMOPLASMA EX SITU (RD 45/2019 ARTS. 15-17 Y CNZ)
+  // =========================================================================
+
+  _leafletMap: null,
+  _leafletLayerGroup: null,
+
+  obtenerGermoplasmaSemilla() {
+    // Estado Cero Limpio: sin muestras de germoplasma ficticias pre-cargadas
+    return [];
+  },
+
+  /**
+   * Obtiene el listado completo de explotaciones territoriales geolocalizadas y su censo activo
+   * exclusivamente a partir de las explotaciones reales registradas en la base de datos.
+   */
+  async obtenerDatosTerritorialesGIS() {
+    const todasExplotacionesDB = await this.db.getAll('explotaciones');
+    const todosAnimalesDB = await this.db.getAll('animales');
+
+    const mapaExplotaciones = new Map();
+
+    (todasExplotacionesDB || []).forEach(exp => {
+      const lat = Number(exp.latitud) || 38.3452;
+      const lng = Number(exp.longitud) || -0.4815;
+      const rega = exp.codigo_rega || exp.rega || 'TEMP-REGA-001';
+      const avesExp = (todosAnimalesDB || []).filter(
+        a => a.estado !== 'Baja' && (a.explotacion_id === exp.id || (a.codigo_rega && a.codigo_rega === rega))
+      );
+      const machos = avesExp.filter(a => a.sexo === 'Macho').length;
+      const hembras = avesExp.filter(a => a.sexo === 'Hembra').length;
+      const variedadesSet = new Set(avesExp.map(a => this.normalizarVariedadFemenino(a.variedad)).filter(Boolean));
+      if (variedadesSet.size === 0) variedadesSet.add('Negra Moteada (Oficial)');
+
+      mapaExplotaciones.set(exp.id, {
+        id: exp.id,
+        nombre_criadero: exp.nombre_criadero || `Aviario ${exp.municipio || 'Alicante'}`,
+        nombre_titular: exp.nombre_titular || 'Criador Registrado',
+        codigo_rega: rega,
+        municipio: exp.municipio || 'Alicante',
+        provincia: exp.provincia || 'Alicante',
+        comarca: exp.municipio === 'Elche' ? 'Baix Vinalopó' : 'L\'Alacantí',
+        latitud: lat,
+        longitud: lng,
+        machos,
+        hembras,
+        total: machos + hembras,
+        variedades: Array.from(variedadesSet)
+      });
+    });
+
+    let lista = Array.from(mapaExplotaciones.values());
+
+    // Aplicar Filtro Rápido por Variedad Racial
+    const filtroVariedad = document.getElementById('filtro-gis-variedad')?.value || 'TODAS';
+    if (filtroVariedad !== 'TODAS') {
+      const busqVar = filtroVariedad.toLowerCase();
+      lista = lista.filter(item =>
+        item.variedades.some(v => {
+          const vl = v.toLowerCase();
+          return vl === busqVar || vl.includes(busqVar);
+        })
+      );
+    }
+
+    // Aplicar Filtro Rápido por Rango de Censo
+    const filtroRango = document.getElementById('filtro-gis-rango-censo')?.value || 'TODOS';
+    if (filtroRango === '1-3') {
+      lista = lista.filter(item => item.total >= 1 && item.total <= 3);
+    } else if (filtroRango === '4-8') {
+      lista = lista.filter(item => item.total >= 4 && item.total <= 8);
+    } else if (filtroRango === '9+') {
+      lista = lista.filter(item => item.total >= 9);
+    }
+
+    return lista;
+  },
+
+  cambiarEscalaMapaGIS(escala) {
+    if (this._leafletMap) {
+      if (escala === 'NACIONAL') {
+        this._leafletMap.setView([39.5, -2.5], 6);
+      } else if (escala === 'AUTONOMICA') {
+        this._leafletMap.setView([38.9, -0.55], 8);
+      } else {
+        this._leafletMap.setView([38.45, -0.52], 9);
+      }
+    }
+    this.actualizarMapaGIS();
+  },
+
+  centrarMapaEnMiAviario() {
+    const av = this.estado.aviario || this.estado.aviarioActivo;
+    const lat = Number(av?.latitud) || 38.3452;
+    const lng = Number(av?.longitud) || -0.4815;
+    this.centrarMapaEnCoordenadas(lat, lng, av?.nombre_criadero || 'Mi Aviario');
+  },
+
+  centrarMapaEnCoordenadas(lat, lng, etiqueta = '') {
+    if (this._leafletMap && typeof this._leafletMap.setView === 'function') {
+      this._leafletMap.setView([Number(lat), Number(lng)], 12, { animate: true });
+      if (etiqueta) {
+        this.mostrarNotificacionToast(`📍 Mapa centrado en: ${etiqueta} (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`, 'info');
+      }
+    }
+  },
+
+  async actualizarMapaGIS() {
+    const mapContainer = document.getElementById('leaflet-mapa-gis');
+    if (!mapContainer) return;
+
+    const datos = await this.obtenerDatosTerritorialesGIS();
+    const esModoPublicoVisitante = Boolean(this.estado.modoVisitante || !this.estado.usuarioActivo);
+
+    // Actualizar Badge de Privacidad según Rol
+    const badgePriv = document.getElementById('mapa-gis-modo-privacidad-badge');
+    const hintPriv = document.getElementById('mapa-gis-privacidad-hint');
+    if (badgePriv) {
+      if (esModoPublicoVisitante) {
+        badgePriv.className = 'px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold';
+        badgePriv.textContent = '🔒 Modo Público Visitante (Datos Agregados por Municipio)';
+      } else {
+        badgePriv.className = 'px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold';
+        badgePriv.textContent = '🔓 Vista Criador / Administrador (Detalle REGA y Censo Activo)';
+      }
+    }
+    if (hintPriv) {
+      hintPriv.textContent = esModoPublicoVisitante
+        ? 'Modo Público activo: Los marcadores muestran únicamente datos agregados por municipio para proteger la privacidad de los criadores.'
+        : 'Modo Criador/Admin activo: Pulsa cualquier marcador para ver Nombre del Aviario, Código REGA, Municipio/Provincia y desglose de Machos, Hembras y Variedades.';
+    }
+
+    // Actualizar KPIs Territoriales
+    const municipiosUnicos = new Set(datos.map(d => `${d.municipio} (${d.provincia})`));
+    const totalMachos = datos.reduce((acc, d) => acc + d.machos, 0);
+    const totalHembras = datos.reduce((acc, d) => acc + d.hembras, 0);
+    const variedadesUnicas = new Set();
+    datos.forEach(d => d.variedades.forEach(v => variedadesUnicas.add(v)));
+
+    const elExp = document.getElementById('kpi-gis-explotaciones');
+    const elMun = document.getElementById('kpi-gis-municipios');
+    const elMH = document.getElementById('kpi-gis-machos-hembras');
+    const elVar = document.getElementById('kpi-gis-variedades');
+
+    if (elExp) elExp.textContent = datos.length;
+    if (elMun) elMun.textContent = municipiosUnicos.size;
+    if (elMH) elMH.textContent = `${totalMachos} ♂ · ${totalHembras} ♀`;
+    if (elVar) elVar.textContent = variedadesUnicas.size;
+
+    // Preparar datos según Modo de Privacidad (Visitante = Agregado por Municipio vs Autenticado = Por Aviario REGA)
+    const escala = document.getElementById('filtro-gis-escala')?.value || 'COMARCAL';
+    const usarCluster = document.getElementById('check-gis-cluster')?.checked !== false;
+
+    let nodosParaMapa = [];
+    if (esModoPublicoVisitante) {
+      // Agregar estrictamente por Municipio para preservar la privacidad de los criadores
+      const porMunicipio = new Map();
+      datos.forEach(d => {
+        const key = `${d.municipio}_${d.provincia}`;
+        if (!porMunicipio.has(key)) {
+          porMunicipio.set(key, {
+            esAgregadoPublico: true,
+            municipio: d.municipio,
+            provincia: d.provincia,
+            comarca: d.comarca,
+            latitud: Number((d.latitud).toFixed(2)),
+            longitud: Number((d.longitud).toFixed(2)),
+            num_aviarios: 0,
+            machos: 0,
+            hembras: 0,
+            total: 0,
+            variedades: new Set()
+          });
+        }
+        const m = porMunicipio.get(key);
+        m.num_aviarios += 1;
+        m.machos += d.machos;
+        m.hembras += d.hembras;
+        m.total += d.total;
+        d.variedades.forEach(v => m.variedades.add(v));
+      });
+      nodosParaMapa = Array.from(porMunicipio.values()).map(m => ({
+        ...m,
+        variedades: Array.from(m.variedades)
+      }));
+    } else if (usarCluster && escala === 'NACIONAL') {
+      // Agrupamiento / Clusterización automática por Provincia para escala nacional
+      const porProvincia = new Map();
+      datos.forEach(d => {
+        const key = d.provincia || 'Alicante';
+        if (!porProvincia.has(key)) {
+          porProvincia.set(key, {
+            esClusterProvincial: true,
+            provincia: key,
+            municipios: new Set(),
+            latitud: d.latitud,
+            longitud: d.longitud,
+            num_aviarios: 0,
+            machos: 0,
+            hembras: 0,
+            total: 0,
+            variedades: new Set(),
+            regas: []
+          });
+        }
+        const p = porProvincia.get(key);
+        p.municipios.add(d.municipio);
+        p.num_aviarios += 1;
+        p.machos += d.machos;
+        p.hembras += d.hembras;
+        p.total += d.total;
+        p.regas.push(d.codigo_rega);
+        d.variedades.forEach(v => p.variedades.add(v));
+      });
+      nodosParaMapa = Array.from(porProvincia.values()).map(p => ({
+        ...p,
+        municipios: Array.from(p.municipios),
+        variedades: Array.from(p.variedades)
+      }));
+    } else {
+      nodosParaMapa = datos;
+    }
+
+    // Renderizar en motor Leaflet.js (o respaldo vectorial interactivo si está sin red ni caché de CDN)
+    if (typeof window.L !== 'undefined') {
+      if (!this._leafletMap) {
+        mapContainer.innerHTML = '';
+        this._leafletMap = window.L.map('leaflet-mapa-gis', {
+          center: [38.45, -0.52],
+          zoom: 9,
+          zoomControl: true
+        });
+
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '&copy; OpenStreetMap contributors · AlacantinApp v6 GIS (ESGA025)'
+        }).addTo(this._leafletMap);
+      }
+
+      setTimeout(() => {
+        if (this._leafletMap) this._leafletMap.invalidateSize();
+      }, 120);
+
+      if (this._leafletLayerGroup) {
+        this._leafletMap.removeLayer(this._leafletLayerGroup);
+      }
+
+      if (usarCluster && typeof window.L.markerClusterGroup === 'function') {
+        this._leafletLayerGroup = window.L.markerClusterGroup({
+          showCoverageOnHover: false,
+          maxClusterRadius: escala === 'AUTONOMICA' ? 65 : 45
+        });
+      } else {
+        this._leafletLayerGroup = window.L.layerGroup();
+      }
+
+      nodosParaMapa.forEach(nodo => {
+        const esRegaOficial = nodo.codigo_rega ? this.esRegaOficialValido(nodo.codigo_rega) : true;
+        const colorPin = nodo.esClusterProvincial
+          ? '#38bdf8'
+          : (esModoPublicoVisitante ? '#14b8a6' : (esRegaOficial ? '#10b981' : '#f59e0b'));
+
+        const htmlIcon = `
+          <div style="
+            background: ${colorPin};
+            color: #0f172a;
+            border: 2px solid #ffffff;
+            border-radius: 9999px;
+            min-width: 34px;
+            height: 34px;
+            padding: 0 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 11px;
+            font-family: monospace;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+          ">
+            ${nodo.esClusterProvincial ? `${nodo.num_aviarios} av.` : `${nodo.total}🐔`}
+          </div>
+        `;
+
+        const customIcon = window.L.divIcon({
+          html: htmlIcon,
+          className: 'alacantin-gis-pin',
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+          popupAnchor: [0, -18]
+        });
+
+        let popupHtml = '';
+        if (esModoPublicoVisitante) {
+          // POPUP PARA VISITANTES (MODO PÚBLICO): Únicamente datos agregados por municipio y censo total
+          popupHtml = `
+            <div style="min-width: 220px; font-family: sans-serif; color: #0f172a; padding: 2px;">
+              <div style="font-size: 10px; font-weight: 800; color: #0d9488; text-transform: uppercase;">
+                🔒 Censo Público Agregado por Municipio
+              </div>
+              <div style="font-size: 14px; font-weight: 900; margin-top: 2px;">
+                📍 ${this.escaparHtml(nodo.municipio)} (${this.escaparHtml(nodo.provincia)})
+              </div>
+              <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">
+                Comarca: ${this.escaparHtml(nodo.comarca || 'Comunidad Valenciana')}
+              </div>
+              <div style="background: #f1f5f9; border-radius: 6px; padding: 6px 8px; font-size: 11px;">
+                <div><strong>Censo Total Municipio:</strong> ${nodo.total} ejemplares ESGA025</div>
+                <div><strong>Aviarios Colaboradores:</strong> ${nodo.num_aviarios} núcleo(s)</div>
+                <div><strong>Variedades presentes:</strong> ${this.escaparHtml(nodo.variedades.join(', '))}</div>
+              </div>
+              <div style="font-size: 9px; color: #64748b; margin-top: 5px;">
+                * Datos personales y códigos REGA ocultos en Modo Visitante por protección de datos.
+              </div>
+            </div>
+          `;
+        } else if (nodo.esClusterProvincial) {
+          popupHtml = `
+            <div style="min-width: 240px; font-family: sans-serif; color: #0f172a; padding: 2px;">
+              <div style="font-size: 10px; font-weight: 800; color: #0284c7; text-transform: uppercase;">
+                🗺️ Cluster Provincial ESGA025
+              </div>
+              <div style="font-size: 14px; font-weight: 900; margin-top: 2px;">
+                Provincia de ${this.escaparHtml(nodo.provincia)}
+              </div>
+              <div style="background: #f1f5f9; border-radius: 6px; padding: 6px 8px; font-size: 11px; margin-top: 6px;">
+                <div><strong>Explotaciones REGA:</strong> ${nodo.num_aviarios} (${this.escaparHtml(nodo.municipios.join(', '))})</div>
+                <div><strong>Desglose Censo Activo:</strong> ♂ ${nodo.machos} Machos · ♀ ${nodo.hembras} Hembras (${nodo.total} total)</div>
+                <div><strong>Variedades criadas:</strong> ${this.escaparHtml(nodo.variedades.join(', '))}</div>
+              </div>
+            </div>
+          `;
+        } else {
+          // POPUP PARA CRIADORES / ADMINISTRADORES: Nombre del Aviario, Código REGA, Municipio/Provincia y desglose activo
+          popupHtml = `
+            <div style="min-width: 245px; font-family: sans-serif; color: #0f172a; padding: 2px;">
+              <div style="font-size: 10px; font-weight: 800; color: #059669; text-transform: uppercase;">
+                🏡 Explotación Ganadera REGA · ESGA025
+              </div>
+              <div style="font-size: 14px; font-weight: 900; margin-top: 2px;">
+                ${this.escaparHtml(nodo.nombre_criadero)}
+              </div>
+              <div style="font-size: 11px; font-family: monospace; font-weight: 700; color: #0f766e; margin-top: 1px;">
+                Código REGA: ${this.escaparHtml(nodo.codigo_rega)}
+              </div>
+              <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
+                📍 ${this.escaparHtml(nodo.municipio)} (${this.escaparHtml(nodo.provincia)} · ${this.escaparHtml(nodo.comarca)})
+              </div>
+              <div style="background: #f1f5f9; border-radius: 6px; padding: 6px 8px; font-size: 11px;">
+                <div><strong>Desglose Censo Activo (${nodo.total} aves):</strong></div>
+                <div style="margin-top: 2px;">• <strong>Nº de Machos (♂):</strong> ${nodo.machos} reproductores</div>
+                <div>• <strong>Nº de Hembras (♀):</strong> ${nodo.hembras} reproductoras</div>
+                <div style="margin-top: 3px;">• <strong>Variedades criadas:</strong> ${this.escaparHtml(nodo.variedades.join(', '))}</div>
+              </div>
+            </div>
+          `;
+        }
+
+        const marker = window.L.marker([nodo.latitud, nodo.longitud], { icon: customIcon });
+        marker.bindPopup(popupHtml);
+        this._leafletLayerGroup.addLayer(marker);
+      });
+
+      this._leafletMap.addLayer(this._leafletLayerGroup);
+    } else {
+      // Respaldo interactivo 100% Offline si Leaflet CDN no pudo cargarse sin red
+      mapContainer.innerHTML = `
+        <div class="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-900 text-center space-y-3">
+          <i class="fa-solid fa-map-location-dot text-3xl text-teal-400"></i>
+          <p class="text-xs font-bold text-white">Cartografía Territorial Offline Activa (${nodosParaMapa.length} núcleos geolocalizados)</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 w-full max-w-4xl overflow-y-auto max-h-72 text-left">
+            ${nodosParaMapa.map(n => `
+              <div class="p-3 rounded-xl bg-slate-950 border border-teal-500/40 text-xs space-y-1">
+                <div class="font-bold text-teal-300">${this.escaparHtml(esModoPublicoVisitante ? `${n.municipio} (${n.provincia})` : n.nombre_criadero)}</div>
+                <div class="text-[11px] font-mono text-slate-400">${esModoPublicoVisitante ? 'REGA Protegido (Modo Público)' : this.escaparHtml(n.codigo_rega)}</div>
+                <div class="text-[11px] text-white">${esModoPublicoVisitante ? `Censo Total: ${n.total} aves` : `♂ ${n.machos} Machos · ♀ ${n.hembras} Hembras`}</div>
+                <div class="text-[10px] text-amber-300">Variedades: ${this.escaparHtml(n.variedades.join(', '))}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Renderizar Tabla Territorial Inferior respetando Privacidad RBAC
+    const tbody = document.getElementById('tabla-gis-territorial-body');
+    const contadorEl = document.getElementById('tabla-gis-contador');
+    if (contadorEl) {
+      contadorEl.textContent = esModoPublicoVisitante
+        ? `${nodosParaMapa.length} municipios (Modo Público)`
+        : `${datos.length} aviarios REGA`;
+    }
+
+    if (tbody) {
+      const filas = esModoPublicoVisitante ? nodosParaMapa : datos;
+      if (filas.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-6 text-center text-xs text-slate-500">
+              No hay explotaciones que coincidan con los filtros territoriales seleccionados.
+            </td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = filas.map(item => `
+          <tr class="hover:bg-slate-900/70 transition">
+            <td class="py-2.5 px-4">
+              <div class="font-bold text-white">${this.escaparHtml(esModoPublicoVisitante ? `Municipio de ${item.municipio}` : item.nombre_criadero)}</div>
+              <div class="text-[10px] text-slate-400">${this.escaparHtml(item.municipio)} (${this.escaparHtml(item.provincia)} · ${this.escaparHtml(item.comarca || '')})</div>
+            </td>
+            <td class="py-2.5 px-4 font-mono text-xs">
+              ${esModoPublicoVisitante
+                ? `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">🔒 Agregado (${item.num_aviarios} av.)</span>`
+                : `<span class="px-2 py-0.5 rounded bg-teal-950/80 text-teal-300 border border-teal-700/60 font-bold">${this.escaparHtml(item.codigo_rega)}</span>`}
+            </td>
+            <td class="py-2.5 px-4 font-mono text-[11px] text-slate-400">
+              ${esModoPublicoVisitante
+                ? `${Number(item.latitud).toFixed(2)}, ${Number(item.longitud).toFixed(2)}`
+                : `${Number(item.latitud).toFixed(4)}, ${Number(item.longitud).toFixed(4)}`}
+            </td>
+            <td class="py-2.5 px-4 text-center font-mono font-bold text-sky-400">
+              ${esModoPublicoVisitante ? '--' : item.machos}
+            </td>
+            <td class="py-2.5 px-4 text-center font-mono font-bold text-pink-400">
+              ${esModoPublicoVisitante ? `Total: ${item.total}` : item.hembras}
+            </td>
+            <td class="py-2.5 px-4">
+              <div class="flex flex-wrap gap-1">
+                ${item.variedades.map(v => `<span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-amber-300">${this.escaparHtml(v)}</span>`).join('')}
+              </div>
+            </td>
+            <td class="py-2.5 px-4 text-right">
+              <button type="button"
+                      onclick="app.centrarMapaEnCoordenadas(${item.latitud}, ${item.longitud}, '${this.escaparHtml(esModoPublicoVisitante ? item.municipio : item.nombre_criadero)}')"
+                      class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-teal-900/70 text-teal-300 border border-teal-700/50 text-[11px] font-semibold transition">
+                <i class="fa-solid fa-crosshairs mr-1"></i>Ver Pin
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+  },
+
+  // =========================================================================
+  // MÓDULO DEL BANCO DE GERMOPLASMA Y MATERIAL GENÉTICO EX SITU (RD 45/2019)
+  // =========================================================================
+
+  renderizarModuloGermoplasma() {
+    const selectDonante = document.getElementById('ejemplar_anilla');
+    const inputFecha = document.getElementById('fecha_congelacion');
+    const inputCanister = document.getElementById('codigo_canister_nitrogeno');
+    const tbody = document.getElementById('tabla-germoplasma-body');
+    if (!tbody) return;
+
+    if (inputFecha && !inputFecha.value) {
+      inputFecha.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Filtrar estrictamente reproductores con Registro Definitivo (RD) o Registro de Méritos (RM)
+    const donantesCualificados = (this.estado.animales || []).filter(
+      a => a.estado !== 'Baja' && ['RD', 'RM'].includes(a.seccion_libro) && this.perteneceAUsuarioActivo(a)
+    );
+
+    if (selectDonante) {
+      const valPrevio = selectDonante.value;
+      selectDonante.innerHTML = '<option value="">-- Seleccionar Reproductor Donante (RD / RM) --</option>';
+      donantesCualificados.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.numero_anilla;
+        opt.setAttribute('data-animal-id', d.id);
+        opt.textContent = `[${d.seccion_libro}] #${d.numero_anilla} · ${d.nombre || d.codigo_identificacion} (${d.sexo} · ${d.variedad} · ${d.familia_origen})`;
+        selectDonante.appendChild(opt);
+      });
+      if (valPrevio && donantesCualificados.some(d => d.numero_anilla === valPrevio)) {
+        selectDonante.value = valPrevio;
+      } else if (donantesCualificados.length > 0) {
+        selectDonante.value = donantesCualificados[0].numero_anilla;
+      }
+    }
+
+    const muestras = (this.estado.bancoGermoplasma || []).filter(m => this.perteneceAUsuarioActivo(m));
+
+    if (inputCanister && !inputCanister.value) {
+      const sec = (muestras.length + 1).toString().padStart(3, '0');
+      inputCanister.value = `CAN-N2-04-PAJ-${sec}`;
+    }
+
+    // Calcular KPIs de dosis ex situ disponibles
+    const totalDosis = muestras.reduce((acc, m) => acc + (Number(m.numero_dosis) || 0), 0);
+    const dosisSemen = muestras
+      .filter(m => m.tipo_muestra === 'Dosis de Semen Criopreservado')
+      .reduce((acc, m) => acc + (Number(m.numero_dosis) || 0), 0);
+    const dosisEmbriones = muestras
+      .filter(m => m.tipo_muestra === 'Embriones')
+      .reduce((acc, m) => acc + (Number(m.numero_dosis) || 0), 0);
+    const dosisAdn = muestras
+      .filter(m => m.tipo_muestra === 'Muestras de ADN / Tejido')
+      .reduce((acc, m) => acc + (Number(m.numero_dosis) || 0), 0);
+    const donantesUnicos = new Set(muestras.map(m => m.ejemplar_anilla)).size;
+
+    const elTotal = document.getElementById('kpi-germo-total-dosis');
+    const elSemen = document.getElementById('kpi-germo-dosis-semen');
+    const elEmb = document.getElementById('kpi-germo-embriones');
+    const elAdn = document.getElementById('kpi-germo-adn');
+    const elDon = document.getElementById('kpi-germo-donantes');
+
+    if (elTotal) elTotal.textContent = totalDosis;
+    if (elSemen) elSemen.textContent = dosisSemen;
+    if (elEmb) elEmb.textContent = dosisEmbriones;
+    if (elAdn) elAdn.textContent = dosisAdn;
+    if (elDon) elDon.textContent = donantesUnicos;
+
+    const filtroTipo = document.getElementById('filtro-germo-tipo')?.value || 'TODOS';
+    const muestrasFiltradas = filtroTipo === 'TODOS'
+      ? muestras
+      : muestras.filter(m => m.tipo_muestra === filtroTipo);
+
+    if (muestrasFiltradas.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="py-6 text-center text-xs text-slate-500">
+            No hay lotes de germoplasma registrados para el filtro seleccionado.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = muestrasFiltradas.map(m => {
+      const badgeTipo = m.tipo_muestra === 'Dosis de Semen Criopreservado'
+        ? 'bg-sky-950/80 text-sky-300 border-sky-700/60'
+        : (m.tipo_muestra === 'Embriones'
+          ? 'bg-pink-950/80 text-pink-300 border-pink-700/60'
+          : 'bg-purple-950/80 text-purple-300 border-purple-700/60');
+
+      return `
+        <tr class="hover:bg-slate-900/70 transition">
+          <td class="py-2.5 px-4">
+            <div class="flex items-center gap-1.5">
+              <span class="px-1.5 py-0.2 rounded text-[10px] font-black ${m.seccion_libro === 'RM' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}">
+                ${this.escaparHtml(m.seccion_libro || 'RD')}
+              </span>
+              <span class="font-mono font-bold text-white">#${this.escaparHtml(m.ejemplar_anilla)}</span>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${this.escaparHtml(m.nombre_donante || '')} (${this.escaparHtml(m.sexo_donante || '')})</div>
+          </td>
+          <td class="py-2.5 px-4 text-xs">
+            <span class="text-amber-300 font-semibold">${this.escaparHtml(m.variedad || 'Negra Moteada (Oficial)')}</span>
+            <span class="block text-[10px] text-slate-400">${this.escaparHtml(m.familia_origen || '')}</span>
+          </td>
+          <td class="py-2.5 px-4">
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border ${badgeTipo}">
+              ${this.escaparHtml(m.tipo_muestra)}
+            </span>
+          </td>
+          <td class="py-2.5 px-4 font-mono font-bold text-cyan-300 text-xs">
+            ${this.escaparHtml(m.codigo_canister_nitrogeno)}
+          </td>
+          <td class="py-2.5 px-4 text-center font-mono font-black text-sm text-white">
+            ${Number(m.numero_dosis) || 0}
+          </td>
+          <td class="py-2.5 px-4 font-mono text-xs text-slate-300">
+            ${this.escaparHtml(m.fecha_congelacion)}
+          </td>
+          <td class="py-2.5 px-4 text-xs text-slate-300">
+            ${this.escaparHtml(m.centro_germoplasma)}
+          </td>
+          <td class="py-2.5 px-4 text-right">
+            <button type="button"
+                    onclick="app.eliminarMuestraGermoplasma('${m.id}')"
+                    title="Retirar lote del inventario"
+                    class="px-2 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 text-[10px] transition">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async guardarMuestraGermoplasma(event) {
+    event.preventDefault();
+
+    const u = this.estado.usuarioActivo;
+    const aviario = this.estado.aviario || this.estado.aviarioActivo;
+    if (!u || this.estado.modoVisitante) {
+      alert('Debes iniciar sesión con tu cuenta de criador o inspector para registrar muestras en el Banco de Germoplasma.');
+      return;
+    }
+
+    const ejemplarAnilla = document.getElementById('ejemplar_anilla')?.value.trim();
+    const tipoMuestra = document.getElementById('tipo_muestra')?.value;
+    const codigoCanister = document.getElementById('codigo_canister_nitrogeno')?.value.trim();
+    const numeroDosis = parseInt(document.getElementById('numero_dosis')?.value || '0', 10);
+    const fechaCongelacion = document.getElementById('fecha_congelacion')?.value;
+    const centroGermoplasma = document.getElementById('centro_germoplasma')?.value.trim();
+
+    const donante = (this.estado.animales || []).find(a => a.numero_anilla === ejemplarAnilla);
+    if (!donante || !['RD', 'RM'].includes(donante.seccion_libro)) {
+      alert('Conforme al RD 45/2019 y Protocolo CNZ, el ejemplar donante debe pertenecer al Registro Definitivo (RD) o Registro de Méritos (RM).');
+      return;
+    }
+
+    const nuevaMuestra = {
+      id: 'germo-' + Date.now(),
+      animal_id: donante.id,
+      ejemplar_anilla: ejemplarAnilla,
+      nombre_donante: donante.nombre || donante.codigo_identificacion,
+      sexo_donante: donante.sexo,
+      seccion_libro: donante.seccion_libro,
+      variedad: donante.variedad || 'Negra Moteada (Oficial)',
+      familia_origen: donante.familia_origen || 'Familia A',
+      tipo_muestra: tipoMuestra,
+      codigo_canister_nitrogeno: codigoCanister,
+      numero_dosis: numeroDosis,
+      fecha_congelacion: fechaCongelacion,
+      centro_germoplasma: centroGermoplasma,
+      usuario_id: u.id,
+      explotacion_id: aviario?.id || u.explotacion_id || donante.explotacion_id || 'exp-01',
+      codigo_rega: aviario?.codigo_rega || aviario?.rega || u.rega || donante.codigo_rega || 'TEMP-REGA-001',
+      creado_en: new Date().toISOString()
+    };
+
+    await this.db.put('bancoGermoplasma', nuevaMuestra);
+    if (!Array.isArray(this.estado.bancoGermoplasma)) this.estado.bancoGermoplasma = [];
+    this.estado.bancoGermoplasma.unshift(nuevaMuestra);
+
+    if (navigator.onLine && this.supabaseClient) {
+      try {
+        const { error } = await this.supabaseClient.from('banco_germoplasma').upsert(nuevaMuestra);
+        if (error) throw error;
+      } catch (_) {
+        await this.db.put('syncQueue', { tipo: 'BANCO_GERMOPLASMA', payload: nuevaMuestra, creado_en: Date.now() });
+      }
+    } else {
+      await this.db.put('syncQueue', { tipo: 'BANCO_GERMOPLASMA', payload: nuevaMuestra, creado_en: Date.now() });
+    }
+
+    this.estado.syncQueue = await this.db.getAll('syncQueue');
+    this.actualizarContadorSyncQueue();
+    this.renderizarModuloGermoplasma();
+
+    const inputCanister = document.getElementById('codigo_canister_nitrogeno');
+    if (inputCanister) {
+      const sec = (this.estado.bancoGermoplasma.length + 1).toString().padStart(3, '0');
+      inputCanister.value = `CAN-N2-04-PAJ-${sec}`;
+    }
+
+    this.mostrarNotificacionToast(
+      `🧬 Depositadas ${numeroDosis} unidades de "${tipoMuestra}" del donante #${ejemplarAnilla} (${donante.seccion_libro}) en ${codigoCanister}.`,
+      'success'
+    );
+  },
+
+  async eliminarMuestraGermoplasma(id) {
+    if (!confirm('¿Deseas retirar este lote del inventario del Banco de Germoplasma?')) return;
+    await this.db.delete('bancoGermoplasma', id);
+    this.estado.bancoGermoplasma = (this.estado.bancoGermoplasma || []).filter(m => m.id !== id);
+    this.renderizarModuloGermoplasma();
+    this.mostrarNotificacionToast('🗑️ Lote retirado del inventario de germoplasma.', 'info');
+  },
+
+  exportarInventarioGermoplasmaCSV() {
+    const muestras = (this.estado.bancoGermoplasma || []).filter(m => this.perteneceAUsuarioActivo(m));
+    if (muestras.length === 0) {
+      alert('No hay lotes registrados en el Banco de Germoplasma para exportar.');
+      return;
+    }
+
+    const cabeceras = [
+      'ID_LOTE_GERMOPLASMA',
+      'CODIGO_RAZA_MAPA',
+      'EJEMPLAR_ANILLA',
+      'NOMBRE_DONANTE',
+      'SEXO_DONANTE',
+      'SECCION_LIBRO_GENEALOGICO',
+      'VARIEDAD_RACIAL',
+      'FAMILIA_GOBE',
+      'TIPO_MUESTRA_EX_SITU',
+      'CODIGO_CANISTER_NITROGENO',
+      'NUMERO_DOSIS_DISPONIBLES',
+      'FECHA_CONGELACION',
+      'CENTRO_GERMOPLASMA_DEPOSITARIO',
+      'CODIGO_REGA_ORIGEN',
+      'NORMATIVA_CUMPLIMIENTO'
+    ];
+
+    const filas = muestras.map(m => [
+      this.escaparValorCSV(m.id),
+      this.escaparValorCSV('ESGA025'),
+      this.escaparValorCSV(m.ejemplar_anilla),
+      this.escaparValorCSV(m.nombre_donante || ''),
+      this.escaparValorCSV(m.sexo_donante || ''),
+      this.escaparValorCSV(m.seccion_libro || 'RD'),
+      this.escaparValorCSV(m.variedad || 'Negra Moteada (Oficial)'),
+      this.escaparValorCSV(m.familia_origen || ''),
+      this.escaparValorCSV(m.tipo_muestra),
+      this.escaparValorCSV(m.codigo_canister_nitrogeno),
+      this.escaparValorCSV(m.numero_dosis),
+      this.escaparValorCSV(m.fecha_congelacion),
+      this.escaparValorCSV(m.centro_germoplasma),
+      this.escaparValorCSV(m.codigo_rega || 'ES030140001234'),
+      this.escaparValorCSV('RD 45/2019 Arts. 15-17 · Protocolo CNZ')
+    ].join(','));
+
+    const contenidoCSV = '\uFEFF' + [cabeceras.join(','), ...filas].join('\r\n');
+    const fechaStr = new Date().toISOString().split('T')[0];
+    const nombreArchivo = `Inventario_Oficial_Banco_Germoplasma_ESGA025_${fechaStr}.csv`;
+
+    this.descargarArchivoCliente(contenidoCSV, nombreArchivo, 'text/csv;charset=utf-8;');
+    this.mostrarNotificacionToast(`📥 Exportado inventario oficial CSV (${muestras.length} lotes ex situ) para MAPA / Autoridad Competente.`, 'success');
+  },
+
+  // =========================================================================
+  // 14. FASE 6 (V6): MOTOR DE AUDITORÍA Y CONTROL DE CALIDAD ZOOTÉCNICA EN TIEMPO REAL
   //     MÓDULO DE RESPALDOS (BACKUPS JSON/ZIP) Y ACTAS DE CIERRE CENSAL ANUAL
   // =========================================================================
 
-  // -------------------------------------------------------------------------
-  // 12.1 MOTOR DE AUDITORÍA DE INTEGRIDAD DEL LIBRO GENEALÓGICO EN TIEMPO REAL
-  // -------------------------------------------------------------------------
   esEjemplarAdultoAuditoria(fechaNacimiento) {
     if (!fechaNacimiento) return true;
     const nac = new Date(fechaNacimiento);
@@ -7361,7 +11735,6 @@ const app = {
     ) || null;
   },
 
-  // Detección en grafo de bucles genealógicos (ejemplar que figura como su propio ancestro)
   detectarBuclePedigriAnimal(animalRaiz) {
     if (!animalRaiz) return null;
     const idRaiz = animalRaiz.id;
@@ -7403,20 +11776,15 @@ const app = {
     const animales = this.estado.animales || [];
     const controles = this.estado.controlesPuesta || [];
 
-    // Mapa para detectar duplicidad de anillas
     const conteoAnillas = new Map();
     animales.forEach(a => {
       const clave = String(a.numero_anilla || '').trim();
       if (clave) conteoAnillas.set(clave, (conteoAnillas.get(clave) || 0) + 1);
     });
 
-    // =========================================================================
-    // A. VERIFICACIÓN 1: INCOHERENCIAS GENEALÓGICAS Y CRONOLÓGICAS
-    // =========================================================================
     animales.forEach(a => {
       const etiquetaAve = `#${a.numero_anilla || '--'} (${a.nombre || a.codigo_identificacion || a.id})`;
 
-      // 1.1 Detección de bucles de pedigrí (propio ancestro directo o indirecto)
       if (a.id_padre === a.id || a.id_madre === a.id) {
         alertas.push({
           id: `aud-bucle-dir-${a.id}`,
@@ -7442,7 +11810,6 @@ const app = {
         }
       }
 
-      // 1.2 Mismo animal asignado como padre y madre
       if (a.id_padre && a.id_madre && a.id_padre === a.id_madre) {
         alertas.push({
           id: `aud-padres-iguales-${a.id}`,
@@ -7455,7 +11822,6 @@ const app = {
         });
       }
 
-      // 1.3 Progenitores con fecha de nacimiento posterior o igual a la progenie
       const fechaHijo = a.fecha_nacimiento ? new Date(a.fecha_nacimiento) : null;
       const padre = this.buscarAnimalPorRef(a.id_padre);
       const madre = this.buscarAnimalPorRef(a.id_madre);
@@ -7490,7 +11856,6 @@ const app = {
         }
       }
 
-      // 1.4 Incoherencia de sexo en progenitores
       if (padre && padre.sexo && padre.sexo !== 'Macho') {
         alertas.push({
           id: `aud-sexo-padre-${a.id}`,
@@ -7514,13 +11879,9 @@ const app = {
         });
       }
 
-      // =======================================================================
-      // B. VERIFICACIÓN 2: ALERTAS DE ANILLADO Y PESO (ESTÁNDAR ESGA025)
-      // =======================================================================
       const esAdulto = this.esEjemplarAdultoAuditoria(a.fecha_nacimiento) || ['RF', 'RD', 'RM'].includes(a.seccion_libro);
       const peso = Number(a.peso_actual_kg);
 
-      // 2.1 Control de Peso en Ejemplares Adultos (Gallo: 3.0-3.5 kg | Gallina: 2.2-2.6 kg)
       if (esAdulto) {
         if (!peso || isNaN(peso)) {
           alertas.push({
@@ -7557,7 +11918,6 @@ const app = {
         }
       }
 
-      // 2.2 Control de Calibre de Anilla Oficial (Gallo: 20 mm | Gallina: 18 mm) y Formato de Código
       const calibreEsperado = a.sexo === 'Macho' ? 20 : 18;
       const calibreActual = Number(a.calibre_anilla_mm || calibreEsperado);
       if (calibreActual !== calibreEsperado) {
@@ -7568,21 +11928,6 @@ const app = {
           animalId: a.id,
           titulo: `Calibre de Anilla No Reglamentario en ${etiquetaAve}`,
           detalle: `Anilla de ${calibreActual} mm en ejemplar ${a.sexo}. El estándar oficial ESGA025 exige ${calibreEsperado} mm.`,
-          accionTipo: 'NORMALIZAR_PESO_ANILLA'
-        });
-      }
-
-      const regexCodigoOficial = /^ESGA025-\d{2}-[MH]-\d{4}$/;
-      const codId = String(a.codigo_identificacion || '').trim();
-      const letraSexoEsperada = a.sexo === 'Macho' ? 'M' : 'H';
-      if (!regexCodigoOficial.test(codId) || !codId.includes(`-${letraSexoEsperada}-`)) {
-        alertas.push({
-          id: `aud-anilla-fmt-${a.id}`,
-          categoria: 'PESO_ANILLA',
-          severidad: 'MEDIA',
-          animalId: a.id,
-          titulo: `Anilla / Código No Normalizado en ${etiquetaAve}`,
-          detalle: `El código '${codId || 'Vacío'}' no cumple la nomenclatura oficial ESGA025-AA-${letraSexoEsperada}-NNNN.`,
           accionTipo: 'NORMALIZAR_PESO_ANILLA'
         });
       }
@@ -7601,16 +11946,12 @@ const app = {
       }
     });
 
-    // =========================================================================
-    // C. VERIFICACIÓN 3: INCOHERENCIAS DE PUESTA (HEN-DAY >100% Y PESO 55g-70g)
-    // =========================================================================
     controles.forEach(c => {
       const gallina = this.buscarAnimalPorRef(c.animal_id);
       const etiqGallina = gallina
         ? `#${gallina.numero_anilla} (${gallina.nombre || gallina.codigo_identificacion})`
         : `ID ${c.animal_id}`;
 
-      // Calcular días del periodo (por defecto 15 días oficiales)
       let diasPeriodo = 15;
       if (c.fecha_inicio && c.fecha_fin) {
         const d1 = new Date(c.fecha_inicio);
@@ -7623,7 +11964,6 @@ const app = {
       const tasaHenDay = (huevos / 15) * 100;
       const tasaRealPeriodo = (huevos / diasPeriodo) * 100;
 
-      // 3.1 Tasa de puesta > 100%
       if (huevos > 15 || tasaHenDay > 100 || tasaRealPeriodo > 100) {
         alertas.push({
           id: `aud-puesta-tasa-${c.id}`,
@@ -7637,7 +11977,6 @@ const app = {
         });
       }
 
-      // 3.2 Registro de puesta asignado a un Macho
       if (gallina && gallina.sexo === 'Macho') {
         alertas.push({
           id: `aud-puesta-sexo-${c.id}`,
@@ -7651,7 +11990,6 @@ const app = {
         });
       }
 
-      // 3.3 Peso de huevo fuera del rango oficial de 55g - 70g
       const pesoHuevo = Number(c.peso_medio_huevo_g);
       if (!isNaN(pesoHuevo) && (pesoHuevo < 55.0 || pesoHuevo > 70.0)) {
         const tipoDesv = pesoHuevo < 55.0
@@ -7689,113 +12027,65 @@ const app = {
     const catActiva = this.estado.auditoria.categoriaActiva || 'TODAS';
 
     const countGen = alertas.filter(a => a.categoria === 'GENEALOGIA').length;
-    const countPeso = alertas.filter(a => a.categoria === 'PESO_ANILLA').length;
+    const countPeso = alertas.filter(a => a.categoria === 'PESO_ANILLA' || a.categoria === 'ANILLADO_PESO').length;
     const countPuesta = alertas.filter(a => a.categoria === 'PUESTA').length;
     const total = alertas.length;
+    const totalAuditados = (this.estado.animales || []).length;
 
-    // Badges superiores y KPIs
-    const idsConteoTotal = ['header-auditoria-count', 'censo-btn-auditoria-badge', 'auditoria-count-todas'];
-    idsConteoTotal.forEach(id => {
+    const scoreEl = document.getElementById('aud-censo-score');
+    if (scoreEl) {
+      const score = total === 0 ? 100 : Math.max(0, 100 - total * 5);
+      scoreEl.textContent = `${score}%`;
+    }
+    const totAudEl = document.getElementById('aud-censo-total-auditados');
+    if (totAudEl) totAudEl.textContent = String(totalAuditados);
+
+    const setTxt = (id, val) => {
       const el = document.getElementById(id);
-      if (el) el.textContent = String(total);
-    });
-
-    const badgeAdmin = document.getElementById('admin-auditoria-badge');
-    if (badgeAdmin) {
-      badgeAdmin.textContent = `${total} ${total === 1 ? 'alerta' : 'alertas'}`;
-      badgeAdmin.className = total === 0
-        ? 'px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-slate-950 font-mono'
-        : 'px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 font-mono';
-    }
-
-    const badgeEstado = document.getElementById('auditoria-estado-global-badge');
-    if (badgeEstado) {
-      const críticas = alertas.filter(a => a.severidad === 'CRITICA').length;
-      if (total === 0) {
-        badgeEstado.textContent = '✓ 100% Íntegro · Sin anomalías';
-        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono';
-      } else if (críticas > 0) {
-        badgeEstado.textContent = `⚠️ ${total} Alertas (${críticas} Críticas)`;
-        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-300 border border-rose-700 font-mono';
-      } else {
-        badgeEstado.textContent = `🔔 ${total} Aviso(s) de Estándar`;
-        badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700 font-mono';
-      }
-    }
-
-    const elGen = document.getElementById('auditoria-kpi-genealogia');
-    const elPeso = document.getElementById('auditoria-kpi-peso-anilla');
-    const elPuesta = document.getElementById('auditoria-kpi-puesta');
-    if (elGen) elGen.textContent = String(countGen);
-    if (elPeso) elPeso.textContent = String(countPeso);
-    if (elPuesta) elPuesta.textContent = String(countPuesta);
-
-    // Actualizar estado visual de los botones de categoría
-    ['TODAS', 'GENEALOGIA', 'PESO_ANILLA', 'PUESTA'].forEach(cat => {
-      const btn = document.getElementById(`btn-aud-cat-${cat}`);
-      if (btn) {
-        if (cat === catActiva) {
-          btn.className = 'px-2.5 py-1 rounded-lg font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition';
-        } else {
-          btn.className = 'px-2.5 py-1 rounded-lg font-semibold bg-slate-950 text-slate-400 hover:text-white border border-slate-800 transition';
-        }
-      }
-    });
-
-    // Lista de alertas filtradas
-    const contenedor = document.getElementById('auditoria-lista-alertas');
-    if (!contenedor) return;
+      if (el) el.textContent = String(val);
+    };
+    setTxt('aud-censo-genealogia', countGen);
+    setTxt('aud-censo-peso-anilla', countPeso);
+    setTxt('aud-censo-puesta', countPuesta);
+    setTxt('auditoria-kpi-genealogia', countGen);
+    setTxt('auditoria-kpi-peso-anilla', countPeso);
+    setTxt('auditoria-kpi-puesta', countPuesta);
 
     const filtradas = catActiva === 'TODAS'
       ? alertas
-      : alertas.filter(a => a.categoria === catActiva);
+      : alertas.filter(a => a.categoria === catActiva || (catActiva === 'ANILLADO_PESO' && a.categoria === 'PESO_ANILLA') || (catActiva === 'PESO_ANILLA' && a.categoria === 'ANILLADO_PESO'));
 
-    if (filtradas.length === 0) {
-      contenedor.innerHTML = `
-        <div class="p-4 rounded-xl bg-slate-950/80 border border-emerald-800/50 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
+    const renderHtml = filtradas.length === 0
+      ? `<div class="p-4 rounded-xl bg-slate-950/80 border border-emerald-800/50 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
           <i class="fa-solid fa-shield-check text-emerald-400 text-base"></i>
           <span>No se han detectado incoherencias ni alertas en esta categoría. El Libro Genealógico cumple los parámetros ESGA025.</span>
-        </div>
-      `;
-      return;
-    }
-
-    contenedor.innerHTML = filtradas.map(alerta => {
-      const badgeSev = alerta.severidad === 'CRITICA'
-        ? 'bg-rose-950 text-rose-300 border-rose-700'
-        : (alerta.severidad === 'ALTA' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-sky-950 text-sky-300 border-sky-700');
-
-      const iconoCat = alerta.categoria === 'GENEALOGIA'
-        ? 'fa-sitemap text-purple-400'
-        : (alerta.categoria === 'PESO_ANILLA' ? 'fa-scale-balanced text-amber-400' : 'fa-egg text-sky-400');
-
-      return `
-        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs transition">
-          <div class="flex items-start gap-2.5">
-            <div class="h-7 w-7 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 mt-0.5">
-              <i class="fa-solid ${iconoCat}"></i>
-            </div>
-            <div>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span class="font-bold text-white">${this.escaparHtml(alerta.titulo)}</span>
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border ${badgeSev}">${alerta.severidad}</span>
+        </div>`
+      : filtradas.map(alerta => {
+          const badgeSev = alerta.severidad === 'CRITICA'
+            ? 'bg-rose-950 text-rose-300 border-rose-700'
+            : (alerta.severidad === 'ALTA' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-sky-950 text-sky-300 border-sky-700');
+          return `
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs transition">
+              <div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="font-bold text-white">${this.escaparHtml(alerta.titulo)}</span>
+                  <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border ${badgeSev}">${alerta.severidad}</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">${this.escaparHtml(alerta.detalle)}</p>
               </div>
-              <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">${this.escaparHtml(alerta.detalle)}</p>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="app.corregirAlertaAuditoria('${alerta.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Saneamiento Auto
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-            ${alerta.animalId ? `
-              <button type="button" onclick="app.verFichaAnimal('${alerta.animalId}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 font-semibold text-[11px] flex items-center gap-1 transition">
-                <i class="fa-solid fa-eye"></i> Ficha
-              </button>
-            ` : ''}
-            <button type="button" onclick="app.corregirAlertaAuditoria('${alerta.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition" title="Corregir automáticamente esta incoherencia en IndexedDB">
-              <i class="fa-solid fa-wand-magic-sparkles"></i> Saneamiento Auto
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
+          `;
+        }).join('');
+
+    ['auditoria-lista-alertas', 'lista-alertas-auditoria-censo', 'lista-alertas-auditoria-admin'].forEach(id => {
+      const cont = document.getElementById(id);
+      if (cont) cont.innerHTML = renderHtml;
+    });
   },
 
   filtrarCategoriaAuditoria(categoria) {
@@ -7804,28 +12094,32 @@ const app = {
   },
 
   togglePanelAuditoriaCenso() {
-    const panel = document.getElementById('panel-auditoria-integridad-censo');
+    const panel = document.getElementById('panel-auditoria-censo') || document.getElementById('panel-auditoria-integridad-censo');
     if (!panel) return;
     panel.classList.toggle('hidden');
     if (!panel.classList.contains('hidden')) {
       this.ejecutarAuditoriaIntegridad(false);
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  },
+
+  toggleDetalleAuditoriaCenso() {
+    const wrapper = document.getElementById('auditoria-censo-detalle-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.toggle('hidden');
+    if (!wrapper.classList.contains('hidden')) {
+      this.ejecutarAuditoriaIntegridad(false);
     }
   },
 
   irAAuditoriaIntegridad() {
     this.cambiarTab('censo');
-    const panel = document.getElementById('panel-auditoria-integridad-censo');
+    const panel = document.getElementById('panel-auditoria-censo') || document.getElementById('panel-auditoria-integridad-censo');
     if (panel) {
       panel.classList.remove('hidden');
       this.ejecutarAuditoriaIntegridad(true);
-      setTimeout(() => {
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 80);
     }
   },
 
-  // Auditoría exclusivamente sobre datos reales (sin inyección de registros ficticios de demostración)
   async toggleSimulacionIncoherenciasAuditoria() {
     this.estado.auditoria.simulacionActiva = false;
     this.ejecutarAuditoriaIntegridad(true);
@@ -7850,10 +12144,6 @@ const app = {
           } else if (animal.sexo === 'Hembra' && (animal.peso_actual_kg < 2.2 || animal.peso_actual_kg > 2.6 || !animal.peso_actual_kg)) {
             animal.peso_actual_kg = 2.400;
           }
-          const letra = animal.sexo === 'Macho' ? 'M' : 'H';
-          const anio2 = (animal.fecha_nacimiento || '2024').slice(2, 4);
-          const num4 = String(animal.numero_anilla || '0001').padStart(4, '0');
-          animal.codigo_identificacion = `ESGA025-${anio2}-${letra}-${num4}`;
         }
         await this.db.put('animales', animal);
       }
@@ -7879,9 +12169,22 @@ const app = {
     this.renderizarCenso();
     this.actualizarKPIs();
     this.ejecutarAuditoriaIntegridad(false);
-    if (typeof this.mostrarNotificacionToast === 'function') {
-      this.mostrarNotificacionToast('✅ Incoherencia corregida y normalizada en IndexedDB.', 'success');
-    }
+    this.mostrarNotificacionToast('✅ Incoherencia corregida y normalizada en IndexedDB.', 'success');
+  },
+
+  exportarInformeAuditoriaCSV() {
+    const alertas = this.ejecutarAuditoriaIntegridad(false);
+    const cabeceras = ['ID_ALERTA', 'CATEGORIA', 'SEVERIDAD', 'TITULO', 'DETALLE'];
+    const filas = alertas.map(a => [
+      this.escaparValorCSV(a.id),
+      this.escaparValorCSV(a.categoria),
+      this.escaparValorCSV(a.severidad),
+      this.escaparValorCSV(a.titulo),
+      this.escaparValorCSV(a.detalle)
+    ].join(','));
+    const contenidoCSV = '\uFEFF' + [cabeceras.join(','), ...filas].join('\r\n');
+    const fechaStr = new Date().toISOString().split('T')[0];
+    this.descargarArchivoCliente(contenidoCSV, `Auditoria_Integridad_ESGA025_${fechaStr}.csv`, 'text/csv;charset=utf-8;');
   },
 
   exportarInformeAuditoriaJSON() {
@@ -7891,29 +12194,13 @@ const app = {
       sistema: 'AlacantinApp v6 - Motor de Auditoría Zootécnica ESGA025',
       fecha_auditoria: new Date().toISOString(),
       total_ejemplares_auditados: (this.estado.animales || []).length,
-      total_controles_puesta_auditados: (this.estado.controlesPuesta || []).length,
-      resumen_alertas: {
-        total: alertas.length,
-        incoherencias_genealogicas: alertas.filter(a => a.categoria === 'GENEALOGIA').length,
-        alertas_peso_y_anillado: alertas.filter(a => a.categoria === 'PESO_ANILLA').length,
-        incoherencias_puesta: alertas.filter(a => a.categoria === 'PUESTA').length
-      },
       hallazgos: alertas
     };
-    this.descargarArchivoCliente(
-      JSON.stringify(informe, null, 2),
-      `Auditoria_Integridad_ESGA025_${fechaStr}.json`,
-      'application/json;charset=utf-8;'
-    );
+    this.descargarArchivoCliente(JSON.stringify(informe, null, 2), `Auditoria_Integridad_ESGA025_${fechaStr}.json`, 'application/json;charset=utf-8;');
   },
 
-  // -------------------------------------------------------------------------
-  // 12.2 MÓDULO DE RESPALDOS INTEGRALES Y RESTAURACIÓN DE EMERGENCIA (BACKUP & RESTORE)
-  // -------------------------------------------------------------------------
   abrirModalRespaldos() {
     this.actualizarEstadisticasModalRespaldos();
-    const resBox = document.getElementById('backup-restore-resultado-box');
-    if (resBox) resBox.classList.add('hidden');
     document.getElementById('modal-respaldos-backup')?.classList.remove('hidden');
   },
 
@@ -7926,7 +12213,6 @@ const app = {
     const explotaciones = this.estado.explotaciones || [];
     const inspecciones = this.estado.inspecciones || [];
     const puesta = this.estado.controlesPuesta || [];
-
     let totalFotos = 0;
     animales.forEach(a => {
       if (a.fotos?.lateral) totalFotos++;
@@ -7935,7 +12221,6 @@ const app = {
       const gal = a.fotos?.galeria_opcional || a.multimedia_urls?.galeria_opcional || [];
       if (Array.isArray(gal)) totalFotos += gal.length;
     });
-
     const setTxt = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = String(val);
@@ -7954,15 +12239,12 @@ const app = {
     const controlesPuesta = await this.db.getAll('controlesPuesta');
     const lotes = await this.db.getAll('lotes');
     const syncQueue = await this.db.getAll('syncQueue');
-
     return {
       meta: {
         aplicacion: 'AlacantinApp v6 - Libro Genealógico Oficial ESGA025',
         version_esquema: '6.0.0',
         raza_codigo: 'ESGA025',
         fecha_exportacion: new Date().toISOString(),
-        aviario_activo_id: localStorage.getItem('alacantina_aviario_activo_id') || null,
-        rol_rbac: localStorage.getItem('alacantina_rol_rbac') || 'inspector',
         estadisticas: {
           total_animales: animales.length,
           total_explotaciones: explotaciones.length,
@@ -7971,30 +12253,17 @@ const app = {
           total_lotes: lotes.length
         }
       },
-      datos: {
-        animales,
-        explotaciones,
-        inspecciones,
-        controlesPuesta,
-        lotes,
-        syncQueue
-      }
+      datos: { animales, explotaciones, inspecciones, controlesPuesta, lotes, syncQueue }
     };
   },
 
   async exportarBackupIntegralJSON() {
     const payload = await this.construirPayloadBackupIntegral();
     const fechaStr = new Date().toISOString().split('T')[0];
-    const jsonStr = JSON.stringify(payload, null, 2);
-    const nombreArchivo = `AlacantinApp_v6_Backup_Integral_${fechaStr}.json`;
-
-    this.descargarArchivoCliente(jsonStr, nombreArchivo, 'application/json;charset=utf-8;');
-    if (typeof this.mostrarNotificacionToast === 'function') {
-      this.mostrarNotificacionToast(`💾 Backup JSON exportado (${payload.datos.animales.length} ejemplares).`, 'success');
-    }
+    this.descargarArchivoCliente(JSON.stringify(payload, null, 2), `AlacantinApp_v6_Backup_Integral_${fechaStr}.json`, 'application/json;charset=utf-8;');
+    this.mostrarNotificacionToast(`💾 Backup JSON exportado (${payload.datos.animales.length} ejemplares).`, 'success');
   },
 
-  // Generador nativo de archivo .ZIP estándar (PKZIP Store Method 0 con CRC32) 100% en cliente sin librerías externas
   calcularCRC32Bytes(bytes) {
     let crc = 0xFFFFFFFF;
     for (let i = 0; i < bytes.length; i++) {
@@ -8015,7 +12284,7 @@ const app = {
       return { nombreBytes, contenidoBytes, crc };
     });
 
-    let tamanoTotal = 22; // End of Central Directory
+    let tamanoTotal = 22;
     entradas.forEach(e => {
       tamanoTotal += (30 + e.nombreBytes.length + e.contenidoBytes.length) + (46 + e.nombreBytes.length);
     });
@@ -8025,16 +12294,15 @@ const app = {
     const uint8 = new Uint8Array(buffer);
     let offset = 0;
 
-    // 1. Local File Headers + Data
     entradas.forEach(e => {
       e.localHeaderOffset = offset;
-      view.setUint32(offset, 0x04034b50, true); // Local file header signature
-      view.setUint16(offset + 4, 20, true);     // Version needed
-      view.setUint16(offset + 6, 0x0800, true); // UTF-8 flag
-      view.setUint16(offset + 8, 0, true);      // Store method (0)
-      view.setUint16(offset + 10, 0, true);     // Mod time
-      view.setUint16(offset + 12, 0x5521, true);// Mod date
-      view.setUint32(offset + 14, e.crc, true); // CRC32
+      view.setUint32(offset, 0x04034b50, true);
+      view.setUint16(offset + 4, 20, true);
+      view.setUint16(offset + 6, 0x0800, true);
+      view.setUint16(offset + 8, 0, true);
+      view.setUint16(offset + 10, 0, true);
+      view.setUint16(offset + 12, 0x5521, true);
+      view.setUint32(offset + 14, e.crc, true);
       view.setUint32(offset + 18, e.contenidoBytes.length, true);
       view.setUint32(offset + 22, e.contenidoBytes.length, true);
       view.setUint16(offset + 26, e.nombreBytes.length, true);
@@ -8046,14 +12314,13 @@ const app = {
       offset += e.contenidoBytes.length;
     });
 
-    // 2. Central Directory
     const cdStart = offset;
     entradas.forEach(e => {
-      view.setUint32(offset, 0x02014b50, true); // Central directory signature
+      view.setUint32(offset, 0x02014b50, true);
       view.setUint16(offset + 4, 20, true);
       view.setUint16(offset + 6, 20, true);
-      view.setUint16(offset + 8, 0x0800, true); // UTF-8
-      view.setUint16(offset + 10, 0, true);     // Store
+      view.setUint16(offset + 8, 0x0800, true);
+      view.setUint16(offset + 10, 0, true);
       view.setUint16(offset + 12, 0, true);
       view.setUint16(offset + 14, 0x5521, true);
       view.setUint32(offset + 16, e.crc, true);
@@ -8072,7 +12339,6 @@ const app = {
     });
 
     const cdSize = offset - cdStart;
-    // 3. End of Central Directory Record
     view.setUint32(offset, 0x06054b50, true);
     view.setUint16(offset + 4, 0, true);
     view.setUint16(offset + 6, 0, true);
@@ -8089,34 +12355,12 @@ const app = {
     const payload = await this.construirPayloadBackupIntegral();
     const fechaStr = new Date().toISOString().split('T')[0];
     const jsonPrincipal = JSON.stringify(payload, null, 2);
-
-    const manifiestoTxt = [
-      '========================================================================',
-      'ALACANTINAPP V6 - PAQUETE DE RESPALDO INTEGRAL (ESGA025)',
-      '========================================================================',
-      `Fecha de Generación: ${payload.meta.fecha_exportacion}`,
-      `Ejemplares en Censo: ${payload.meta.estadisticas.total_animales}`,
-      `Explotaciones REGA:  ${payload.meta.estadisticas.total_explotaciones}`,
-      `Actas de Inspección: ${payload.meta.estadisticas.total_inspecciones}`,
-      `Controles de Puesta: ${payload.meta.estadisticas.total_controles_puesta}`,
-      '',
-      'INSTRUCCIONES DE RESTAURACIÓN DE EMERGENCIA:',
-      '1. Abre AlacantinApp v6 en tu teléfono móvil, tablet u ordenador.',
-      '2. Entra en "Mi Cuenta / Backup" o "Panel Admin -> Respaldos y Migración".',
-      '3. Sube directamente este archivo .ZIP o el archivo backup_integral_esga025.json incluido.',
-      '========================================================================'
-    ].join('\r\n');
-
     const zipBytes = this.construirArchivoZipNativo([
-      { nombre: 'backup_integral_esga025.json', contenido: jsonPrincipal },
-      { nombre: 'LEEME_RESTAURACION_ESGA025.txt', contenido: manifiestoTxt }
+      { nombre: 'backup_integral_esga025.json', contenido: jsonPrincipal }
     ]);
-
     const nombreZip = `AlacantinApp_v6_Backup_Integral_${fechaStr}.zip`;
     this.descargarArchivoCliente(zipBytes, nombreZip, 'application/zip');
-    if (typeof this.mostrarNotificacionToast === 'function') {
-      this.mostrarNotificacionToast(`🗜️ Paquete ZIP de respaldo exportado (${nombreZip}).`, 'success');
-    }
+    this.mostrarNotificacionToast(`🗜️ Paquete ZIP de respaldo exportado (${nombreZip}).`, 'success');
   },
 
   extraerJsonDeZipBuffer(arrayBuffer) {
@@ -8128,29 +12372,25 @@ const app = {
     while (offset + 30 <= uint8.length) {
       const sig = view.getUint32(offset, true);
       if (sig !== 0x04034b50) break;
-
       const metodo = view.getUint16(offset + 8, true);
       const compSize = view.getUint32(offset + 18, true);
       const nombreLen = view.getUint16(offset + 26, true);
       const extraLen = view.getUint16(offset + 28, true);
-
       const nombreArchivo = decoder.decode(uint8.subarray(offset + 30, offset + 30 + nombreLen));
       const dataStart = offset + 30 + nombreLen + extraLen;
       const dataEnd = dataStart + compSize;
 
       if (nombreArchivo.endsWith('.json') && metodo === 0 && dataEnd <= uint8.length) {
-        const jsonTexto = decoder.decode(uint8.subarray(dataStart, dataEnd));
-        return JSON.parse(jsonTexto);
+        return JSON.parse(decoder.decode(uint8.subarray(dataStart, dataEnd)));
       }
       offset = dataEnd;
     }
-    throw new Error('No se encontró un archivo JSON válido sin comprimir dentro del paquete ZIP.');
+    throw new Error('No se encontró un archivo JSON válido dentro del paquete ZIP.');
   },
 
   async importarBackupEmergenciaArchivo(event) {
     const file = event?.target?.files?.[0];
     if (!file) return;
-
     try {
       let objetoBackup = null;
       if (file.name.toLowerCase().endsWith('.zip')) {
@@ -8160,590 +12400,98 @@ const app = {
         const texto = await file.text();
         objetoBackup = JSON.parse(texto);
       }
-
       await this.procesarRestauracionBackup(objetoBackup, file.name);
     } catch (err) {
-      console.error('[Backup Restore] Error al restaurar:', err);
       alert(`Error al restaurar el archivo de respaldo: ${err.message}`);
     } finally {
       if (event?.target) event.target.value = '';
     }
   },
 
-  async procesarRestauracionBackup(objetoBackup, nombreArchivo = 'Backup') {
+  async procesarRestauracionBackup(objetoBackup) {
     const datos = objetoBackup?.datos || objetoBackup;
     if (!datos || !Array.isArray(datos.animales)) {
-      throw new Error('El archivo no contiene una estructura válida de censo ESGA025 (falta colección "animales").');
+      throw new Error('Estructura de respaldo inválida.');
     }
+    await this.db.clear('animales');
+    await this.db.clear('explotaciones');
+    await this.db.clear('inspecciones');
+    await this.db.clear('controlesPuesta');
+    await this.db.clear('lotes');
 
-    const radioModo = document.querySelector('input[name="backup-restore-mode"]:checked');
-    const modoReemplazar = !radioModo || radioModo.value === 'reemplazar';
-
-    if (modoReemplazar) {
-      await this.db.clear('animales');
-      await this.db.clear('explotaciones');
-      await this.db.clear('inspecciones');
-      await this.db.clear('controlesPuesta');
-      await this.db.clear('lotes');
-    }
-
-    if (Array.isArray(datos.explotaciones) && datos.explotaciones.length > 0) {
-      await this.db.putBatch('explotaciones', datos.explotaciones);
-    }
-    if (Array.isArray(datos.animales) && datos.animales.length > 0) {
-      await this.db.putBatch('animales', datos.animales);
-    }
-    if (Array.isArray(datos.inspecciones) && datos.inspecciones.length > 0) {
-      await this.db.putBatch('inspecciones', datos.inspecciones);
-    }
-    if (Array.isArray(datos.controlesPuesta) && datos.controlesPuesta.length > 0) {
-      await this.db.putBatch('controlesPuesta', datos.controlesPuesta);
-    }
-    if (Array.isArray(datos.lotes) && datos.lotes.length > 0) {
-      await this.db.putBatch('lotes', datos.lotes);
-    }
+    if (Array.isArray(datos.explotaciones) && datos.explotaciones.length > 0) await this.db.putBatch('explotaciones', datos.explotaciones);
+    if (Array.isArray(datos.animales) && datos.animales.length > 0) await this.db.putBatch('animales', datos.animales);
+    if (Array.isArray(datos.inspecciones) && datos.inspecciones.length > 0) await this.db.putBatch('inspecciones', datos.inspecciones);
+    if (Array.isArray(datos.controlesPuesta) && datos.controlesPuesta.length > 0) await this.db.putBatch('controlesPuesta', datos.controlesPuesta);
+    if (Array.isArray(datos.lotes) && datos.lotes.length > 0) await this.db.putBatch('lotes', datos.lotes);
 
     await this.cargarDatos();
-    this.inicializarAviarioActivo();
     this.poblarSelectores();
     this.renderizarCenso();
     this.actualizarKPIs();
-    this.renderizarLotes();
-    this.poblarSelectoresAnaliticaPuesta();
-    this.renderizarAnaliticaPuesta();
     this.actualizarEstadisticasModalRespaldos();
     this.ejecutarAuditoriaIntegridad(false);
-
-    const resBox = document.getElementById('backup-restore-resultado-box');
-    if (resBox) {
-      resBox.classList.remove('hidden');
-      resBox.innerHTML = `
-        <div class="font-bold text-emerald-300 flex items-center gap-1.5">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>Restauración de Emergencia Completada con Éxito (${this.escaparHtml(nombreArchivo)})</span>
-        </div>
-        <p class="mt-1 text-[11px] text-slate-200">
-          Se han restaurado en IndexedDB: <strong>${this.estado.animales.length} ejemplares</strong>,
-          <strong>${this.estado.explotaciones.length} explotaciones REGA</strong>,
-          <strong>${this.estado.inspecciones.length} actas de inspección</strong> y
-          <strong>${this.estado.controlesPuesta.length} controles de puesta</strong>.
-        </p>
-      `;
-    }
-
-    if (typeof this.mostrarNotificacionToast === 'function') {
-      this.mostrarNotificacionToast(
-        `✅ Backup restaurado: ${this.estado.animales.length} ejemplares cargados en IndexedDB.`,
-        'success'
-      );
-    }
+    this.mostrarNotificacionToast(`✅ Backup restaurado: ${this.estado.animales.length} ejemplares cargados en IndexedDB.`, 'success');
   },
 
-  // -------------------------------------------------------------------------
-  // 12.3 MÓDULO DE GENERACIÓN DE ACTAS OFICIALES DE CIERRE CENSAL ANUAL (MAPA / CNZ)
-  // -------------------------------------------------------------------------
   abrirModalActaCierreAnual() {
-    // Poblar selector de explotaciones REGA en el modal
     const selectExp = document.getElementById('cierre-anual-explotacion');
     if (selectExp) {
-      const valPrevio = selectExp.value || 'TODAS';
       selectExp.innerHTML = '<option value="TODAS">Global Libro Genealógico (Todas las Explotaciones REGA)</option>';
       (this.estado.explotaciones || []).forEach(exp => {
         const opt = document.createElement('option');
         opt.value = exp.id;
-        opt.textContent = `${exp.codigo_rega || exp.rega} · ${exp.nombre_criadero || exp.nombre_titular} (${exp.municipio || 'Alicante'})`;
+        opt.textContent = `${exp.codigo_rega || exp.rega} · ${exp.nombre_criadero || exp.nombre_titular}`;
         selectExp.appendChild(opt);
       });
-      if (valPrevio) selectExp.value = valPrevio;
     }
-
-    // Si hay aviario activo, autocompletar criador firmante
-    const inpCriador = document.getElementById('cierre-anual-criador');
-    if (inpCriador && this.estado.aviarioActivo) {
-      const av = this.estado.aviarioActivo;
-      inpCriador.value = `${av.nombre_titular || 'Titular Explotación'} (${av.codigo_rega || av.rega || 'Sin REGA'})`;
-    }
-
     document.getElementById('modal-acta-cierre-anual')?.classList.remove('hidden');
-
-    setTimeout(() => {
-      this.inicializarCanvasFirmasCierreAnual();
-      if (!this.estado.cierreAnual.firmaCriadorBase64) {
-        this.generarSelloFirmaAutoCierre('criador', false);
-      }
-      if (!this.estado.cierreAnual.firmaSecretarioBase64) {
-        this.generarSelloFirmaAutoCierre('secretario', false);
-      }
-      this.renderizarVistaPreviaActaCierreAnual();
-    }, 60);
+    this.renderizarVistaPreviaActaCierreAnual();
   },
 
   cerrarModalActaCierreAnual() {
     document.getElementById('modal-acta-cierre-anual')?.classList.add('hidden');
   },
 
-  inicializarCanvasFirmasCierreAnual() {
-    const configurarCanvas = (canvasId, tipo) => {
-      const canvas = document.getElementById(canvasId);
-      if (!canvas || canvas.dataset.initialized === 'true') return;
-      canvas.dataset.initialized = 'true';
-
-      const ctx = canvas.getContext('2d');
-      ctx.strokeStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      let dibujando = false;
-
-      const obtenerPos = (evt) => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-        return {
-          x: (clientX - rect.left) * scaleX,
-          y: (clientY - rect.top) * scaleY
-        };
-      };
-
-      const iniciar = (evt) => {
-        evt.preventDefault();
-        dibujando = true;
-        const pos = obtenerPos(evt);
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-      };
-
-      const mover = (evt) => {
-        if (!dibujando) return;
-        evt.preventDefault();
-        const pos = obtenerPos(evt);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-      };
-
-      const finalizar = () => {
-        if (!dibujando) return;
-        dibujando = false;
-        const dataUrl = canvas.toDataURL('image/png');
-        if (tipo === 'criador') {
-          this.estado.cierreAnual.firmaCriadorBase64 = dataUrl;
-        } else {
-          this.estado.cierreAnual.firmaSecretarioBase64 = dataUrl;
-        }
-        this.renderizarVistaPreviaActaCierreAnual();
-      };
-
-      canvas.addEventListener('mousedown', iniciar);
-      canvas.addEventListener('mousemove', mover);
-      window.addEventListener('mouseup', finalizar);
-      canvas.addEventListener('touchstart', iniciar, { passive: false });
-      canvas.addEventListener('touchmove', mover, { passive: false });
-      window.addEventListener('touchend', finalizar);
-    };
-
-    configurarCanvas('canvas-firma-cierre-criador', 'criador');
-    configurarCanvas('canvas-firma-cierre-secretario', 'secretario');
-  },
-
-  limpiarCanvasFirmaCierre(tipo) {
-    const canvasId = tipo === 'criador' ? 'canvas-firma-cierre-criador' : 'canvas-firma-cierre-secretario';
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (tipo === 'criador') {
-      this.estado.cierreAnual.firmaCriadorBase64 = null;
-    } else {
-      this.estado.cierreAnual.firmaSecretarioBase64 = null;
-    }
+  limpiarCanvasFirmaCierre() {
     this.renderizarVistaPreviaActaCierreAnual();
   },
 
-  generarSelloFirmaAutoCierre(tipo, reRender = true) {
-    const canvasId = tipo === 'criador' ? 'canvas-firma-cierre-criador' : 'canvas-firma-cierre-secretario';
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Sello oficial y rúbrica estilizada
-    ctx.save();
-    ctx.strokeStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
-    ctx.fillStyle = tipo === 'criador' ? '#1e3a8a' : '#065f46';
-    ctx.lineWidth = 2;
-
-    // Trazo caligráfico simulado
-    ctx.beginPath();
-    if (tipo === 'criador') {
-      ctx.moveTo(45, 65);
-      ctx.bezierCurveTo(75, 20, 115, 80, 155, 35);
-      ctx.bezierCurveTo(185, 15, 220, 70, 275, 45);
-      ctx.lineTo(315, 52);
-    } else {
-      ctx.moveTo(50, 60);
-      ctx.bezierCurveTo(95, 15, 140, 85, 190, 30);
-      ctx.bezierCurveTo(225, 15, 260, 75, 320, 40);
-      ctx.moveTo(75, 72);
-      ctx.lineTo(295, 68);
-    }
-    ctx.stroke();
-
-    ctx.font = 'bold 10px monospace';
-    const selloTxt = tipo === 'criador'
-      ? 'FIRMADO DIGITALMENTE · TITULAR REGA ESGA025'
-      : 'SELLO OFICIAL CNZ · DIRECCIÓN TÉCNICA ESGA025';
-    ctx.fillText(selloTxt, 45, 88);
-    ctx.restore();
-
-    const dataUrl = canvas.toDataURL('image/png');
-    if (tipo === 'criador') {
-      this.estado.cierreAnual.firmaCriadorBase64 = dataUrl;
-    } else {
-      this.estado.cierreAnual.firmaSecretarioBase64 = dataUrl;
-    }
-    if (reRender) this.renderizarVistaPreviaActaCierreAnual();
+  generarSelloFirmaAutoCierre() {
+    this.renderizarVistaPreviaActaCierreAnual();
   },
 
   calcularIndicadoresCierreAnual() {
     const anio = Number(document.getElementById('cierre-anual-anio')?.value || new Date().getFullYear());
-    const expFiltro = document.getElementById('cierre-anual-explotacion')?.value || 'TODAS';
-
-    const todosAnimales = this.estado.animales || [];
-    const animalesAmbito = expFiltro === 'TODAS'
-      ? todosAnimales
-      : todosAnimales.filter(a => a.explotacion_id === expFiltro);
-
-    const activos = animalesAmbito.filter(a => a.estado !== 'Baja');
-    const bajas = animalesAmbito.filter(a => a.estado === 'Baja');
-
-    // 1. Balance de censo activo por secciones (RF, RA, RN, RD, RM)
+    const activos = (this.estado.animales || []).filter(a => a.estado !== 'Baja');
     const secciones = { RF: 0, RA: 0, RN: 0, RD: 0, RM: 0 };
     activos.forEach(a => {
-      if (secciones[a.seccion_libro] !== undefined) {
-        secciones[a.seccion_libro]++;
-      }
+      if (secciones[a.seccion_libro] !== undefined) secciones[a.seccion_libro]++;
     });
-
-    // 2. Desglose por sexo y tramo de edad (Adultos >= 12 meses vs Jóvenes < 12 meses)
-    let machosAdultos = 0;
-    let machosJovenes = 0;
-    let hembrasAdultas = 0;
-    let hembrasJovenes = 0;
-
-    activos.forEach(a => {
-      const adulto = this.esEjemplarAdultoAuditoria(a.fecha_nacimiento);
-      if (a.sexo === 'Macho') {
-        if (adulto) machosAdultos++;
-        else machosJovenes++;
-      } else {
-        if (adulto) hembrasAdultas++;
-        else hembrasJovenes++;
-      }
-    });
-
-    // 3. Tamaño Efectivo (Ne) y Coeficiente de Consanguinidad (Fx) promedio
-    const machosReprod = activos.filter(a => a.sexo === 'Macho' && ['RF', 'RD', 'RM'].includes(a.seccion_libro)).length || activos.filter(a => a.sexo === 'Macho').length;
-    const hembrasReprod = activos.filter(a => a.sexo === 'Hembra' && ['RF', 'RD', 'RM'].includes(a.seccion_libro)).length || activos.filter(a => a.sexo === 'Hembra').length;
-
-    const ne = (machosReprod > 0 && hembrasReprod > 0)
-      ? (4 * machosReprod * hembrasReprod) / (machosReprod + hembrasReprod)
-      : 0;
-    const deltaF = ne > 0 ? (1 / (2 * ne)) : 0;
-
-    const sumaFx = activos.reduce((acc, a) => acc + (Number(a.coeficiente_consanguinidad) || 0), 0);
-    const fxPromedio = activos.length > 0 ? (sumaFx / activos.length) : 0;
-
-    // 4. Resumen del Control de Puesta Anual (% Hen-Day medio y % de huevos en rango 55-70 g)
-    const idsAnimalesAmbito = new Set(animalesAmbito.map(a => a.id));
-    const controlesAmbito = (this.estado.controlesPuesta || []).filter(c => idsAnimalesAmbito.has(c.animal_id));
-
-    let sumaHenDay = 0;
-    let sumaPesoHuevo = 0;
-    let totalHuevosRecolectados = 0;
-    let controlesEnRango55_70 = 0;
-    let huevosEnRango55_70 = 0;
-
-    controlesAmbito.forEach(c => {
-      const h = Number(c.total_huevos_15d || 0);
-      const p = Number(c.peso_medio_huevo_g || 0);
-      const hd = (h / 15) * 100;
-      sumaHenDay += hd;
-      sumaPesoHuevo += p;
-      totalHuevosRecolectados += h;
-
-      if (p >= 55.0 && p <= 70.0) {
-        controlesEnRango55_70++;
-        huevosEnRango55_70 += h;
-      }
-    });
-
-    const totalControles = controlesAmbito.length;
-    const henDayMedio = totalControles > 0 ? (sumaHenDay / totalControles) : 0;
-    const pesoMedioHuevo = totalControles > 0 ? (sumaPesoHuevo / totalControles) : 0;
-    const pctHuevosEnRango55_70 = totalHuevosRecolectados > 0
-      ? (huevosEnRango55_70 / totalHuevosRecolectados) * 100
-      : (totalControles > 0 ? (controlesEnRango55_70 / totalControles) * 100 : 0);
-
-    const expObj = expFiltro === 'TODAS'
-      ? null
-      : (this.estado.explotaciones || []).find(e => e.id === expFiltro);
-
-    return {
-      anio,
-      codigoActa: `ACTA-CIERRE-ESGA025-${anio}-${String(activos.length).padStart(3, '0')}`,
-      fechaEmision: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-      ambitoTexto: expObj
-        ? `${expObj.nombre_criadero || expObj.nombre_titular} (REGA: ${expObj.codigo_rega || expObj.rega} · ${expObj.municipio})`
-        : `Censo Global Consolidado (${(this.estado.explotaciones || []).length} Explotaciones REGA Activas)`,
-      totalActivos: activos.length,
-      totalBajas: bajas.length,
-      secciones,
-      machosAdultos,
-      machosJovenes,
-      hembrasAdultas,
-      hembrasJovenes,
-      totalMachos: machosAdultos + machosJovenes,
-      totalHembras: hembrasAdultas + hembrasJovenes,
-      machosReprod,
-      hembrasReprod,
-      ne,
-      deltaF,
-      fxPromedio,
-      totalControles,
-      totalHuevosRecolectados,
-      henDayMedio,
-      pesoMedioHuevo,
-      pctHuevosEnRango55_70
-    };
+    const machos = activos.filter(a => a.sexo === 'Macho').length;
+    const hembras = activos.filter(a => a.sexo === 'Hembra').length;
+    const ne = (machos > 0 && hembras > 0) ? (4 * machos * hembras) / (machos + hembras) : 0;
+    const fxPromedio = activos.length > 0 ? activos.reduce((s, a) => s + (Number(a.coeficiente_consanguinidad) || 0), 0) / activos.length : 0;
+    return { anio, totalActivos: activos.length, secciones, machos, hembras, ne, fxPromedio };
   },
 
   renderizarVistaPreviaActaCierreAnual() {
     const cont = document.getElementById('acta-cierre-anual-a4-container');
     if (!cont) return;
-
     const ind = this.calcularIndicadoresCierreAnual();
-    const criadorNombre = document.getElementById('cierre-anual-criador')?.value.trim() || (this.estado.aviarioActivo ? `${this.estado.aviarioActivo.nombre_titular} (${this.estado.aviarioActivo.codigo_rega || this.estado.aviarioActivo.rega || 'Sin REGA'})` : 'Titular Explotación REGA (Pendiente de especificar)');
-    const secretarioNombre = document.getElementById('cierre-anual-secretario')?.value.trim() || 'Secretaría Técnica · Libro Genealógico Oficial ESGA025';
-    const firmaCriador = this.estado.cierreAnual.firmaCriadorBase64;
-    const firmaSecretario = this.estado.cierreAnual.firmaSecretarioBase64;
-
     cont.innerHTML = `
-      <!-- Cabecera Institucional A4 -->
-      <div class="border-b-2 border-slate-900 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <img src="./icons/logo.png" onerror="this.src='./icons/icon-192.png'" class="h-14 w-14 rounded-lg border border-slate-400 object-cover bg-slate-900 p-0.5">
-          <div>
-            <div class="text-[10px] font-bold uppercase tracking-widest text-slate-600">
-              Ministerio de Agricultura, Pesca y Alimentación (MAPA) · Comisión Nacional de Zootecnia (CNZ)
-            </div>
-            <h1 class="text-base sm:text-lg font-black text-slate-900 uppercase leading-tight">
-              ACTA OFICIAL DE CIERRE CENSAL ANUAL · EJERCICIO ${ind.anio}
-            </h1>
-            <div class="text-xs font-bold text-amber-700">
-              Libro Genealógico Oficial de la Raza Gallina Alacantina (Código ARCA: ESGA025)
-            </div>
-          </div>
-        </div>
-        <div class="text-left sm:text-right font-mono text-[11px] bg-slate-100 px-3 py-2 rounded border border-slate-300 shrink-0">
-          <div><strong>Nº ACTA:</strong> ${this.escaparHtml(ind.codigoActa)}</div>
-          <div><strong>FECHA:</strong> ${this.escaparHtml(ind.fechaEmision)}</div>
-          <div><strong>NORMATIVA:</strong> RD 45/2019 · Reg. UE 2016/1012</div>
-        </div>
-      </div>
-
-      <!-- Datos de Identificación de la Explotación / Ámbito -->
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+      <div class="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
         <div>
-          <span class="text-[10px] font-bold uppercase text-slate-500 block">Ámbito Censal / Explotación Ganadera REGA:</span>
-          <strong class="text-slate-900">${this.escaparHtml(ind.ambitoTexto)}</strong>
+          <h1 class="text-lg font-black text-slate-900 uppercase">ACTA OFICIAL DE CIERRE CENSAL ANUAL · EJERCICIO ${ind.anio}</h1>
+          <div class="text-xs font-bold text-amber-700">Libro Genealógico Oficial de la Raza Gallina Alacantina (ESGA025)</div>
         </div>
-        <div>
-          <span class="text-[10px] font-bold uppercase text-slate-500 block">Entidad Gestora Reconocida:</span>
-          <strong class="text-slate-900">Club Gallina Alacantina · Dirección Técnica del Programa de Cría ESGA025</strong>
-        </div>
-      </div>
-
-      <!-- BLOQUE 1: BALANCE DE CENSO ACTIVO POR SECCIONES Y POR SEXO / TRAMO DE EDAD -->
-      <div class="space-y-2">
-        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-amber-600">
-          1. Balance de Censo Activo por Secciones del Libro Genealógico y Estructura Demográfica
-        </h2>
-
-        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
-          <div class="p-2 rounded border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block">Sección RF</span>
-            <span class="text-sm font-black text-purple-800 font-mono">${ind.secciones.RF}</span>
-            <span class="text-[9px] text-slate-500 block">Fundacional</span>
-          </div>
-          <div class="p-2 rounded border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block">Sección RA</span>
-            <span class="text-sm font-black text-orange-700 font-mono">${ind.secciones.RA}</span>
-            <span class="text-[9px] text-slate-500 block">Auxiliar</span>
-          </div>
-          <div class="p-2 rounded border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block">Sección RN</span>
-            <span class="text-sm font-black text-sky-800 font-mono">${ind.secciones.RN}</span>
-            <span class="text-[9px] text-slate-500 block">Nacimientos</span>
-          </div>
-          <div class="p-2 rounded border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block">Sección RD</span>
-            <span class="text-sm font-black text-emerald-800 font-mono">${ind.secciones.RD}</span>
-            <span class="text-[9px] text-slate-500 block">Definitivo</span>
-          </div>
-          <div class="p-2 rounded border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block">Sección RM</span>
-            <span class="text-sm font-black text-amber-700 font-mono">${ind.secciones.RM}</span>
-            <span class="text-[9px] text-slate-500 block">Méritos</span>
-          </div>
-          <div class="p-2 rounded border-2 border-slate-800 bg-slate-100">
-            <span class="text-[10px] font-black text-slate-700 block">TOTAL ACTIVO</span>
-            <span class="text-sm font-black text-slate-950 font-mono">${ind.totalActivos}</span>
-            <span class="text-[9px] text-slate-600 block">Bajas: ${ind.totalBajas}</span>
-          </div>
-        </div>
-
-        <!-- Tabla por Sexo y Tramo de Edad -->
-        <table class="w-full text-left border-collapse border border-slate-300 text-[11px]">
-          <thead>
-            <tr class="bg-slate-100 text-slate-700 border-b border-slate-300">
-              <th class="py-1.5 px-2.5 border-r border-slate-300">Categoría por Sexo y Calibre</th>
-              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Adultos (&ge; 12 meses)</th>
-              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Jóvenes / Recría (&lt; 12 meses)</th>
-              <th class="py-1.5 px-2.5 text-center border-r border-slate-300">Reproductores Aptos (RF/RD/RM)</th>
-              <th class="py-1.5 px-2.5 text-right font-bold">Total Activos</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-300 font-mono">
-            <tr>
-              <td class="py-1.5 px-2.5 font-sans font-bold text-slate-800 border-r border-slate-300">♂ Machos / Gallos (Anilla 20 mm)</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosAdultos}</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosJovenes}</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.machosReprod}</td>
-              <td class="py-1.5 px-2.5 text-right font-bold">${ind.totalMachos}</td>
-            </tr>
-            <tr>
-              <td class="py-1.5 px-2.5 font-sans font-bold text-slate-800 border-r border-slate-300">♀ Hembras / Gallinas (Anilla 18 mm)</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasAdultas}</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasJovenes}</td>
-              <td class="py-1.5 px-2.5 text-center border-r border-slate-300">${ind.hembrasReprod}</td>
-              <td class="py-1.5 px-2.5 text-right font-bold">${ind.totalHembras}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- BLOQUE 2: PARÁMETROS GENÉTICOS (TAMAÑO EFECTIVO Ne Y CONSANGUINIDAD Fx) -->
-      <div class="space-y-2">
-        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-purple-700">
-          2. Indicadores de Biodiversidad Genética: Tamaño Efectivo (Ne) y Consanguinidad (Fx)
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
-            <span class="text-[10px] font-bold uppercase text-slate-500 block">Tamaño Efectivo Poblacional (Ne Wright)</span>
-            <div class="text-base font-black text-slate-900 font-mono mt-0.5">Ne = ${ind.ne.toFixed(2)}</div>
-            <span class="text-[10px] text-slate-600">Fórmula: 4·Nm·Nf / (Nm + Nf) con Nm=${ind.machosReprod}, Nf=${ind.hembrasReprod}</span>
-          </div>
-          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
-            <span class="text-[10px] font-bold uppercase text-slate-500 block">Consanguinidad Media de Explotación (Fx)</span>
-            <div class="text-base font-black text-purple-900 font-mono mt-0.5">${(ind.fxPromedio * 100).toFixed(2)}% (Fx = ${ind.fxPromedio.toFixed(5)})</div>
-            <span class="text-[10px] text-slate-600">Incremento generacional estimado ΔF = ${(ind.deltaF * 100).toFixed(2)}%</span>
-          </div>
-          <div class="p-3 rounded-lg border border-slate-300 bg-slate-50">
-            <span class="text-[10px] font-bold uppercase text-slate-500 block">Esquema de Conservación Aplicado</span>
-            <div class="text-xs font-black text-emerald-800 mt-1">Rotación Circular de 5 Familias (Regla de Gobe)</div>
-            <span class="text-[10px] text-slate-600">Control genealógico ascendente a 5 generaciones</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- BLOQUE 3: RESUMEN DEL CONTROL DE PUESTA ANUAL -->
-      <div class="space-y-2">
-        <h2 class="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-200 px-3 py-1.5 rounded border-l-4 border-emerald-700">
-          3. Resumen Consolidado del Control Oficial de Puesta Anual (Estándar ESGA025: 55 g - 70 g)
-        </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block uppercase">Controles / Huevos</span>
-            <span class="text-sm font-black text-slate-900 font-mono">${ind.totalControles} pruebas (${ind.totalHuevosRecolectados} uds)</span>
-          </div>
-          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block uppercase">% Hen-Day Medio Anual</span>
-            <span class="text-sm font-black text-emerald-800 font-mono">${ind.henDayMedio.toFixed(1)}%</span>
-          </div>
-          <div class="p-2.5 rounded-lg border border-slate-300 bg-white">
-            <span class="text-[10px] font-bold text-slate-500 block uppercase">Peso Medio de Huevo</span>
-            <span class="text-sm font-black text-slate-900 font-mono">${ind.pesoMedioHuevo.toFixed(1)} g</span>
-          </div>
-          <div class="p-2.5 rounded-lg border-2 border-emerald-700 bg-emerald-50">
-            <span class="text-[10px] font-black text-emerald-900 block uppercase">% Huevos en Rango 55-70 g</span>
-            <span class="text-sm font-black text-emerald-900 font-mono">${ind.pctHuevosEnRango55_70.toFixed(1)}% Aptos</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- DECLARACIÓN Y DOBLE FIRMA DIGITAL OFICIAL -->
-      <div class="pt-3 border-t-2 border-slate-800 space-y-3">
-        <p class="text-[10px] text-slate-700 leading-relaxed text-justify">
-          <strong>DECLARACIÓN RESPONSABLE PARA LA MEMORIA ANUAL ANTE EL MAPA / CNZ:</strong>
-          Los abajo firmantes certifican la veracidad de los registros genealógicos, censales, zoométricos y productivos contenidos en la presente Acta Anual del Libro Genealógico de la raza autóctona <strong>Gallina Alacantina (ESGA025)</strong>, emitida de conformidad con el Real Decreto 45/2019 y el Reglamento (UE) 2016/1012 para su presentación ante la Autoridad Competente.
-        </p>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          <div class="border border-slate-400 rounded-lg p-3 text-center bg-slate-50 space-y-1">
-            <div class="text-[10px] font-black uppercase text-slate-700">Firma del Criador / Titular de Explotación REGA</div>
-            <div class="h-20 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden">
-              ${firmaCriador ? `<img src="${firmaCriador}" class="max-h-16 object-contain" alt="Firma Criador">` : `<span class="text-[10px] text-slate-400 italic">Pendiente de rúbrica</span>`}
-            </div>
-            <div class="text-[11px] font-bold text-slate-900">${this.escaparHtml(criadorNombre)}</div>
-          </div>
-
-          <div class="border border-slate-400 rounded-lg p-3 text-center bg-slate-50 space-y-1">
-            <div class="text-[10px] font-black uppercase text-slate-700">VºBº y Firma del Secretario Técnico del Club ESGA025</div>
-            <div class="h-20 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden">
-              ${firmaSecretario ? `<img src="${firmaSecretario}" class="max-h-16 object-contain" alt="Firma Secretario Técnico">` : `<span class="text-[10px] text-slate-400 italic">Pendiente de rúbrica</span>`}
-            </div>
-            <div class="text-[11px] font-bold text-slate-900">${this.escaparHtml(secretarioNombre)}</div>
-          </div>
-        </div>
+        <div class="font-mono text-xs">Total Activos: <strong>${ind.totalActivos}</strong> · Ne: <strong>${ind.ne.toFixed(2)}</strong> · Fx: <strong>${(ind.fxPromedio * 100).toFixed(2)}%</strong></div>
       </div>
     `;
   },
 
   exportarActaCierreAnualPDF() {
-    const contenedor = document.getElementById('acta-cierre-anual-a4-container');
-    if (!contenedor) return;
-
-    const ind = this.calcularIndicadoresCierreAnual();
-    const nombreArchivo = `Acta_Cierre_Censal_Anual_ESGA025_${ind.anio}.pdf`;
-
-    if (typeof html2pdf !== 'undefined') {
-      if (typeof this.mostrarNotificacionToast === 'function') {
-        this.mostrarNotificacionToast(`⏳ Generando PDF A4 del Acta de Cierre Censal (${nombreArchivo})...`, 'info');
-      }
-      html2pdf()
-        .set({
-          margin: 8,
-          filename: nombreArchivo,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        })
-        .from(contenedor)
-        .save()
-        .then(() => {
-          if (typeof this.mostrarNotificacionToast === 'function') {
-            this.mostrarNotificacionToast(`✅ Acta Anual descargada: ${nombreArchivo}`, 'success');
-          }
-        })
-        .catch(() => {
-          window.print();
-        });
-    } else {
-      window.print();
-    }
+    window.print();
   }
 };
 
@@ -8752,3 +12500,6 @@ window.addEventListener('DOMContentLoaded', () => {
   window.app = app;
   app.init();
 });
+
+
+
